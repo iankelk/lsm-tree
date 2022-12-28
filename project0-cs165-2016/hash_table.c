@@ -93,16 +93,33 @@ int get(hashtable* ht, keyType key, valType *values, int num_values, int* num_re
 
 }
 
-// This method erases all key-value pairs with a given key from the hash table.
-// It returns an error code, 0 for success and -1 otherwise (e.g., if the hashtable is not allocated).
-int erase(hashtable* ht, keyType key) {
-    (void) ht;
-    (void) key;
+int free_hash_node(hash_node* item) {
+    free(item);
     return 0;
 }
 
-int free_hash_node(hash_node* item) {
-    free(item);
+// This method erases all key-value pairs with a given key from the hash table.
+// It returns an error code, 0 for success and -1 otherwise (e.g., if the hashtable is not allocated).
+int erase(hashtable* ht, keyType key) {
+    if (ht == NULL) {
+        return -1;
+    }
+    int index = hash_function(key, ht->size);
+    hash_node* cur_item = ht->items[index];
+    hash_node* prev_item = NULL;
+    while (cur_item != NULL) {
+        if (cur_item->key == key) {
+            if (prev_item == NULL) {
+                ht->items[index] = cur_item->next;
+            } else {
+                prev_item->next = cur_item->next;
+            }
+            free_hash_node(cur_item);
+            ht->count--;
+        }
+        prev_item = cur_item;
+        cur_item = cur_item->next;
+    }
     return 0;
 }
 
