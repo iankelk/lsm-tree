@@ -27,6 +27,7 @@ typedef struct hashtable {
     hash_node** items;
     int size;
     int count;
+    int node_size;
 } hashtable;
 
 int allocate(hashtable** ht, int size);

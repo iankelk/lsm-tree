@@ -4,25 +4,6 @@ unsigned long hash_function(keyType key, int size) {
     return key % size;
 }
 
-hash_node* create_hash_node(keyType key, valType value) {
-    // Creates a pointer to a new hash table item
-    hash_node* item = (hash_node*) malloc (sizeof(hash_node));
-    if (item == NULL) {
-        return NULL;
-    }
-    // Create a new kv_pair array of size NODE_SIZE
-    item->kv_pairs = (kv_pair*) malloc (NODE_SIZE * sizeof(kv_pair));  
-    if (item->kv_pairs == NULL) {
-        return NULL;
-    }
-    // Initialize the first kv_pair in the array
-    item->kv_pairs[0].key = key;
-    item->kv_pairs[0].value = value;
-    item->next = NULL;
-    item->count = 1;
-    return item;
-}
-
 // Initialize the components of a hashtable.
 // The size parameter is the expected number of elements to be inserted.
 // This method returns an error code, 0 for success and -1 otherwise (e.g., if the parameter passed to the method is not null, if malloc fails, etc).
@@ -36,6 +17,8 @@ int allocate(hashtable** ht, int size) {
     }
     (*ht)->size = size;
     (*ht)->count = 0;
+    (*ht)->node_size = NODE_SIZE;
+    
     (*ht)->items = (hash_node**) calloc ((*ht)->size, sizeof(hash_node*));
     if ((*ht)->items == NULL) {
         return -1;
@@ -43,6 +26,25 @@ int allocate(hashtable** ht, int size) {
     for (int i = 0; i < (*ht)->size; i++)
         (*ht)->items[i] = NULL;
     return 0;
+}
+
+hash_node* create_hash_node(keyType key, valType value, int node_size) {
+    // Creates a pointer to a new hash table item
+    hash_node* item = (hash_node*) malloc (sizeof(hash_node));
+    if (item == NULL) {
+        return NULL;
+    }
+    // Create a new kv_pair array of size NODE_SIZE
+    item->kv_pairs = (kv_pair*) malloc (node_size * sizeof(kv_pair));  
+    if (item->kv_pairs == NULL) {
+        return NULL;
+    }
+    // Initialize the first kv_pair in the array
+    item->kv_pairs[0].key = key;
+    item->kv_pairs[0].value = value;
+    item->next = NULL;
+    item->count = 1;
+    return item;
 }
 
 // This method inserts a key-value pair into the hash table. Each node of the linked list contains an array of key-value pairs. 
@@ -68,7 +70,7 @@ int put(hashtable* ht, keyType key, valType value) {
         prev_item = cur_item;
         cur_item = cur_item->next;
     }
-    hash_node* new_item = create_hash_node(key, value);
+    hash_node* new_item = create_hash_node(key, value, ht->node_size);
     if (new_item == NULL) {
         return -1;
     }
