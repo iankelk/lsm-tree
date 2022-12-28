@@ -10,9 +10,16 @@ hash_node* create_hash_node(keyType key, valType value) {
     if (item == NULL) {
         return NULL;
     }
-    item->key = key;
-    item->value = value;
+    // Create a new kv_pair array of size NODE_SIZE
+    item->kv_pairs = (kv_pair*) malloc (NODE_SIZE * sizeof(kv_pair));  
+    if (item->kv_pairs == NULL) {
+        return NULL;
+    }
+    // Initialize the first kv_pair in the array
+    item->kv_pairs[0].key = key;
+    item->kv_pairs[0].value = value;
     item->next = NULL;
+    item->count = 1;
     return item;
 }
 
@@ -20,12 +27,6 @@ hash_node* create_hash_node(keyType key, valType value) {
 // The size parameter is the expected number of elements to be inserted.
 // This method returns an error code, 0 for success and -1 otherwise (e.g., if the parameter passed to the method is not null, if malloc fails, etc).
 int allocate(hashtable** ht, int size) {
-    // The next line tells the compiler that we know we haven't used the variable
-    // yet so don't issue a warning. You should remove this line once you use
-    // the parameter.
-    // (void) ht;
-    // (void) size;
-    // return 0;
     if (*ht != NULL) {
         return -1;
     }
@@ -44,32 +45,38 @@ int allocate(hashtable** ht, int size) {
     return 0;
 }
 
-// This method inserts a key-value pair into the hash table.
+// This method inserts a key-value pair into the hash table. Each node of the linked list contains an array of key-value pairs. 
+// It first checks to see there is room available in any of the nodes in the linked list. If there is, it inserts the key-value 
+// pair into the array of the first available node. If the node is full, it creates a new node and inserts the key-value pair
+// into the array of the new node.
 // It returns an error code, 0 for success and -1 otherwise (e.g., if malloc is called and fails).
 // Allow the existence of multiple key-value pairs with the same key
 int put(hashtable* ht, keyType key, valType value) {
-    // (void) ht;
-    // (void) key;
-    // (void) value;
-    // return 0;
     if (ht == NULL) {
         return -1;
     }
-    hash_node* item = create_hash_node(key, value);
     int index = hash_function(key, ht->size);
     hash_node* cur_item = ht->items[index];
     hash_node* prev_item = NULL;
-    
     while (cur_item != NULL) {
+        if (cur_item->count < NODE_SIZE) {
+            cur_item->kv_pairs[cur_item->count].key = key;
+            cur_item->kv_pairs[cur_item->count].value = value;
+            cur_item->count++;
+            return 0;
+        }
         prev_item = cur_item;
         cur_item = cur_item->next;
     }
-    if (prev_item == NULL) {
-        ht->items[index] = item;
-    } else {
-        prev_item->next = item;
+    hash_node* new_item = create_hash_node(key, value);
+    if (new_item == NULL) {
+        return -1;
     }
-    ht->count++;
+    if (prev_item == NULL) {
+        ht->items[index] = new_item;
+    } else {
+        prev_item->next = new_item;
+    }
     return 0;
 }
 
@@ -89,11 +96,13 @@ int get(hashtable* ht, keyType key, valType *values, int num_values, int* num_re
     hash_node* cur_item = ht->items[index];
     int count = 0;
     while (cur_item != NULL) {
-        if (cur_item->key == key) {
-            if (count < num_values) {
-                values[count] = cur_item->value;
+        for (int i = 0; i < cur_item->count; i++) {
+            if (cur_item->kv_pairs[i].key == key) {
+                if (count < num_values) {
+                    values[count] = cur_item->kv_pairs[i].value;
+                }
+                count++;
             }
-            count++;
         }
         cur_item = cur_item->next;
     }
@@ -101,7 +110,12 @@ int get(hashtable* ht, keyType key, valType *values, int num_values, int* num_re
     return 0;
 }
 
+// Free all the components of a hash_node
 int free_hash_node(hash_node* item) {
+    if (item == NULL) {
+        return -1;
+    }
+    free(item->kv_pairs);
     free(item);
     return 0;
 }
@@ -116,17 +130,30 @@ int erase(hashtable* ht, keyType key) {
     hash_node* cur_item = ht->items[index];
     hash_node* prev_item = NULL;
     while (cur_item != NULL) {
-        if (cur_item->key == key) {
-            if (prev_item == NULL) {
-                ht->items[index] = cur_item->next;
-            } else {
-                prev_item->next = cur_item->next;
+        for (int i = 0; i < cur_item->count; i++) {
+            if (cur_item->kv_pairs[i].key == key) {
+                for (int j = i; j < cur_item->count - 1; j++) {
+                    cur_item->kv_pairs[j].key = cur_item->kv_pairs[j + 1].key;
+                    cur_item->kv_pairs[j].value = cur_item->kv_pairs[j + 1].value;
+                }
+                cur_item->count--;
+                if (cur_item->count == 0) {
+                    if (prev_item == NULL) {
+                        ht->items[index] = cur_item->next;
+                    } else {
+                        prev_item->next = cur_item->next;
+                    }
+                    free_hash_node(cur_item);
+                    cur_item = prev_item;
+                }
+                break;
             }
-            free_hash_node(cur_item);
-            ht->count--;
         }
         prev_item = cur_item;
-        cur_item = cur_item->next;
+        // Check for NULL to see if the last node was deleted
+        if (cur_item != NULL) {
+            cur_item = cur_item->next;
+        }
     }
     return 0;
 }
@@ -134,15 +161,19 @@ int erase(hashtable* ht, keyType key) {
 // This method frees all memory occupied by the hash table.
 // It returns an error code, 0 for success and -1 otherwise.
 int deallocate(hashtable* ht) {
-    // This line tells the compiler that we know we haven't used the variable
-    // yet so don't issue a warning. You should remove this line once you use
-    // the parameter.
+    if (ht == NULL) {
+        return -1;
+    }
     for (int i = 0; i < ht->size; i++) {
-        if (ht->items[i] != NULL) {
-            free_hash_node(ht->items[i]);
+        hash_node* cur_item = ht->items[i];
+        hash_node* next_item = NULL;
+        while (cur_item != NULL) {
+            next_item = cur_item->next;
+            free_hash_node(cur_item);
+            cur_item = next_item;
         }
     }
     free(ht->items);
-    free(ht);    
+    free(ht);
     return 0;
 }
