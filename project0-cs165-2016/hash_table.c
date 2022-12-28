@@ -7,6 +7,9 @@ unsigned long hash_function(keyType key, int size) {
 hash_node* create_hash_node(keyType key, valType value) {
     // Creates a pointer to a new hash table item
     hash_node* item = (hash_node*) malloc (sizeof(hash_node));
+    if (item == NULL) {
+        return NULL;
+    }
     item->key = key;
     item->value = value;
     item->next = NULL;
@@ -27,9 +30,15 @@ int allocate(hashtable** ht, int size) {
         return -1;
     }
     *ht = (hashtable*) malloc (sizeof(hashtable));
+    if (*ht == NULL) {
+        return -1;
+    }
     (*ht)->size = size;
     (*ht)->count = 0;
     (*ht)->items = (hash_node**) calloc ((*ht)->size, sizeof(hash_node*));
+    if ((*ht)->items == NULL) {
+        return -1;
+    }
     for (int i = 0; i < (*ht)->size; i++)
         (*ht)->items[i] = NULL;
     return 0;
@@ -90,7 +99,6 @@ int get(hashtable* ht, keyType key, valType *values, int num_values, int* num_re
     }
     *num_results = count;
     return 0;
-
 }
 
 int free_hash_node(hash_node* item) {
