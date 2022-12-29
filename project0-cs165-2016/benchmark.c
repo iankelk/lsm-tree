@@ -17,7 +17,10 @@ int main(void) {
 
   hashtable* ht=NULL;
   int num_tests = 50000000;
-  assert(allocate(&ht, num_tests)==0);
+  //assert(allocate(&ht, num_tests)==0);
+  assert(allocate(&ht, CAPACITY)==0);
+
+  printf("Initial size of hash array is %d\n", ht->size);
 
   int seed = 2;
   srand(seed);
@@ -30,11 +33,13 @@ int main(void) {
     int key = rand();
     int val = rand();
     assert(put(ht, key, val)==0);
+    assert(resize(&ht)==0);
   }
 
   gettimeofday(&stop, NULL);
   double secs = (double)(stop.tv_usec - start.tv_usec) / 1000000 + (double)(stop.tv_sec - start.tv_sec); 
   printf("50 million insertions took %f seconds\n", secs);
+  printf("Final size of hash array is %d\n", ht->size);
 
   assert(deallocate(ht)==0);
 

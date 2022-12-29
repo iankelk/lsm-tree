@@ -1,7 +1,20 @@
 #include "hash_table.h"
 
-unsigned long hash_function(keyType key, int size) {
+int hash_function(keyType key, int size) {
     return key % size;
+}
+
+// Get closest prime number to the given number doubled
+int get_doubled_prime(int num) {
+    int prime = 2 * num;
+    int i;
+    for (i = 2; i < prime; i++) {
+        if (prime % i == 0) {
+            prime++;
+            i = 2;
+        }
+    }
+    return prime;
 }
 
 // Initialize the components of a hashtable.
@@ -18,6 +31,7 @@ int allocate(hashtable** ht, int size) {
     (*ht)->size = size;
     (*ht)->count = 0;
     (*ht)->node_size = NODE_SIZE;
+    (*ht)->q_tuning = Q_TUNING;
     
     (*ht)->items = (hash_node**) calloc ((*ht)->size, sizeof(hash_node*));
     if ((*ht)->items == NULL) {
@@ -61,10 +75,11 @@ int put(hashtable* ht, keyType key, valType value) {
     hash_node* cur_item = ht->items[index];
     hash_node* prev_item = NULL;
     while (cur_item != NULL) {
-        if (cur_item->count < NODE_SIZE) {
+        if (cur_item->count < ht->node_size) {
             cur_item->kv_pairs[cur_item->count].key = key;
             cur_item->kv_pairs[cur_item->count].value = value;
             cur_item->count++;
+            ht->count++;
             return 0;
         }
         prev_item = cur_item;
@@ -79,6 +94,7 @@ int put(hashtable* ht, keyType key, valType value) {
     } else {
         prev_item->next = new_item;
     }
+    ht->count++;
     return 0;
 }
 
@@ -133,11 +149,13 @@ int erase(hashtable* ht, keyType key) {
     hash_node* prev_item = NULL;
     while (cur_item != NULL) {
         for (int i = 0; i < cur_item->count; i++) {
+            // If the key is found, shift all the elements in the array to the left
             if (cur_item->kv_pairs[i].key == key) {
                 for (int j = i; j < cur_item->count - 1; j++) {
                     cur_item->kv_pairs[j].key = cur_item->kv_pairs[j + 1].key;
                     cur_item->kv_pairs[j].value = cur_item->kv_pairs[j + 1].value;
                 }
+                // Decrement the count and free the node if the count is 0
                 cur_item->count--;
                 if (cur_item->count == 0) {
                     if (prev_item == NULL) {
@@ -151,6 +169,7 @@ int erase(hashtable* ht, keyType key) {
                 break;
             }
         }
+        // Update the pointers
         prev_item = cur_item;
         // Check for NULL to see if the last node was deleted
         if (cur_item != NULL) {
@@ -166,6 +185,7 @@ int deallocate(hashtable* ht) {
     if (ht == NULL) {
         return -1;
     }
+    // Free all the nodes in the linked list
     for (int i = 0; i < ht->size; i++) {
         hash_node* cur_item = ht->items[i];
         hash_node* next_item = NULL;
@@ -177,5 +197,50 @@ int deallocate(hashtable* ht) {
     }
     free(ht->items);
     free(ht);
+    return 0;
+}
+
+// Whenever the number of key-value pairs grows beyond a threshold value, the size of the array should be enlarged. 
+// The threshold value is typically defined as hashtable q_tuning * count / size. To enlarge the hash table, allocate
+// a new array that is larger than the original. Note that the number of slots in the new array should also be a prime
+// number. Moreover, the size of the new array should be approximately double the size of the original array. Then 
+// iterate through every key-value pair of the original hash table and call put() to insert them into the new hash 
+// table. Finally, deallocate the original hash table to ensure no memory leaks have taken place. This method returns
+// an error code, 0 for success and -1 otherwise (e.g., if the hashtable is not allocated).
+int resize(hashtable** ht) {
+    if (*ht == NULL) {
+        return -1;
+    }
+    // Check if the hash table should be resized
+    if (((*ht)->q_tuning * (*ht)->count / (*ht)->size) <= 1) {
+        return 0;
+    }
+
+    // Find the next prime number
+    int new_size = get_doubled_prime((*ht)->size);
+
+    // Create a new hash table with the new size
+    hashtable *new_ht = NULL;
+    allocate(&new_ht, new_size);
+    if (new_ht == NULL) {
+        return -1;
+    }
+
+    new_ht->node_size = (*ht)->node_size;
+    new_ht->q_tuning = (*ht)->q_tuning;
+
+    // Iterate through the old hash table and insert the key-value pairs into the new hash table
+    for (int i = 0; i < (*ht)->size; i++) {
+        hash_node* cur_item = (*ht)->items[i];
+        while (cur_item != NULL) {
+            for (int j = 0; j < cur_item->count; j++) {
+                put(new_ht, cur_item->kv_pairs[j].key, cur_item->kv_pairs[j].value);
+            }
+            cur_item = cur_item->next;
+        }
+    }
+    // Deallocate the old hash table
+    deallocate(*ht);
+    *ht = new_ht;
     return 0;
 }

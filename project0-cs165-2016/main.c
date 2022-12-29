@@ -8,13 +8,19 @@
 int main(void) {
 
   hashtable *ht = NULL;
-  int size = 50000;
+  int size = CAPACITY;
   allocate(&ht, size);
+
 
   int key = 0;
   int value = -1;
 
+  printf("Initial size of hash array is %d\n", ht->size);
+
   put(ht, key, value);
+  resize(&ht);
+
+  printf("Final size of hash array is %d\n", ht->size);
 
   int num_values = 1;
 
