@@ -14,7 +14,8 @@
 int main(int argc, char *argv[]) {
   
   int num_tests = 50000000;
-  int size = num_tests, node_size = NODE_SIZE, q_tuning = Q_TUNING;
+  int size = num_tests, node_size = NODE_SIZE;
+  float q_tuning = Q_TUNING; 
 
   // Parse command line arguments
   // -s: size of hash table
@@ -25,11 +26,11 @@ int main(int argc, char *argv[]) {
   // ./benchmark -s 1000000 -q 2 -n 4
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-s") == 0) {
-      size = atoi(argv[i+1]);
+      size = atoi(argv[++i]);
     } else if (strcmp(argv[i], "-q") == 0) {
-      q_tuning = atoi(argv[i+1]);
+      q_tuning = atof(argv[++i]);
     } else if (strcmp(argv[i], "-n") == 0) {
-      node_size = atoi(argv[i+1]);
+      node_size = atoi(argv[++i]);
     }
   }
 
@@ -39,7 +40,7 @@ int main(int argc, char *argv[]) {
   ht->node_size = node_size;
   ht->q_tuning = q_tuning;
 
-  printf("Parameters: size: %d, node_size: %d, Q: %d\n", size, node_size, q_tuning);
+  printf("Parameters: size: %d, node_size: %d, Q: %f\n", size, node_size, q_tuning);
 
   int seed = 2;
   srand(seed);
@@ -52,7 +53,6 @@ int main(int argc, char *argv[]) {
     int key = rand();
     int val = rand();
     assert(put(ht, key, val)==0);
-    assert(resize(&ht)==0);
   }
 
   gettimeofday(&stop, NULL);
