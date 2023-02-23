@@ -6,6 +6,7 @@
 
 using namespace std;
 
+/*
 int main(int argc, char *argv[]) {
     int bf_bits_per_key, fanout, memtable_size;
     // Parse command line arguments
@@ -33,7 +34,7 @@ int main(int argc, char *argv[]) {
 
 
 }
-
+*/
 
 // void server(LSMTree &tree) {
 
@@ -71,3 +72,43 @@ int main(int argc, char *argv[]) {
 //         }
 //     }
 // }
+
+/*
+#include <iostream>
+#include "dynamic_bitset.hpp"
+
+int main() {
+    DynamicBitset bits(10);
+    bits.set(3);
+    bits.set(5);
+    bits.set(9);
+    bits.reset(5);
+
+    for (size_t i = 0; i < bits.size(); ++i) {
+        std::cout << bits.test(i) << " ";
+    }
+
+    std::cout << "\n\n";
+
+    bits.resize(20);
+
+    for (size_t i = 0; i < bits.size(); ++i) {
+        std::cout << bits.test(i) << " ";
+    }
+
+    std::cout << std::endl;
+    return 0;
+}
+*/
+
+#include <iostream>
+#include "bloom_filter.hpp"
+
+int main() {
+    BloomFilter bf(1000, 0.01, 10000);
+    bf.add("hello");
+    bf.add("world");
+    std::cout << bf.contains("hello") << std::endl; // prints 1
+    std::cout << bf.contains("foo") << std::endl; // prints 0
+    return 0;
+}
