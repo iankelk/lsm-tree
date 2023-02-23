@@ -20,21 +20,23 @@ bool Memtable::put(KEY_t key, VAL_t value) {
 }
 
 // Get the value associated with a key
-VAL_t* Memtable::get(KEY_t key) {
+VAL_t* Memtable::get(KEY_t key) const {
     auto it = table_.find(key);
     if (it == table_.end()) {
         return nullptr;
     }
-    return &it->second;
+    VAL_t *val = new VAL_t;
+    *val = it->second;
+    return val;
 }
 
 // Get all key-value pairs within a range
-map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) {
+map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
     map<KEY_t, VAL_t> range;
-    for (auto it = table_.lower_bound(start); it != table_.upper_bound(end); it++) {
-        range[it->first] = it->second;
-    }
-    return range;
+    auto itStart = table_.lower_bound(start);
+    auto itEnd = table_.upper_bound(end);
+    // Return a map of key-value pairs within the range
+    return std::map<KEY_t, VAL_t>(itStart, itEnd);
 }
 
 // Remove all key-value pairs from the memtable
