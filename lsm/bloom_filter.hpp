@@ -6,13 +6,14 @@
 #include <string>
 
 #include "dynamic_bitset.hpp"
+#include "data_types.hpp"
 
 class BloomFilter {
 public:
     BloomFilter(int capacity, double error_rate, int bitset_size);
 
-    void add(const std::string& key);
-    bool contains(const std::string& key);
+    void add(const KEY_t key);
+    bool contains(const KEY_t key);
 
 private:
     int capacity;

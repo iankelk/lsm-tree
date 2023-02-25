@@ -28,6 +28,12 @@ typedef int32_t VAL_t;
 #define RANGE_PATTERN_SCAN "%d %d"
 #define DELETE_PATTERN_SCAN "%d"
 
+// SSTABLE DEFINITIONS
+#define FILE_DESCRIPTOR_UNINITIALIZED -1
+#define SSTABLE_FILE_TEMPLATE "/tmp/lsm-XXXXXX"
+
+
+
 // Key Value Pair
 struct kv_pair {
     KEY_t key;

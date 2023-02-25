@@ -106,9 +106,9 @@ int main() {
 
 int main() {
     BloomFilter bf(1000, 0.01, 10000);
-    bf.add("hello");
-    bf.add("world");
-    std::cout << bf.contains("hello") << std::endl; // prints 1
-    std::cout << bf.contains("foo") << std::endl; // prints 0
+    bf.add(12345);
+    bf.add(123456);
+    std::cout << bf.contains(12345) << std::endl; // prints 1
+    std::cout << bf.contains(54321) << std::endl; // prints 0
     return 0;
 }

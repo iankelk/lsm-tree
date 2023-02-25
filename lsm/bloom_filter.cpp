@@ -2,6 +2,7 @@
 #include <cstdlib>
 
 #include "bloom_filter.hpp"
+#include "data_types.hpp"
 
 BloomFilter::BloomFilter(int capacity, double error_rate, int bitset_size) :
     capacity(capacity), error_rate(error_rate), bitset_size(bitset_size) {
@@ -13,8 +14,8 @@ BloomFilter::BloomFilter(int capacity, double error_rate, int bitset_size) :
 }
 
 
-void BloomFilter::add(const std::string& key) {
-    std::hash<std::string> hasher;
+void BloomFilter::add(const KEY_t key) {
+    std::hash<KEY_t> hasher;
     int hash_value = hasher(key);
     for (int i = 0; i < this->num_levels; i++) {
         int index =  std::abs((hash_value >> i) % this->bits_per_level + i * this->bits_per_level);
@@ -23,8 +24,8 @@ void BloomFilter::add(const std::string& key) {
     }
 }
 
-bool BloomFilter::contains(const std::string& key) {
-    std::hash<std::string> hasher;
+bool BloomFilter::contains(const KEY_t key) {
+    std::hash<KEY_t> hasher;
     int hash_value = hasher(key);
     for (int i = 0; i < this->num_levels; i++) {
         int index = std::abs((hash_value >> i) % this->bits_per_level + i * this->bits_per_level);
