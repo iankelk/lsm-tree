@@ -1,9 +1,10 @@
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
 #include <fcntl.h>
-#include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "run.hpp"
 
@@ -18,6 +19,7 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
     fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
     size(0),
+    max_key(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED)
 {
     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
@@ -29,7 +31,8 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
 }
 
 Run::~Run() {
-    close(fd);
+    closeFile();
+    cout << "FD after destruct: " + to_string(fd) + "\n"; 
     assert(fd == FILE_DESCRIPTOR_UNINITIALIZED);
     remove(tmp_file.c_str());
 }
@@ -51,6 +54,11 @@ void Run::put(KEY_t key, VAL_t val) {
     if (size % getpagesize() == 0) {
         fence_pointers.push_back(key);
     }
+    // If the key is greater than the max key, update the max key
+    if (key > max_key) {
+        max_key = key;
+    }
+
     // Write the key-value pair to the temporary file
     write(fd, &kv, sizeof(kv_pair));
     size++;
@@ -60,7 +68,7 @@ VAL_t * Run::get(KEY_t key) {
     VAL_t *val;
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
-    if (key < fence_pointers.front() || key > fence_pointers.back() || !bloom_filter.contains(key)) {
+    if (key < fence_pointers.front() || key > max_key || !bloom_filter.contains(key)) {
         return nullptr;
     }
     // Binary search for the page containing the key in the fence pointers vector
@@ -98,13 +106,13 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Initialize an empty map
     map<KEY_t, VAL_t> range_map;
     // Check if the range is in the range of the fence pointers
-    if (end < fence_pointers.front() || start > fence_pointers.back()) {
+    if (end < fence_pointers.front() || start > max_key) {
         return range_map;
     }
     if (start < fence_pointers.front()) {
         start = fence_pointers.front();
     }
-    if (end > fence_pointers.back()) {
+    if (end > max_key) {
         end = fence_pointers.back();
     }
     // Binary search for the page containing the start key in the fence pointers vector.

@@ -17,6 +17,7 @@ public:
     void put(KEY_t key, VAL_t val);
 private:
     long max_kv_pairs;
+    KEY_t max_key;
     int capacity;
     double error_rate;
     int bitset_size;
