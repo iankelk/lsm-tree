@@ -32,7 +32,7 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
 
 Run::~Run() {
     closeFile();
-    cout << "FD after destruct: " + to_string(fd) + "\n"; 
+    //cout << "FD after destruct: " + to_string(fd) + "\n"; 
     assert(fd == FILE_DESCRIPTOR_UNINITIALIZED);
     remove(tmp_file.c_str());
 }
@@ -66,6 +66,11 @@ void Run::put(KEY_t key, VAL_t val) {
 
 VAL_t * Run::get(KEY_t key) {
     VAL_t *val;
+
+    // Check if the run is empty
+    if (size == 0) {
+        return nullptr;
+    }
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
     if (key < fence_pointers.front() || key > max_key || !bloom_filter.contains(key)) {
@@ -105,6 +110,12 @@ VAL_t * Run::get(KEY_t key) {
 map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Initialize an empty map
     map<KEY_t, VAL_t> range_map;
+
+    // Check if the run is empty
+    if (size == 0) {
+        return range_map;
+    }
+
     // Check if the range is in the range of the fence pointers
     if (end < fence_pointers.front() || start > max_key) {
         return range_map;

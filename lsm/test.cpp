@@ -239,13 +239,13 @@ int testRun() {
         }
     }
 
-    // // Test case for retrieving a key that doesn't exist
-    // {
-    //     Run run(1, 1, 0.1, 1);
-    //     KEY_t key = 10;
-    //     VAL_t *retrieved_val = run.get(key);
-    //     assert(retrieved_val == nullptr);
-    // }
+    // Test case for retrieving a key that doesn't exist
+    {
+        Run run(1, 1, 0.1, 1);
+        KEY_t key = 10;
+        VAL_t *retrieved_val = run.get(key);
+        assert(retrieved_val == nullptr);
+    }
 
     // Test case for retrieving a range of keys
     {
