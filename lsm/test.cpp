@@ -225,6 +225,19 @@ int testRun() {
         assert(retrieved == expected);
     }
 
+
+    // Test case for inserting and retrieving a subrange
+    {
+        Run run(5, 5, 0.1, 5);
+        map<KEY_t, VAL_t> expected = {{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}};
+        for (auto const& [key, val] : expected) {
+            run.put(key, val);
+        }
+        map<KEY_t, VAL_t> retrieved = run.range(2, 4);
+        map<KEY_t, VAL_t> expected_retrieved = {{2, 2}, {3, 3}, {4, 4}};
+        assert(retrieved == expected_retrieved);
+    }
+
     // Test case for inserting more key-value pairs than the capacity
     {
         Run run(5, 5, 0.1, 5);
@@ -239,11 +252,21 @@ int testRun() {
         }
     }
 
-    // Test case for retrieving a key that doesn't exist
+    // Test case for retrieving a key that doesn't exist from an empty run
     {
         Run run(1, 1, 0.1, 1);
         KEY_t key = 10;
         VAL_t *retrieved_val = run.get(key);
+        assert(retrieved_val == nullptr);
+    }
+
+    // Test case for retrieving a key that doesn't exist from a non-empty run
+    {
+        Run run(1, 1, 0.1, 1);
+        KEY_t key = 10;
+        VAL_t val = 20;
+        run.put(key, val);
+        VAL_t *retrieved_val = run.get(50);
         assert(retrieved_val == nullptr);
     }
 
