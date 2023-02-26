@@ -39,12 +39,3 @@ bool BloomFilter::contains(const KEY_t key) {
     }
     return true;
 }
-
-// int main() {
-//     BloomFilter bf(1000, 0.01, 10000);
-//     bf.add("hello");
-//     bf.add("world");
-//     std::cout << bf.contains("hello") << std::endl; // prints 1
-//     std::cout << bf.contains("foo") << std::endl; // prints 0
-//     return 0;
-// }
