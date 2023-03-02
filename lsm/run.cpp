@@ -44,6 +44,7 @@ void Run::closeFile() {
 }
 
 void Run::put(KEY_t key, VAL_t val) {
+    int result;
     if (size >= max_kv_pairs) {
         throw runtime_error("Attempting to add to full Run");
     }
@@ -60,7 +61,8 @@ void Run::put(KEY_t key, VAL_t val) {
     }
 
     // Write the key-value pair to the temporary file
-    write(fd, &kv, sizeof(kv_pair));
+    result = write(fd, &kv, sizeof(kv_pair));
+    assert(result != -1);
     size++;
 }
 
@@ -85,7 +87,7 @@ VAL_t * Run::get(KEY_t key) {
     }
 
     // Open the file descriptor for the temporary file
-    int fd = open(tmp_file.c_str(), O_RDONLY);
+    fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw runtime_error("Failed to open temporary file for Run");
     }
@@ -146,7 +148,7 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         throw runtime_error("Start page index is greater than or equal to end page index");
     }
     // Open the file descriptor for the temporary file
-    int fd = open(tmp_file.c_str(), O_RDONLY);
+    fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw runtime_error("Failed to open temporary file for Run");
     }
@@ -164,4 +166,33 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     }
     closeFile();
     return range_map;
+}
+
+ map<KEY_t, VAL_t> Run::getMap() {
+    map<KEY_t, VAL_t> map;
+    // Open the file descriptor for the temporary file
+    fd = open(tmp_file.c_str(), O_RDONLY);
+    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+        throw runtime_error("Failed to open temporary file for Run");
+    }
+    // Read all the key-value pairs from the temporary file
+    kv_pair kv;
+    while (read(fd, &kv, sizeof(kv_pair)) > 0) {
+        map[kv.key] = kv.value;
+    }
+    closeFile();
+    return map;
+ }
+
+long Run::getMaxKvPairs() {
+    return max_kv_pairs;
+}
+int Run::getCapacity() {
+    return capacity;
+}
+double Run::getErrorRate() {
+    return error_rate;
+}
+int Run::getBitsetSize() {
+    return bitset_size;
 }

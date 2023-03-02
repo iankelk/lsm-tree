@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 #include <cassert>
-#include <iostream>
 #include <stdexcept>
 
 #include "unistd.h"
@@ -12,6 +11,7 @@
 #include "bloom_filter.hpp"
 #include "memtable.hpp"
 #include "run.hpp"
+#include "level.hpp"
 
 using namespace std;
 
@@ -20,12 +20,14 @@ int testDynamicBitset();
 int testBloomFilter();
 int testMemtable();
 int testRun();
+int testLevel();
 
 int main() {
     testDynamicBitset();
     testBloomFilter();
     testMemtable();
     testRun();
+    testLevel();
 }
 
 // Check that the given function throws the expected exception
@@ -274,8 +276,75 @@ int testRun() {
         assert(retrieved == expected);
     }
 
+    // Test case for a getMap with multiple key-value pairs
+    {
+        Run run(10, 100, 0.01, 1000);
+        KEY_t key1 = 1;
+        VAL_t val1 = 2;
+        KEY_t key2 = 2;
+        VAL_t val2 = 3;
+        KEY_t key3 = 3;
+        VAL_t val3 = 4;
+        run.put(key1, val1);
+        run.put(key2, val2);
+        run.put(key3, val3);
+        map<KEY_t, VAL_t> result = run.getMap();
+        assert(result.size() == 3);
+        assert(result[key1] == val1);
+        assert(result[key2] == val2);
+        assert(result[key3] == val3);
+    }
+
     cout << "Run: All tests passed" << endl;
 
+    return 0;
+}
+
+//    Level(int n, long s, bool l) : max_runs(n), max_run_size(s), leveling(l), num_runs(0) {}
+
+
+int testLevel() {
+    // Create a level with maximum of 2 runs of size 4
+    Level level(2, 4, false);
+
+    // Create 3 runs
+    Run run1(4, 2, 0.01, 10);
+    run1.put(1, 10);
+    run1.put(2, 20);
+    run1.put(3, 30);
+    run1.put(4, 40);
+
+    Run run2(4, 2, 0.01, 10);
+    run2.put(5, 50);
+    run2.put(6, 60);
+    run2.put(7, 70);
+    run2.put(8, 80);
+
+    Run run3(4, 2, 0.01, 10);
+    run3.put(5, 50);
+    run3.put(6, 60);
+
+    // Test adding runs to the level
+    level.put(run1);
+    level.put(run2);
+    assert(level.runs.size() == 2);
+    assert(level.num_runs == 2);
+
+    // Test dumping the level
+    level.dump();
+    //level.put(run3);
+    //assert(level.runs.size() == 2);
+    //assert(level.num_runs == 2);
+
+    // Test compacting the level
+    level.compactLevel();
+    assert(level.runs.size() == 1);
+    assert(level.num_runs == 1);
+
+    // Test dumping the level
+    level.dump();
+
+    cout << "Level: All tests passed!" << endl;
     return 0;
 }
 

@@ -15,9 +15,14 @@ public:
     VAL_t * get(KEY_t key);
     map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
+    map<KEY_t, VAL_t> getMap();
+    long getMaxKvPairs();
+    int getCapacity();
+    double getErrorRate();
+    int getBitsetSize();
 private:
-    long max_kv_pairs;
     KEY_t max_key;
+    long max_kv_pairs;
     int capacity;
     double error_rate;
     int bitset_size;
