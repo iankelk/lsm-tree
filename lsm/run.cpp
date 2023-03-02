@@ -31,6 +31,7 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
 }
 
 Run::~Run() {
+    cout << "RUN DESTRUCTOR\n";
     closeFile();
     //cout << "FD after destruct: " + to_string(fd) + "\n"; 
     assert(fd == FILE_DESCRIPTOR_UNINITIALIZED);
