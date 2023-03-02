@@ -32,5 +32,5 @@ public:
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
-    // void compactLevel();
+    void compactLevel();
 };

@@ -28,7 +28,8 @@ void Level::dump() {
         }
     }
 }
-/*
+// Level(int n, long s, bool l, int ln) : max_runs(n), max_run_size(s), leveling(l), level_num(ln), num_runs(0) {}
+
 void Level::compactLevel() {
     // Create a new map to hold the merged data
     map<KEY_t, VAL_t> merged_map;
@@ -47,17 +48,18 @@ void Level::compactLevel() {
     }
 
     // Create a new run with the merged data
-    Run merged_run(runs.front()->getMaxKvPairs(), runs.front()->getCapacity(), runs.front()->getErrorRate(), runs.front()->getBitsetSize());
+    // TODO: FANOUT should be a parameter
+    Run merged_run(runs.front()->getMaxKvPairs()*2, runs.front()->getCapacity(), runs.front()->getErrorRate(), runs.front()->getBitsetSize());
     for (const auto &kv : merged_map) {
         if (kv.second != TOMBSTONE) {
             merged_run.put(kv.first, kv.second);
         }
     }
 
-    // // Delete the old runs
-    // for (auto &run : runs) {
-    //     delete &run;
-    // }
+    // Delete the old runs
+    for (auto &run : runs) {
+        delete &run;
+    }
 
     // Clear the runs queue
     runs.clear();
@@ -67,4 +69,4 @@ void Level::compactLevel() {
     // Set the number of runs to 1
     num_runs = 1;         
 }
-*/
+
