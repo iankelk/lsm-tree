@@ -309,25 +309,32 @@ int testLevel() {
     Level level(2, 4, false, 1);
 
     // Create 3 runs
-    Run run1(4, 2, 0.01, 10);
-    run1.put(1, 10);
-    run1.put(2, 20);
-    run1.put(3, 30);
-    run1.put(4, 40);
+    // Run run1(4, 2, 0.01, 10);
+    // run1.put(1, 10);
+    // run1.put(2, 20);
+    // run1.put(3, 30);
+    // run1.put(4, 40);
 
-    Run run2(4, 2, 0.01, 10);
-    run2.put(5, 50);
-    run2.put(6, 60);
-    run2.put(7, 70);
-    run2.put(8, 80);
+    unique_ptr<Run> run_ptr1(new Run(4, 2, 0.01, 10));
+    run_ptr1->put(1, 10);
+    run_ptr1->put(2, 20);
+    run_ptr1->put(3, 30);
+    run_ptr1->put(4, 40);
 
-    Run run3(4, 2, 0.01, 10);
-    run3.put(5, 50);
-    run3.put(6, 60);
+    unique_ptr<Run> run_ptr2(new Run(4, 2, 0.01, 10));
+    run_ptr2->put(5, 50);
+    run_ptr2->put(6, 60);
+    run_ptr2->put(7, 70);
+    run_ptr2->put(8, 80);
+
+    // Run run3(4, 2, 0.01, 10);
+    // run3.put(5, 50);
+    // run3.put(6, 60);
 
     // Test adding runs to the level
-    level.put(move(unique_ptr<Run> (&run1)));
-    level.put(move(unique_ptr<Run> (&run2)));
+    //level.put(move(unique_ptr<Run> (&run1)));
+    level.put(move(run_ptr1));
+    level.put(move(run_ptr2));
     assert(level.runs.size() == 2);
     assert(level.num_runs == 2);
 
