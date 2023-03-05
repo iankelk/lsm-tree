@@ -20,6 +20,9 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     // Level(int n, bool l, int ln) : max_runs(n), leveling(l), level_num(ln), num_runs(0) {}
     levels.emplace_back(pow(fanout, FIRST_LEVEL_NUM), level_policy, FIRST_LEVEL_NUM);
 
+    // Set the level to indicate it's the last level
+    levels.back().is_last_level = true;
+
     // print out the max_kv_pairs of the buffer
     //cout << "Buffer max_kv_pairs: " << buffer.max_kv_pairs << "\n";
 }
@@ -29,16 +32,38 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if(buffer.put(key, val)) {
         return;
     }
-    // print the key and value
-    cout << "Key: " << key << " Value: " << val << "\n";
 
-    // print the max runs of the first level
-    cout << "Max runs of first level: " << levels.front().max_runs << "\n";
-    // print the number of runs of the first level
-    cout << "Number of runs of first level: " << levels.front().num_runs << "\n";
+    // Merge the levels recursively
+    merge_levels(levels.begin());
+
+    // Set all levels in the levels vector to not be the last level unless their level_num is equal to the level vector's size
+    // for (auto it = levels.begin(); it != levels.end(); it++) {
+    //     it->is_last_level = (it->level_num == levels.size());
+    // }
+
+    // // print the key and value
+    // cout << "Key: " << key << " Value: " << val << "\n";
+
+    // // print the max runs of the first level
+    // cout << "Max runs of first level: " << levels.front().max_runs << "\n";
+    // // print the number of runs of the first level
+    // cout << "Number of runs of first level: " << levels.front().num_runs << "\n";
     
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
+    //unique_ptr<Run> run_ptr = make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size);
+    //levels.front().runs.emplace_front(move(run_ptr));
+
+    // Create a new run with the right number of key/value pairs, bloom filter capacity, error rate, and bitset size
+    //levels.front().runs.emplace_front(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
+
+    // print the capacity of the first run of the first level
+    cout << "Capacity of first run of first level: " << levels.front().runs.front()->capacity << "\n";
+
+    // Print the filename of the temporary file
+    cout << "Filename: " << levels.front().runs.front()->tmp_file << endl;
+    // increment the number of runs in the first level
+    //levels.front().num_runs++;
 
     // Flush the buffer to level 1
     for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
@@ -48,6 +73,8 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     buffer.clear();
     // Add the key-value pair to the buffer
     buffer.put(key, val);
+
+    printTree();
 }
 
 
@@ -56,30 +83,64 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 // until a level has space for a new run in it.
 void LSMTree::merge_levels(vector<Level>::iterator it) {
     vector<Level>::iterator next;
+    // Save the level number of the current level
+    int level_num = it->level_num;
 
     // If the current level has space for another run, return
     if (it->num_runs < it->max_runs) {
         return;
     } else {
-        // If there is another level, move next to it. Otherwise create a new level and move next to it.
-        if (it + 1 != levels.end()) {
-            next = it + 1;
+        // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
+        if (it + 1 == levels.end()) {
+            levels.emplace_back(pow(fanout, level_num + 1), level_policy, level_num + 1);
+            // Get the iterators next and it which are lost when the vector is resized
+            next = levels.end() - 1;
+            it = levels.end() - 2;
+            // Set the level to indicate it's the last level
+            next->is_last_level = true;
+            // // Make sure the next level is cleared
+            // next->runs.clear();
+
+            // print the size of the next->runs deque
+            cout << "Size of next->runs deque: " << next->runs.size() << "\n";
+        // If the next level has space for another run, move the next pointer to the next level
         } else {
-            levels.emplace_back(pow(fanout, it->level_num + 1), level_policy, it->level_num + 1);
             next = it + 1;
+            if (next->num_runs >= next->max_runs) {
+                merge_levels(next);
+             }
         }
     }
-    if (next->num_runs >= next->max_runs) {
-        merge_levels(next);
-    }
+
+    // Clear the deque of runs in the next level
+   // next->runs.clear();
+    cout << "Size of runs queue in merge_levels before: " << next->runs.size() << "\n";
+
     // Merge the current level into the next level by moving the entire deque of runs into the next level
     next->runs.insert(next->runs.end(), make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
+    // Print the size of the runs queue
+    cout << "Size of runs queue in merge_levels after: " << next->runs.size() << "\n";
+    
+     // Compact the level
+    next->compactLevel(buffer.max_kv_pairs * next->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
+
     // Clear the current level
     it->runs.clear();
     // Increment the number of runs in the next level
     next->num_runs += it->num_runs;
-    // Decrement the number of runs in the current level
+    // Zero the number of runs in the current level
     it->num_runs = 0;
-    // Compact the level
-    next->compactLevel(buffer.max_kv_pairs * next->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
+   
 }
+
+    // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
+    // the number of runs per each level.
+    void LSMTree::printTree() {
+        cout << "\nPRINTING TREE...\n";
+        cout << "Number of entries in the buffer: " << buffer.table_.size() << "\n";
+        cout << "Number of levels: " << levels.size() << "\n";
+        for (auto it = levels.begin(); it != levels.end(); it++) {
+            cout << "Number of runs in level " << it->level_num << ": " << it->num_runs << "\n";
+        }
+        cout << "PRINTING TREE COMPLETE\n\n";
+    }

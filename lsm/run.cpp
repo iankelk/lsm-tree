@@ -84,8 +84,8 @@ VAL_t * Run::get(KEY_t key) {
         return nullptr;
     }
     // Binary search for the page containing the key in the fence pointers vector
-    auto upper_bound_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), key);
-    auto page_index = static_cast<long>(std::distance(fence_pointers.begin(), upper_bound_iter)) - 1;
+    auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), key);
+    auto page_index = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
 
     if (page_index < 0) {
         throw runtime_error("Negative index from fence pointer");
@@ -175,10 +175,15 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
  map<KEY_t, VAL_t> Run::getMap() {
     map<KEY_t, VAL_t> map;
+
+    // Print the tmp file name
+    cout << "tmp_file: " << tmp_file << endl;
+
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw runtime_error("Failed to open temporary file for Run");
+
     }
     // Read all the key-value pairs from the temporary file
     kv_pair kv;

@@ -9,7 +9,7 @@ build:
 	g++ lsm/main.cpp $(SRCS) -o bin/lsm -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
 
 test:
-	g++ -ggdb3 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
 
 .PHONY: generator
 generator:

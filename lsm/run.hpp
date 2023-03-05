@@ -20,7 +20,7 @@ public:
     int getCapacity();
     double getErrorRate();
     int getBitsetSize();
-private:
+//private:
     KEY_t max_key;
     long max_kv_pairs;
     int capacity;
