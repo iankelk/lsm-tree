@@ -49,6 +49,10 @@ void Run::put(KEY_t key, VAL_t val) {
     if (size >= max_kv_pairs) {
         throw runtime_error("Attempting to add to full Run");
     }
+    // print max_kv_pairs and size
+    //cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
+    //cout << "size: " + to_string(size) + "\n";
+
     kv_pair kv = {key, val};
     bloom_filter.add(key);
     // Add the key to the fence pointers vector if it is a multiple of the page size. 
