@@ -28,7 +28,8 @@ void Level::dump() {
     }
 }
 
-void Level::compactLevel() {
+// Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
+void Level::compactLevel(long max_kv_pairs, int capacity, double error_rate, int bitset_size) {
     // Create a new map to hold the merged data
     map<KEY_t, VAL_t> merged_map;
     // Iterate through the runs in the level
@@ -47,7 +48,7 @@ void Level::compactLevel() {
 
     // Create a new run with the merged data
     // TODO: FANOUT should be a parameter
-    Run merged_run(runs.front()->getMaxKvPairs()*2, runs.front()->getCapacity(), runs.front()->getErrorRate(), runs.front()->getBitsetSize());
+    Run merged_run(max_kv_pairs, capacity, error_rate, bitset_size);
     for (const auto &kv : merged_map) {
         if (kv.second != TOMBSTONE) {
             merged_run.put(kv.first, kv.second);

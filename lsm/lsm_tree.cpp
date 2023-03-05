@@ -49,3 +49,37 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Add the key-value pair to the buffer
     buffer.put(key, val);
 }
+
+
+// Given an iterator for the levels vector, check to see if there is space to insert another run
+// If the next level does not have space for the current level, recursively merge the next level downwards
+// until a level has space for a new run in it.
+void LSMTree::merge_levels(vector<Level>::iterator it) {
+    vector<Level>::iterator next;
+
+    // If the current level has space for another run, return
+    if (it->num_runs < it->max_runs) {
+        return;
+    } else {
+        // If there is another level, move next to it. Otherwise create a new level and move next to it.
+        if (it + 1 != levels.end()) {
+            next = it + 1;
+        } else {
+            levels.emplace_back(pow(fanout, it->level_num + 1), level_policy, it->level_num + 1);
+            next = it + 1;
+        }
+    }
+    if (next->num_runs >= next->max_runs) {
+        merge_levels(next);
+    }
+    // Merge the current level into the next level by moving the entire deque of runs into the next level
+    next->runs.insert(next->runs.end(), make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
+    // Clear the current level
+    it->runs.clear();
+    // Increment the number of runs in the next level
+    next->num_runs += it->num_runs;
+    // Decrement the number of runs in the current level
+    it->num_runs = 0;
+    // Compact the level
+    next->compactLevel(buffer.max_kv_pairs * next->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
+}
