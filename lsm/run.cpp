@@ -47,6 +47,9 @@ void Run::closeFile() {
 void Run::put(KEY_t key, VAL_t val) {
     int result;
     if (size >= max_kv_pairs) {
+        // print max_kv_pairs and size
+        cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
+        cout << "size: " + to_string(size) + "\n";
         throw runtime_error("Attempting to add to full Run");
     }
     // print max_kv_pairs and size

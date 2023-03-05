@@ -9,7 +9,7 @@ using namespace std;
 
 class Memtable {
 public:
-    Memtable(int max_kv_pairs) : max_kv_pairs(max_kv_pairs) {}
+    explicit Memtable(int max_kv_pairs) : max_kv_pairs(max_kv_pairs) {}
     ~Memtable() {};
 
     int max_kv_pairs;

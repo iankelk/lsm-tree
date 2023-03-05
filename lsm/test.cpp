@@ -362,18 +362,18 @@ int testLevel() {
 }
 
 int testTree() {
-    {
-        // #define DEFAULT_FANOUT 10
-        // #define DEFAULT_NUM_PAGES 1000
-        // #define DEFAULT_CAPACITY 1000
-        // #define DEFAULT_ERROR_RATE 0.01
-        // #define DEFAULT_BITSET_SIZE 10000
-        // #define DEFAULT_LEVELING_POLICY false 
+    // {
+    //     // #define DEFAULT_FANOUT 10
+    //     // #define DEFAULT_NUM_PAGES 1000
+    //     // #define DEFAULT_CAPACITY 1000
+    //     // #define DEFAULT_ERROR_RATE 0.01
+    //     // #define DEFAULT_BITSET_SIZE 10000
+    //     // #define DEFAULT_LEVELING_POLICY false 
 
-        // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
-        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 5, 2);
-        tree.put(1, 1);
-    }
+    //     // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
+    //     LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 5, 2);
+    //     tree.put(1, 1);
+    // }
 
     {
         // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
