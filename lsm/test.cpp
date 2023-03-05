@@ -12,6 +12,8 @@
 #include "memtable.hpp"
 #include "run.hpp"
 #include "level.hpp"
+#include "lsm_tree.hpp"
+
 
 using namespace std;
 
@@ -21,6 +23,7 @@ int testBloomFilter();
 int testMemtable();
 int testRun();
 int testLevel();
+int testTree();
 
 int main() {
     testDynamicBitset();
@@ -28,6 +31,7 @@ int main() {
     testMemtable();
     testRun();
     testLevel();
+    testTree();
 }
 
 // Check that the given function throws the expected exception
@@ -306,7 +310,7 @@ int testRun() {
 int testLevel() {
 
     // Create a level with maximum of 2 runs of size 4
-    Level level(2, 4, false, 1);
+    Level level(4, false, 1);
 
     // Create 3 runs
     // Run run1(4, 2, 0.01, 10);
@@ -353,6 +357,35 @@ int testLevel() {
     level.dump();
 */
     cout << "Level: All tests passed!" << endl;
+
+    return 0;
+}
+
+int testTree() {
+    {
+        // #define DEFAULT_FANOUT 10
+        // #define DEFAULT_NUM_PAGES 1000
+        // #define DEFAULT_CAPACITY 1000
+        // #define DEFAULT_ERROR_RATE 0.01
+        // #define DEFAULT_BITSET_SIZE 10000
+        // #define DEFAULT_LEVELING_POLICY false 
+
+        // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
+        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 5, 2);
+        tree.put(1, 1);
+    }
+
+    {
+        // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
+        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 2);
+
+        // Iterate from 1 to 512 and insert them into the tree
+        for (int i = 1; i <= 5120; i++) {
+            tree.put(i, i);
+        }
+    }
+
+    cout << "Tree: All tests passed!" << endl;
 
     return 0;
 }

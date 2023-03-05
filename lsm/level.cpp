@@ -4,7 +4,7 @@
 using namespace std;
 
 // Add run to the beginning of the Level runs queue 
-void Level::put(unique_ptr<Run> run_ptr) {
+void Level::put(unique_ptr<Run>&& run_ptr) {
     if (num_runs >= max_runs) {
         throw std::out_of_range("put: Attempted to add run to full level");
     }
@@ -17,7 +17,6 @@ void Level::dump() {
     cout << "Level: " << endl;
     cout << "  num_runs: " << num_runs << endl;
     cout << "  max_runs: " << max_runs << endl;
-    cout << "  max_run_size: " << max_run_size << endl;
     cout << "  leveling: " << leveling << endl;
     cout << "  runs: " << endl;
     // Iterate through the runs in the level
@@ -28,7 +27,6 @@ void Level::dump() {
         }
     }
 }
-// Level(int n, long s, bool l, int ln) : max_runs(n), max_run_size(s), leveling(l), level_num(ln), num_runs(0) {}
 
 void Level::compactLevel() {
     // Create a new map to hold the merged data
@@ -69,4 +67,5 @@ void Level::compactLevel() {
     // Set the number of runs to 1
     num_runs = 1;         
 }
+
 

@@ -17,9 +17,10 @@ public:
     VAL_t* get(KEY_t key) const;
     map<KEY_t, VAL_t> range(KEY_t start, KEY_t end) const;
     void clear();
+    map<KEY_t, VAL_t> table_;
 
 private:
-    map<KEY_t, VAL_t> table_;
+    
 };
 
 #endif /* MEMTABLE_H */
