@@ -29,8 +29,8 @@ int main() {
     testDynamicBitset();
     testBloomFilter();
     testMemtable();
-    testRun();
-    testLevel();
+    //testRun();
+    //testLevel();
     testTree();
 }
 

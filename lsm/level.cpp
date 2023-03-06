@@ -9,7 +9,17 @@ void Level::put(unique_ptr<Run> run_ptr) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
+    // Increment the kv_pairs in the level
+    kv_pairs += runs.front()->max_kv_pairs;
+
+    // Increment the number of runs in the level    
     num_runs++;
+    // Update the number of key-value pairs in the level
+    kv_pairs += runs.front()->max_kv_pairs;
+    // print the number of key-value pairs in the level
+    cout << "Number of key-value pairs in level: " << kv_pairs << endl;
+    // print the max number of key-value pairs in the level
+    cout << "Max number of key-value pairs in level: " << max_kv_pairs << endl;
 }
 
 // Dump the contents of the level
@@ -101,9 +111,16 @@ long Level::calculateLevelSize(int level_num) {
 // Returns true if there is enough space in the level to add a run with max_kv_pairs
 bool Level::willLowerLevelFit() {
     // Get the previous level number, or 1 if this is the first level
-    int prevLevel = (level_num - 1) > 0 ? (level_num - 1) : 1;
-    // Check if the prevLevel - 1 is in the level_sizes vector. If it is, get the level size from the vector. If not, calculate the level size using calculateLevelSize()
-    long prevLevelSize = (prevLevel - 1) < level_sizes.size() ? level_sizes[prevLevel - 1] : calculateLevelSize(prevLevel);
+    int prevLevel = (level_num - 2) > 0 ? (level_num - 2) : 1;
+    // Check if the prevLevel - 1 is in the level_sizes vector. If it is, get the level size from the vector. 
+    // If not, calculate the level size using calculateLevelSize()
+    long prevLevelSize = prevLevel < level_sizes.size() ? level_sizes[prevLevel - 2] : calculateLevelSize(prevLevel);
+    // print the previous level size, the kv_pairs, and the max_kv_pairs
+    cout << "prevLevelSize: " << prevLevelSize << " kv_pairs: " << kv_pairs << " max_kv_pairs: " << max_kv_pairs << endl;
+
+    bool willFit = (kv_pairs + prevLevelSize <= max_kv_pairs);
+    // print whether the level will fit
+    cout << "willFit: " << willFit << endl;
     // Check if the sum of the current level's runs' kv_pairs and the previous level's size is less than or equal to this level's max_kv_pairs
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }

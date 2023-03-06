@@ -21,6 +21,9 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
     levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, FIRST_LEVEL_NUM);
 
+    // Increment the kv_pairs in the level by the max kv_pairs in the buffer
+    levels.back().kv_pairs += buffer.max_kv_pairs;
+
     // Set the level to indicate it's the last level
     levels.back().is_last_level = true;
 
@@ -33,6 +36,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if(buffer.put(key, val)) {
         return;
     }
+    printTree();
 
     // Merge the levels recursively
     merge_levels(levels.begin());
@@ -89,6 +93,8 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
 
     // If the current level has space for another run, return
     if (it->willLowerLevelFit()) {
+        // print the current level number
+        cout << "It FITS! Current level number: " << level_num << "\n";
         return;
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
@@ -99,9 +105,6 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
             it = levels.end() - 2;
             // Set the level to indicate it's the last level
             next->is_last_level = true;
-            // // Make sure the next level is cleared
-            // next->runs.clear();
-
             // print the size of the next->runs deque
             cout << "Size of next->runs deque: " << next->runs.size() << "\n";
         // If the next level has space for another run, move the next pointer to the next level
@@ -123,7 +126,7 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     cout << "Size of runs queue in merge_levels after: " << next->runs.size() << "\n";
     
      // Compact the level
-    next->compactLevel(buffer.max_kv_pairs * next->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
+    next->compactLevel(next->sumMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size);
 
     // Clear the current level
     it->runs.clear();
@@ -133,7 +136,6 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     it->num_runs = 0;
    
 }
-
     // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
     // the number of runs per each level.
     void LSMTree::printTree() {
