@@ -21,9 +21,8 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
     levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, FIRST_LEVEL_NUM);
 
-    // Set the level to indicate it's the last level
-    levels.back().is_last_level = true;
-
+    // Set the first level in the levels vector to be the last level
+    levels.front().is_last_level = true;
     // print out the max_kv_pairs of the buffer
     //cout << "Buffer max_kv_pairs: " << buffer.max_kv_pairs << "\n";
 }
@@ -37,7 +36,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
-        merge_levels(levels.begin());
+        merge_levels(FIRST_LEVEL_NUM);
     }
 
     // Set all levels in the levels vector to not be the last level unless their level_num is equal to the level vector's size
@@ -83,35 +82,41 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 // Given an iterator for the levels vector, check to see if there is space to insert another run
 // If the next level does not have space for the current level, recursively merge the next level downwards
 // until a level has space for a new run in it.
-void LSMTree::merge_levels(vector<Level>::iterator it) {
+void LSMTree::merge_levels(int currentLevelNum) {
+    vector<Level>::iterator it;
     vector<Level>::iterator next;
-    // Save the level number of the current level
-    int level_num = it->level_num;
+
+    // Get the iterator for the current level and subtract 1 since the levels vector is 0-indexed
+    it = levels.begin() + currentLevelNum - 1;
 
     // If the current level has space for another run, return
     if (it->willLowerLevelFit()) {
         // print the current level number
-        cout << "It FITS! Current level number: " << level_num << "\n";
+        cout << "It FITS! Current level number: " << currentLevelNum << "\n";
         return;
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
         if (it + 1 == levels.end()) {
-            levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, level_num + 1);
+            levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, currentLevelNum + 1);
             // Get the iterators "it" and "next" which are lost when the vector is resized
             it = levels.end() - 2;
             next = levels.end() - 1;
+            it->is_last_level = false;
             next->is_last_level = true;
         // If the next level has space for another run, move the next pointer to the next level
         } else {
             next = it + 1;
             if (!next->willLowerLevelFit()) {
-                merge_levels(next);
+                merge_levels(currentLevelNum + 1);
              }
         }
     }
 
+    it = levels.begin() + currentLevelNum - 1;
+    next = levels.begin() + currentLevelNum;
+
     // Clear the deque of runs in the next level
-   // next->runs.clear();
+    // next->runs.clear();
     cout << "Size of runs queue in merge_levels next before: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it before: " << it->runs.size() << "\n";
 
@@ -145,7 +150,13 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
         cout << "Number of entries in the buffer: " << buffer.table_.size() << "\n";
         cout << "Number of levels: " << levels.size() << "\n";
         for (auto it = levels.begin(); it != levels.end(); it++) {
-            cout << "Number of runs in level " << it->level_num << ": " << it->num_runs << "\n";
+            cout << "Number of runs in level " << it->level_num << ": " << it->runs.size() << "\n";
+            // print the number of key/value pairs in each run using the numKVPairs() function
+            cout << "Number of KV pairs in level " << it->level_num << ": " << it->numKVPairs() << "\n";
+        }
+        // For each level, print if it is the last level
+        for (auto it = levels.begin(); it != levels.end(); it++) {
+            cout << "Is level " << it->level_num << " the last level? " << it->is_last_level << "\n";
         }
         cout << "PRINTING TREE COMPLETE\n\n";
     }

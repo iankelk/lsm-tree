@@ -381,10 +381,13 @@ int testTree() {
         LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 2);
 
         // Iterate from 1 to 512 and insert them into the tree
-        for (int i = 1; i <= 5120; i++) {
+        for (int i = 1; i <= 50000; i++) {
             tree.put(i, i);
         }
+        // Print the tree
+        tree.printTree();
     }
+
 
     cout << "Tree: All tests passed!" << endl;
 

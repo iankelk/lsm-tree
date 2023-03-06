@@ -5,8 +5,13 @@ using namespace std;
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(unique_ptr<Run> run_ptr) {
+    // print the kv_pairs, run_ptr->max_kv_pairs, max_kv_pairs, and the level_num in one line
+    cout << "WTF kv_pairs: " << kv_pairs << " run_ptr->max_kv_pairs: " << run_ptr->max_kv_pairs << " max_kv_pairs: " << max_kv_pairs << " level_num: " << level_num << endl;
+    // print the actual number of kv_pairs using numKVPairs()
+    cout << "Actual number of kv_pairs: " << numKVPairs() << endl;
+
     // Check if there is enough space in the level to add the run
-    if (kv_pairs + run_ptr->max_kv_pairs > max_kv_pairs) {
+    if (numKVPairs() + run_ptr->max_kv_pairs > max_kv_pairs) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
@@ -79,7 +84,7 @@ void Level::compactLevel(long new_max_kv_pairs, int capacity, double error_rate,
     // Set the number of key-value pairs in the level to 0
     kv_pairs = 0;
 
-    put(make_unique<Run>(new_max_kv_pairs, capacity, error_rate, bitset_size));
+    put(make_unique<Run>(merged_map.size(), capacity, error_rate, bitset_size));
 
     cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
 
@@ -130,12 +135,13 @@ long Level::sumMaxKvPairs() {
 
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
 long Level::getLevelSize(int level_num) {
-    // Check if the level_num - 1 is in the level_sizes vector. If it is, get the level size from the vector.
-    if (level_num - 1 < level_sizes.size()) {
-        return level_sizes[level_num - 1];
+    // Check if the level_num - 1 is in the level_sizes map. 
+    // If it is, get the level size from the map. If not, calculate it and cache it
+    if (level_sizes.find(level_num) != level_sizes.end()) {
+        return level_sizes[level_num];
     } else {
         long level_size = pow(fanout, level_num) * buffer_size;
-        level_sizes.insert(level_sizes.begin() + level_num - 1, level_size);
+        level_sizes[level_num] = level_size;
         return level_size;
     }
 }
@@ -143,7 +149,8 @@ long Level::getLevelSize(int level_num) {
 // Returns true if there is enough space in the level to flush the buffer
 bool Level::willBufferFit() {
     // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
-    return (kv_pairs + buffer_size <= max_kv_pairs);
+    return (numKVPairs() + buffer_size <= max_kv_pairs);
+    //return (kv_pairs + buffer_size <= max_kv_pairs);
 }
 
 // Returns true if there is enough space in the level to add a run with max_kv_pairs
@@ -156,9 +163,18 @@ bool Level::willLowerLevelFit() {
     // print the previous level size, the kv_pairs, and the max_kv_pairs
     cout << "prevLevelSize: " << prevLevelSize << " kv_pairs: " << kv_pairs << " max_kv_pairs: " << max_kv_pairs << endl;
 
-    bool willFit = (kv_pairs + prevLevelSize <= max_kv_pairs);
+    bool willFit = (numKVPairs() + prevLevelSize <= max_kv_pairs);
     // print whether the level will fit
     cout << "willFit: " << willFit << endl;
     // Check if the sum of the current level's runs' kv_pairs and the previous level's size is less than or equal to this level's max_kv_pairs
-    return (kv_pairs + prevLevelSize <= max_kv_pairs);
+    return (numKVPairs() + prevLevelSize <= max_kv_pairs);
+}
+
+// Count the number of kv_pairs in a level by iterating through the runs queue
+int Level::numKVPairs() {
+    int num_kv_pairs = 0;
+    for (const auto& run : runs) {
+        num_kv_pairs += run->max_kv_pairs;
+    }
+    return num_kv_pairs;
 }

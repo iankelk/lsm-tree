@@ -12,7 +12,7 @@ class Level {
 public:
     // level_num is the level number
     int level_num;
-    // boolean if the level is the last level
+    // boolean if the level is the last level.
     bool is_last_level = false;
     // num_runs is the number of runs that are currently in a level
     int num_runs = 0;
@@ -27,7 +27,7 @@ public:
     // Fanout
     int fanout;
     // Vector of level sizes cached
-    vector<long> level_sizes;
+    map<int, long> level_sizes;
     // runs is a std::deque of std::unique_ptr pointing to runs in the level
     deque<unique_ptr<Run>> runs;
     // constructor
@@ -51,6 +51,9 @@ public:
     bool willLowerLevelFit();
     // Returns true if there is enough space in the level flush the memtable
     bool willBufferFit();
+    // Returns the number of kv_pairs in the level
+    int numKVPairs();
+
 
     // copy constructor
     Level(Level&& other) noexcept

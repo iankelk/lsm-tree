@@ -25,10 +25,11 @@ class LSMTree {
     bool level_policy;
 
     vector<Level> levels;
-    void merge_levels(vector<Level>::iterator);
-    void printTree();
+    void merge_levels(int currentLevelNum);
+    
 public:
     LSMTree(int, float, int, int, int);
+    void printTree();
     void put(KEY_t, VAL_t);
     // void get(KEY_t);
     // void range(KEY_t, KEY_t);
