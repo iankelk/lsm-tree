@@ -310,7 +310,8 @@ int testRun() {
 int testLevel() {
 
     // Create a level with maximum of 2 runs of size 4
-    Level level(4, false, 1);
+    // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
+    Level level(512, 2, false, 1);
 
     // Create 3 runs
     // Run run1(4, 2, 0.01, 10);

@@ -18,7 +18,8 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     level_policy = DEFAULT_LEVELING_POLICY;
 
     // Level(int n, bool l, int ln) : max_runs(n), leveling(l), level_num(ln), num_runs(0) {}
-    levels.emplace_back(pow(fanout, FIRST_LEVEL_NUM), level_policy, FIRST_LEVEL_NUM);
+    // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
+    levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, FIRST_LEVEL_NUM);
 
     // Set the level to indicate it's the last level
     levels.back().is_last_level = true;
@@ -87,12 +88,12 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     int level_num = it->level_num;
 
     // If the current level has space for another run, return
-    if (it->num_runs < it->max_runs) {
+    if (it->willLowerLevelFit()) {
         return;
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
         if (it + 1 == levels.end()) {
-            levels.emplace_back(pow(fanout, level_num + 1), level_policy, level_num + 1);
+            levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, level_num + 1);
             // Get the iterators next and it which are lost when the vector is resized
             next = levels.end() - 1;
             it = levels.end() - 2;
@@ -106,7 +107,7 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
         // If the next level has space for another run, move the next pointer to the next level
         } else {
             next = it + 1;
-            if (next->num_runs >= next->max_runs) {
+            if (!next->willLowerLevelFit()) {
                 merge_levels(next);
              }
         }
@@ -121,14 +122,13 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     // Print the size of the runs queue
     cout << "Size of runs queue in merge_levels after: " << next->runs.size() << "\n";
     
-    // Increment the number of runs in the next level
-    next->num_runs += it->num_runs;
-
      // Compact the level
-    next->compactLevel(buffer.max_kv_pairs * it->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
+    next->compactLevel(buffer.max_kv_pairs * next->num_runs, bf_capacity, bf_error_rate, bf_bitset_size);
 
     // Clear the current level
     it->runs.clear();
+    // Increment the number of runs in the next level
+    next->num_runs += it->num_runs;
     // Zero the number of runs in the current level
     it->num_runs = 0;
    
