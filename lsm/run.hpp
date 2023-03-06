@@ -32,6 +32,23 @@ public:
     long size;
     int fd;
     void closeFile();
+
+//     Run(Run&& other) noexcept
+//     : max_key(other.max_key),
+//       max_kv_pairs(other.max_kv_pairs),
+//       capacity(other.capacity),
+//       error_rate(other.error_rate),
+//       bitset_size(other.bitset_size),
+//       bloom_filter(std::move(other.bloom_filter)),
+//       fence_pointers(std::move(other.fence_pointers)),
+//       tmp_file(std::move(other.tmp_file)),
+//       size(std::move(other.size)),
+//       fd(std::move(other.fd))
+// {
+//     // other.fd = FILE_DESCRIPTOR_UNINITIALIZED;
+//     // other.size = 0;
+// }
+
 };
 
 #endif

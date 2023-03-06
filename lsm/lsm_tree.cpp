@@ -66,8 +66,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Print the filename of the temporary file
     cout << "Filename: " << levels.front().runs.front()->tmp_file << endl;
-    // increment the number of runs in the first level
-    //levels.front().num_runs++;
 
     // Flush the buffer to level 1
     for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
@@ -123,19 +121,20 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
 
-    
      // Compact the level if next->runs has more than one run
     if (next->runs.size() > 1) {
         next->compactLevel(next->sumMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size);
     }
     
+    // Increment the number of runs in the next level
+    next->num_runs = next->runs.size();
+    // print out the filename of the first run in the next level
+    cout << "Filename of first run in next level: " << next->runs.front()->tmp_file << "\n";
+
     // Clear the current level
     it->runs.clear();
-    // Increment the number of runs in the next level
-    next->num_runs += it->num_runs;
     // Zero the number of runs in the current level
-    it->num_runs = 0;
-   
+    it->num_runs = it->runs.size();
 }
     // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
     // the number of runs per each level.

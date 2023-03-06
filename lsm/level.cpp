@@ -13,12 +13,15 @@ void Level::put(unique_ptr<Run> run_ptr) {
     // Increment the kv_pairs in the level
     kv_pairs += runs.front()->max_kv_pairs;
 
-    // Increment the number of runs in the level    
-    num_runs++;
+    // Calculate the number of runs in the runs queue
+    num_runs = runs.size();
+
     // print the number of key-value pairs in the level
     cout << "Number of key-value pairs in level: " << kv_pairs << endl;
     // print the max number of key-value pairs in the level
     cout << "Max number of key-value pairs in level: " << max_kv_pairs << endl;
+    // print the temporary file name of the run
+    cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
 }
 
 // Dump the contents of the level
@@ -66,31 +69,49 @@ void Level::compactLevel(long new_max_kv_pairs, int capacity, double error_rate,
         }
     }
 
-    // Create a new run with the merged data
-    // TODO: FANOUT should be a parameter
-    Run merged_run(new_max_kv_pairs, capacity, error_rate, bitset_size);
-    for (const auto &kv : merged_map) {
-        // Check if the key-value pair is a tombstone and if the level is the last level
-        if (!(is_last_level && kv.second == TOMBSTONE)) {
-            merged_run.put(kv.first, kv.second);
-        }
-    }
-
-    // Check if this is the last level
-
-
-    // Delete the old runs
-    // for (auto &run : runs) {
-    //     delete &run;
-    // }
+    // print the size of the merged_map
+    cout << "Size of merged_map: " << merged_map.size() << endl;
 
     // Clear the runs queue
     runs.clear();
-    // Add the merged run to the runs queue
 
-    runs.emplace_front(move(unique_ptr<Run> (&merged_run)));
+    put(make_unique<Run>(new_max_kv_pairs, capacity, error_rate, bitset_size));
+
+    cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
+
+
+    // // Emplace_front a new run with the merged data to the runs queue
+    // runs.emplace_front(make_unique<Run>(new_max_kv_pairs, capacity, error_rate, bitset_size));
+
+    // Iterate through the merged map and add the key-value pairs to the run
+    for (const auto &kv : merged_map) {
+        // Check if the key-value pair is a tombstone and if the level is the last level
+        if (!(is_last_level && kv.second == TOMBSTONE)) {
+            runs.front()->put(kv.first, kv.second);
+        }
+    }
+
+
+
+
+
+    // // Create a new run with the merged data
+    // // TODO: FANOUT should be a parameter
+    // Run merged_run(new_max_kv_pairs, capacity, error_rate, bitset_size);
+    // for (const auto &kv : merged_map) {
+    //     // Check if the key-value pair is a tombstone and if the level is the last level
+    //     if (!(is_last_level && kv.second == TOMBSTONE)) {
+    //         merged_run.put(kv.first, kv.second);
+    //     }
+    // }
+
+    // Add the merged run to the runs queue
+    //runs.emplace_front(move(unique_ptr<Run> (&merged_run)));
+    //runs.emplace_front(move(merged_run));
     // Set the number of runs to 1
-    num_runs = 1;  
+    num_runs = runs.size();
+    // print the number of runs in the level
+    cout << "Compaction @ end: Number of runs in level: " << num_runs << endl;
           
 }
 long Level::sumMaxKvPairs() {
@@ -98,6 +119,8 @@ long Level::sumMaxKvPairs() {
     for (const auto& run : runs) {
         sum += run->max_kv_pairs;
     }
+    // print sum
+    cout << "Sum of max_kv_pairs: " << sum << endl;
     return sum;
 }
 
