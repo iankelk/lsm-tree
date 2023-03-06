@@ -114,12 +114,15 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
 
     // Clear the deque of runs in the next level
    // next->runs.clear();
-    cout << "Size of runs queue in merge_levels before: " << next->runs.size() << "\n";
+    cout << "Size of runs queue in merge_levels next before: " << next->runs.size() << "\n";
+    cout << "Size of runs queue in merge_levels it before: " << it->runs.size() << "\n";
 
     // Merge the current level into the next level by moving the entire deque of runs into the next level
     next->runs.insert(next->runs.end(), make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
     // Print the size of the runs queue
-    cout << "Size of runs queue in merge_levels after: " << next->runs.size() << "\n";
+    cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
+    cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
+
     
      // Compact the level if next->runs has more than one run
     if (next->runs.size() > 1) {

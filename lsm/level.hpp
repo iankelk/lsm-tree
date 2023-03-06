@@ -42,7 +42,7 @@ public:
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
-    void compactLevel(long max_kv_pairs, int capacity, double error_rate, int bitset_size);
+    void compactLevel(long new_max_kv_pairs, int capacity, double error_rate, int bitset_size);
     // sumMaxKvPairs returns the sum of the max_kv_pairs of the runs in the level
     long sumMaxKvPairs();
     // getLevelSize returns the size of the level

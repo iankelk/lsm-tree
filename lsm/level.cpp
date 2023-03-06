@@ -15,8 +15,6 @@ void Level::put(unique_ptr<Run> run_ptr) {
 
     // Increment the number of runs in the level    
     num_runs++;
-    // Update the number of key-value pairs in the level
-    kv_pairs += runs.front()->max_kv_pairs;
     // print the number of key-value pairs in the level
     cout << "Number of key-value pairs in level: " << kv_pairs << endl;
     // print the max number of key-value pairs in the level
@@ -45,12 +43,14 @@ void Level::dump() {
 }
 
 // Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
-void Level::compactLevel(long max_kv_pairs, int capacity, double error_rate, int bitset_size) {
+void Level::compactLevel(long new_max_kv_pairs, int capacity, double error_rate, int bitset_size) {
+    int i;
+ 
     // Create a new map to hold the merged data
     map<KEY_t, VAL_t> merged_map;
 
     // Print the size of the runs queue
-    cout << "Size of runs queue: " << runs.size() << endl;
+    //cout << "Size of runs queue: " << runs.size() << endl;
 
     // Iterate through the runs in the level
     for (auto &run : runs) {
@@ -68,7 +68,7 @@ void Level::compactLevel(long max_kv_pairs, int capacity, double error_rate, int
 
     // Create a new run with the merged data
     // TODO: FANOUT should be a parameter
-    Run merged_run(max_kv_pairs, capacity, error_rate, bitset_size);
+    Run merged_run(new_max_kv_pairs, capacity, error_rate, bitset_size);
     for (const auto &kv : merged_map) {
         // Check if the key-value pair is a tombstone and if the level is the last level
         if (!(is_last_level && kv.second == TOMBSTONE)) {
@@ -90,7 +90,8 @@ void Level::compactLevel(long max_kv_pairs, int capacity, double error_rate, int
 
     runs.emplace_front(move(unique_ptr<Run> (&merged_run)));
     // Set the number of runs to 1
-    num_runs = 1;         
+    num_runs = 1;  
+          
 }
 long Level::sumMaxKvPairs() {
     long sum = 0;
