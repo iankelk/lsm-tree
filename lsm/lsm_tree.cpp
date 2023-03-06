@@ -33,7 +33,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if(buffer.put(key, val)) {
         return;
     }
-    printTree();
+    //printTree();
 
     // Check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
@@ -129,12 +129,14 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     // Increment the number of runs in the next level
     next->num_runs = next->runs.size();
     // print out the filename of the first run in the next level
-    cout << "Filename of first run in next level: " << next->runs.front()->tmp_file << "\n";
+    //cout << "Filename of first run in next level: " << next->runs.front()->tmp_file << "\n";
 
     // Clear the current level
     it->runs.clear();
     // Zero the number of runs in the current level
     it->num_runs = it->runs.size();
+    // Zero the number of key/value pairs in the current level
+    it->kv_pairs = 0;
 }
     // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
     // the number of runs per each level.

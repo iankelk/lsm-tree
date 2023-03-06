@@ -74,6 +74,10 @@ void Level::compactLevel(long new_max_kv_pairs, int capacity, double error_rate,
 
     // Clear the runs queue
     runs.clear();
+    // Set the number of runs to 0
+    num_runs = 0;
+    // Set the number of key-value pairs in the level to 0
+    kv_pairs = 0;
 
     put(make_unique<Run>(new_max_kv_pairs, capacity, error_rate, bitset_size));
 
