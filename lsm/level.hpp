@@ -45,10 +45,12 @@ public:
     void compactLevel(long max_kv_pairs, int capacity, double error_rate, int bitset_size);
     // sumMaxKvPairs returns the sum of the max_kv_pairs of the runs in the level
     long sumMaxKvPairs();
-    // calculateLevelSize calculates the size of the level
-    long calculateLevelSize(int level_num); 
+    // getLevelSize returns the size of the level
+    long getLevelSize(int level_num); 
     // Returns true if there is enough space in the level to add a run with max_kv_pairs
     bool willLowerLevelFit();
+    // Returns true if there is enough space in the level flush the memtable
+    bool willBufferFit();
 
     // copy constructor
     Level(Level&& other) noexcept

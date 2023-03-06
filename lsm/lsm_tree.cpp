@@ -21,9 +21,6 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
     levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, FIRST_LEVEL_NUM);
 
-    // Increment the kv_pairs in the level by the max kv_pairs in the buffer
-    levels.back().kv_pairs += buffer.max_kv_pairs;
-
     // Set the level to indicate it's the last level
     levels.back().is_last_level = true;
 
@@ -38,8 +35,10 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
     printTree();
 
-    // Merge the levels recursively
-    merge_levels(levels.begin());
+    // Check to see if the first level has space for the buffer. If not, merge the levels recursively
+    if (!levels.front().willBufferFit()) {
+        merge_levels(levels.begin());
+    }
 
     // Set all levels in the levels vector to not be the last level unless their level_num is equal to the level vector's size
     // for (auto it = levels.begin(); it != levels.end(); it++) {
@@ -100,13 +99,10 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, level_num + 1);
-            // Get the iterators next and it which are lost when the vector is resized
-            next = levels.end() - 1;
+            // Get the iterators "it" and "next" which are lost when the vector is resized
             it = levels.end() - 2;
-            // Set the level to indicate it's the last level
+            next = levels.end() - 1;
             next->is_last_level = true;
-            // print the size of the next->runs deque
-            cout << "Size of next->runs deque: " << next->runs.size() << "\n";
         // If the next level has space for another run, move the next pointer to the next level
         } else {
             next = it + 1;
@@ -125,9 +121,11 @@ void LSMTree::merge_levels(vector<Level>::iterator it) {
     // Print the size of the runs queue
     cout << "Size of runs queue in merge_levels after: " << next->runs.size() << "\n";
     
-     // Compact the level
-    next->compactLevel(next->sumMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size);
-
+     // Compact the level if next->runs has more than one run
+    if (next->runs.size() > 1) {
+        next->compactLevel(next->sumMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size);
+    }
+    
     // Clear the current level
     it->runs.clear();
     // Increment the number of runs in the next level

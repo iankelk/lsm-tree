@@ -5,7 +5,8 @@ using namespace std;
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(unique_ptr<Run> run_ptr) {
-    if (!willLowerLevelFit()) {
+    // Check if there is enough space in the level to add the run
+    if (kv_pairs + run_ptr->max_kv_pairs > max_kv_pairs) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
@@ -99,13 +100,22 @@ long Level::sumMaxKvPairs() {
     return sum;
 }
 
-long Level::calculateLevelSize(int level_num) {
-    // Calculate the level size using the formula: f^ln * bs
-    long level_size = pow(fanout, level_num) * buffer_size;
-    // Insert the level size into the level_sizes vector at the index of level_num - 1 using insert()
-    level_sizes.insert(level_sizes.begin() + level_num - 1, level_size);
-    // Return the level size
-    return level_size;
+// If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
+long Level::getLevelSize(int level_num) {
+    // Check if the level_num - 1 is in the level_sizes vector. If it is, get the level size from the vector.
+    if (level_num - 1 < level_sizes.size()) {
+        return level_sizes[level_num - 1];
+    } else {
+        long level_size = pow(fanout, level_num) * buffer_size;
+        level_sizes.insert(level_sizes.begin() + level_num - 1, level_size);
+        return level_size;
+    }
+}
+
+// Returns true if there is enough space in the level to flush the buffer
+bool Level::willBufferFit() {
+    // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
+    return (kv_pairs + buffer_size <= max_kv_pairs);
 }
 
 // Returns true if there is enough space in the level to add a run with max_kv_pairs
@@ -114,7 +124,7 @@ bool Level::willLowerLevelFit() {
     int prevLevel = (level_num - 2) > 0 ? (level_num - 2) : 1;
     // Check if the prevLevel - 1 is in the level_sizes vector. If it is, get the level size from the vector. 
     // If not, calculate the level size using calculateLevelSize()
-    long prevLevelSize = prevLevel < level_sizes.size() ? level_sizes[prevLevel - 2] : calculateLevelSize(prevLevel);
+    long prevLevelSize = getLevelSize(prevLevel);
     // print the previous level size, the kv_pairs, and the max_kv_pairs
     cout << "prevLevelSize: " << prevLevelSize << " kv_pairs: " << kv_pairs << " max_kv_pairs: " << max_kv_pairs << endl;
 
@@ -124,4 +134,3 @@ bool Level::willLowerLevelFit() {
     // Check if the sum of the current level's runs' kv_pairs and the previous level's size is less than or equal to this level's max_kv_pairs
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }
-
