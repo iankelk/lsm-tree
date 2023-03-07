@@ -311,7 +311,7 @@ int testLevel() {
 
     // Create a level with maximum of 2 runs of size 4
     // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
-    Level level(512, 2, false, 1);
+    Level level(512, 2, Level::LEVELED, 1);
 
     // Create 3 runs
     // Run run1(4, 2, 0.01, 10);
@@ -378,7 +378,7 @@ int testTree() {
 
     {
         // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
-        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 2, LSMTree::LEVELED);
+        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 2, Level::LEVELED);
 
         // Iterate from 1 to 512 and insert them into the tree
         for (int i = 1; i <= 50000; i++) {

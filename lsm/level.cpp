@@ -60,13 +60,15 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
     // Create a new map to hold the merged data
     map<KEY_t, VAL_t> merged_map;
 
-    // Print the size of the runs queue
-    //cout << "Size of runs queue: " << runs.size() << endl;
+    // Print the ACTUAL REAL size of the level
+    cout << "Num KV pairs in level: " << numKVPairs() << endl;
 
     // Iterate through the runs in the level
-    for (auto &run : runs) {
+    for  (const auto& run : runs) {
         // Get the map of the run
         map<KEY_t, VAL_t> run_map = run->getMap();
+        // print the size of the run_map
+        cout << "Size of run_map: " << run_map.size() << endl;
         // Iterate through the key-value pairs in the run map
         for (const auto &kv : run_map) {
             // Check if the key is already in the merged map

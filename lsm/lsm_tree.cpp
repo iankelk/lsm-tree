@@ -10,7 +10,7 @@
 
 using namespace std;
 
-LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Policy level_policy) :
+LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) :
     bf_capacity(bf_capacity), bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
     buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
 {
@@ -55,10 +55,9 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
 
-    // If level_policy is true, then compact the first level
-    if (level_policy == LEVELED) {
-        levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
-    }
+    // print out the max_kv_pairs of the first run of the first level
+    cout << "Max kv pairs of first run of first level: " << levels.front().runs.front()->max_kv_pairs << "\n";
+
     //unique_ptr<Run> run_ptr = make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size);
     //levels.front().runs.emplace_front(move(run_ptr));
 
@@ -75,6 +74,12 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
         levels.front().runs.front()->put(it->first, it->second);
     }
+
+    // If level_policy is true, then compact the first level
+    if (level_policy == Level::LEVELED) {
+        levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+    }
+    
     // Clear the buffer
     buffer.clear();
     // Add the key-value pair to the buffer
@@ -131,9 +136,9 @@ void LSMTree::merge_levels(int currentLevelNum) {
     cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
 
-    if (level_policy == LEVELED || level_policy == LAZY_LEVELED && next->is_last_level) {
+    //if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->is_last_level) {
         next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
-    }
+    //}
     
     // Increment the number of runs in the next level
     next->num_runs = next->runs.size();
