@@ -10,12 +10,12 @@
 
 using namespace std;
 
-LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout) :
-    bf_capacity(bf_capacity), bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout),
+LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Policy level_policy) :
+    bf_capacity(bf_capacity), bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
     buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
 {
     // TODO: correct the leveling to read from the command line
-    level_policy = DEFAULT_LEVELING_POLICY;
+    //level_policy = DEFAULT_LEVELING_POLICY;
 
     // Level(int n, bool l, int ln) : max_runs(n), leveling(l), level_num(ln), num_runs(0) {}
     // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
@@ -54,6 +54,11 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
+
+    // If level_policy is true, then compact the first level
+    if (level_policy == LEVELED) {
+        levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+    }
     //unique_ptr<Run> run_ptr = make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size);
     //levels.front().runs.emplace_front(move(run_ptr));
 
@@ -126,9 +131,9 @@ void LSMTree::merge_levels(int currentLevelNum) {
     cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
 
-
-    next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
-    
+    if (level_policy == LEVELED || level_policy == LAZY_LEVELED && next->is_last_level) {
+        next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+    }
     
     // Increment the number of runs in the next level
     next->num_runs = next->runs.size();
