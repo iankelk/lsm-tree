@@ -79,7 +79,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (level_policy == Level::LEVELED) {
         levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
     }
-    
+
     // Clear the buffer
     buffer.clear();
     // Add the key-value pair to the buffer
@@ -136,9 +136,9 @@ void LSMTree::merge_levels(int currentLevelNum) {
     cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
 
-    //if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->is_last_level) {
+    if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->is_last_level) {
         next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
-    //}
+    }
     
     // Increment the number of runs in the next level
     next->num_runs = next->runs.size();

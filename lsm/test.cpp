@@ -378,10 +378,10 @@ int testTree() {
 
     {
         // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
-        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 2, Level::LEVELED);
+        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 5, Level::LAZY_LEVELED);
 
         // Iterate from 1 to 512 and insert them into the tree
-        for (int i = 1; i <= 50000; i++) {
+        for (int i = 1; i <= 100000; i++) {
             tree.put(i, i);
         }
         // Print the tree
