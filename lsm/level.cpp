@@ -51,9 +51,12 @@ void Level::dump() {
 }
 
 // Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
-void Level::compactLevel(long new_max_kv_pairs, int capacity, double error_rate, int bitset_size) {
-    int i;
- 
+void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
+    
+    // Nothing to compact if there is only one run
+    if (runs.size() == 1) {
+        return;
+    }
     // Create a new map to hold the merged data
     map<KEY_t, VAL_t> merged_map;
 

@@ -126,10 +126,9 @@ void LSMTree::merge_levels(int currentLevelNum) {
     cout << "Size of runs queue in merge_levels next after: " << next->runs.size() << "\n";
     cout << "Size of runs queue in merge_levels it after: " << it->runs.size() << "\n";
 
-     // Compact the level if next->runs has more than one run
-    if (next->runs.size() > 1) {
-        next->compactLevel(next->sumMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size);
-    }
+
+    next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+    
     
     // Increment the number of runs in the next level
     next->num_runs = next->runs.size();
