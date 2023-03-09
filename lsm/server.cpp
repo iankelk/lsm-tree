@@ -34,9 +34,19 @@ void Server::handle_client(int client_socket) {
     std::cout << "New client connected" << std::endl;
 
     // Read commands from client
-    std::string command;
-    char response[1024];
-    while (std::getline(std::cin, command)) {
+    char buffer[1024];
+    while (true) {
+        // Receive command
+        ssize_t n_read = recv(client_socket, buffer, sizeof(buffer), 0);
+        if (n_read == -1) {
+            std::cerr << "Error receiving data from client" << std::endl;
+            break;
+        } else if (n_read == 0) {
+            std::cout << "Client disconnected" << std::endl;
+            break;
+        }
+        std::string command(buffer, n_read);
+
         // Parse command
         std::stringstream ss(command);
         char op;
@@ -44,6 +54,8 @@ void Server::handle_client(int client_socket) {
         KEY_t key, lower_key, upper_key;
         VAL_t value;
         std::string file_name;
+
+        char response[1024];
         
         switch (op) {
             case 'p':
