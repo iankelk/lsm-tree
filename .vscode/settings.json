@@ -76,7 +76,8 @@
         "variant": "cpp",
         "algorithm": "cpp",
         "filesystem": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "thread": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }

@@ -14,8 +14,6 @@
 #include "run.hpp"
 #include "level.hpp"
 
-using namespace std;
-
 class LSMTree {
 public:
     LSMTree(int, float, int, int, int, Level::Policy);

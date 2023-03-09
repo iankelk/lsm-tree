@@ -29,6 +29,11 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+
+    if (val < VAL_MIN || val > VAL_MAX) {
+        die("Could not insert value " + to_string(val) + ": out of range.");
+    }
+
     if(buffer.put(key, val)) {
         return;
     }
@@ -38,31 +43,12 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (!levels.front().willBufferFit()) {
         merge_levels(FIRST_LEVEL_NUM);
     }
-
-    // Set all levels in the levels vector to not be the last level unless their level_num is equal to the level vector's size
-    // for (auto it = levels.begin(); it != levels.end(); it++) {
-    //     it->is_last_level = (it->level_num == levels.size());
-    // }
-
-    // // print the key and value
-    // cout << "Key: " << key << " Value: " << val << "\n";
-
-    // // print the max runs of the first level
-    // cout << "Max runs of first level: " << levels.front().max_runs << "\n";
-    // // print the number of runs of the first level
-    // cout << "Number of runs of first level: " << levels.front().num_runs << "\n";
     
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
 
     // print out the max_kv_pairs of the first run of the first level
     cout << "Max kv pairs of first run of first level: " << levels.front().runs.front()->max_kv_pairs << "\n";
-
-    //unique_ptr<Run> run_ptr = make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size);
-    //levels.front().runs.emplace_front(move(run_ptr));
-
-    // Create a new run with the right number of key/value pairs, bloom filter capacity, error rate, and bitset size
-    //levels.front().runs.emplace_front(make_unique<Run>(buffer.max_kv_pairs, bf_capacity, bf_error_rate, bf_bitset_size));
 
     // print the capacity of the first run of the first level
     cout << "Capacity of first run of first level: " << levels.front().runs.front()->capacity << "\n";
