@@ -62,11 +62,9 @@ int main() {
         }
     }
 
-    // End measuring time
+    // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
-    // Calculate duration
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-     // Print duration
     std::cout << "Processing the workload took " << duration.count() << " microseconds" << std::endl;
 
     // Clean up resources

@@ -6,30 +6,36 @@
 //     // TODO: Implement put command
 // }
 
-int get(int key) {
+int get(int key)
+{
     // TODO: Implement get command
     return 0;
 }
 
-std::vector<std::pair<int, int>> range(int lower_key, int upper_key) {
+std::vector<std::pair<int, int>> range(int lower_key, int upper_key)
+{
     // TODO: Implement range command
     return std::vector<std::pair<int, int>>();
 }
 
-void del(int key) {
+void del(int key)
+{
     // TODO: Implement delete command
 }
 
-void load(const std::string& file_name) {
+void load(const std::string &file_name)
+{
     // TODO: Implement load command
 }
 
-void printStats() {
+void printStats()
+{
     // TODO: Implement print stats command
 }
 
 // Thread function to handle client connections
-void Server::handle_client(int client_socket) {
+void Server::handle_client(int client_socket)
+{
     std::vector<std::pair<int, int>> results = {};
 
     std::cout << "New client connected" << std::endl;
@@ -38,14 +44,15 @@ void Server::handle_client(int client_socket) {
     char buffer[1024];
     // Check if client is still connected
 
-
-    while (true) {
+    while (true)
+    {
         // Receive command
         ssize_t n_read = recv(client_socket, buffer, sizeof(buffer), 0);
         if (n_read == -1) {
             std::cerr << "Error receiving data from client" << std::endl;
             break;
-        } else if (n_read == 0) {
+        }
+        else if (n_read == 0) {
             std::cout << "Client disconnected" << std::endl;
             return;
         }
@@ -60,110 +67,114 @@ void Server::handle_client(int client_socket) {
         std::string file_name;
 
         char response[1024];
-        
-        switch (op) {
-            case 'p':
-                ss >> key >> value;
-                lsmTree->put(key, value);
-                snprintf(response, sizeof(response), "PUT %d %d\n", key, value);
-                //send(client_socket, response, strlen(response), 0);
-                break;
-            case 'g':
-                ss >> key;
-                snprintf(response, sizeof(response),"%d\n", get(key));
-                //send(client_socket, response, strlen(response), 0);
-                break;
-            case 'r':
-                ss >> lower_key >> upper_key;
-                results = range(lower_key, upper_key);
-                for (const auto& p : results) {
-                    snprintf(response, sizeof(response),"%d:%d ", p.first, p.second);
-                    send(client_socket, response, strlen(response), 0);
-                }
-                snprintf(response, sizeof(response),"\n");
-                //send(client_socket, response, strlen(response), 0);
-                break;
-            case 'd':
-                ss >> key;
-                del(key);
-                snprintf(response, sizeof(response),"DEL %d\n", key);
-                //send(client_socket, response, strlen(response), 0);
-                break;
-            case 'l':
-                ss >> file_name;
-                load(file_name);
-                snprintf(response, sizeof(response),"LOADED %s\n", file_name.c_str());
-                //send(client_socket, response, strlen(response), 0);
-                break;
-            case 's':
-                lsmTree->printTree();
-                snprintf(response, sizeof(response),"PRINT TREE %s\n", "PLACEHOLDER");
-                break;
-            default:
-                snprintf(response, sizeof(response),"Invalid command\n");
-                //send(client_socket, response, strlen(response), 0);
+
+        switch (op)
+        {
+        case 'p':
+            ss >> key >> value;
+            lsmTree->put(key, value);
+            snprintf(response, sizeof(response), "PUT %d %d\n", key, value);
+            // send(client_socket, response, strlen(response), 0);
+            break;
+        case 'g':
+            ss >> key;
+            snprintf(response, sizeof(response), "%d\n", get(key));
+            // send(client_socket, response, strlen(response), 0);
+            break;
+        case 'r':
+            ss >> lower_key >> upper_key;
+            results = range(lower_key, upper_key);
+            for (const auto &p : results) {
+                snprintf(response, sizeof(response), "%d:%d ", p.first, p.second);
+                send(client_socket, response, strlen(response), 0);
+            }
+            snprintf(response, sizeof(response), "\n");
+            // send(client_socket, response, strlen(response), 0);
+            break;
+        case 'd':
+            ss >> key;
+            del(key);
+            snprintf(response, sizeof(response), "DEL %d\n", key);
+            // send(client_socket, response, strlen(response), 0);
+            break;
+        case 'l':
+            ss >> file_name;
+            load(file_name);
+            snprintf(response, sizeof(response), "LOADED %s\n", file_name.c_str());
+            // send(client_socket, response, strlen(response), 0);
+            break;
+        case 's':
+            lsmTree->printTree();
+            snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
+            break;
+        default:
+            snprintf(response, sizeof(response), "Invalid command\n");
+            // send(client_socket, response, strlen(response), 0);
         }
         send(client_socket, response, strlen(response), 0);
     }
-    
+
     // Clean up resources
     close();
     std::cout << "Client disconnected" << std::endl;
 }
 
-void Server::run() {
+void Server::run()
+{
     // Accept incoming connections
     while (true) {
         sockaddr_in client_address;
         socklen_t client_address_size = sizeof(client_address);
-        int client_socket = accept(server_socket, (sockaddr*)&client_address, &client_address_size);
+        int client_socket = accept(server_socket, (sockaddr *)&client_address, &client_address_size);
         if (client_socket == -1) {
             std::cerr << "Error accepting incoming connection" << std::endl;
             continue;
         }
-        
+
         // Spawn thread to handle client connection
         std::thread client_thread(&Server::handle_client, this, client_socket);
         client_thread.detach();
     }
 }
 
-Server::Server(int port) {
+Server::Server(int port)
+{
     // Create server socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == -1) {
         std::cerr << "Error creating server socket" << std::endl;
         exit(1);
     }
-    
+
     // Bind socket to port
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = INADDR_ANY;
     server_address.sin_port = htons(port);
-    if (::bind(server_socket, (sockaddr*)&server_address, sizeof(server_address)) == -1) {
+    if (::bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
         std::cerr << "Error binding server socket" << std::endl;
         close();
         exit(1);
     }
-    
+
     // Listen for incoming connections
     if (listen(server_socket, SOMAXCONN) == -1) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         close();
         exit(1);
     }
-    
     std::cout << "Server started, listening on port " << port << std::endl;
 }
 
-void Server::close() {
+void Server::close()
+{
     if (server_socket != -1) {
         shutdown(server_socket, SHUT_RDWR);
         ::close(server_socket);
     }
 }
 
-void Server::createLSMTree(int argc, char** argv) {
+void Server::createLSMTree(int argc, char **argv)
+{
     // Process command line arguments based on your LSM-Tree implementation
     int opt, bf_capacity, bf_bitset_size, buffer_num_pages, fanout;
     float bf_error_rate;
@@ -176,41 +187,74 @@ void Server::createLSMTree(int argc, char** argv) {
     fanout = DEFAULT_FANOUT;
     level_policy = DEFAULT_LEVELING_POLICY;
 
-    while ((opt = getopt(argc, argv, "c:e:b:n:f:l")) != -1) {
+    while ((opt = getopt(argc, argv, "c:e:b:n:f:l:h")) != -1) {
         switch (opt) {
-            case 'c':
-                bf_capacity = atoi(optarg);
-                break;
-            case 'e':
-                bf_error_rate = atof(optarg);
-                break;
-            case 'b':
-                bf_bitset_size = atoi(optarg);
-                break;
-            case 'n':
-                buffer_num_pages = atoi(optarg);
-                break;
-            case 'f':
-                fanout = atoi(optarg);
-                break;
-            case 'l':
+        case 'c':
+            bf_capacity = atoi(optarg);
+            break;
+        case 'e':
+            bf_error_rate = atof(optarg);
+            break;
+        case 'b':
+            bf_bitset_size = atoi(optarg);
+            break;
+        case 'n':
+            buffer_num_pages = atoi(optarg);
+            break;
+        case 'f':
+            fanout = atoi(optarg);
+            break;
+        case 'l':
+            if (strcmp(optarg, "TIERED") == 0) {
+                level_policy = Level::Policy::TIERED;
+            } else if (strcmp(optarg, "LEVELED") == 0) {
+                level_policy = Level::Policy::LEVELED;
+            }
+            else if (strcmp(optarg, "LAZY_LEVELED") == 0) {
                 level_policy = Level::Policy::LAZY_LEVELED;
-                break;
-            default:
-                std::cerr << "Usage: " << argv[0] << " [-c capacity] [-e error_rate] [-b bitset_size] [-n num_pages] [-f fanout] [-l level_policy]" << std::endl;
+            }
+            else {
+                std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, and LAZY_LEVELED" << std::endl;
                 exit(1);
+            }
+            break;
+        case 'h':
+            printHelp();
+            exit(0);
+        default:
+            printHelp();
+            exit(1);
         }
     }
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bf_capacity, bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
 }
 
-int main(int argc, char** argv) {
+void Server::printHelp()
+{
+    // Create a mapping of the DEFAULT_LEVELING_POLICY enum to a string
+    std::map<Level::Policy, std::string> level_policy_map;
+    level_policy_map[Level::Policy::TIERED] = "TIERED";
+    level_policy_map[Level::Policy::LEVELED] = "LEVELED";
+    level_policy_map[Level::Policy::LAZY_LEVELED] = "LAZY_LEVELED";
+
+    std::cout << "Usage: ./server [OPTIONS]\n"
+              << "Options:\n"
+              << "  -c <capacity>        Bloom filter capacity (default: " << DEFAULT_CAPACITY << ")\n"
+              << "  -e <error_rate>      Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
+              << "  -b <bitset_size>     Bloom filter Bitset size in bytes (default: " << DEFAULT_BITSET_SIZE << ")\n"
+              << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
+              << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -l <level_policy>    Level policy (default: " << level_policy_map[DEFAULT_LEVELING_POLICY] << ")\n"
+              << "  -h                   Print this help message\n" << std::endl
+    ;
+}
+
+int main(int argc, char **argv) {
     // Create server object
     Server server(1234);
     server.createLSMTree(argc, argv);
     server.run();
-
     // Clean up resources
     server.close();
     return 0;

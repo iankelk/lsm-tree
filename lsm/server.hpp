@@ -10,12 +10,14 @@
 #include "lsm_tree.hpp"
 
 // Define the server class
-class Server {
+class Server
+{
 public:
     Server(int port);
-    void createLSMTree(int argc, char** argv);
+    void createLSMTree(int argc, char **argv);
     void run();
     void close();
+
 private:
     // Unique pointer to LSMTree
     std::unique_ptr<LSMTree> lsmTree;
@@ -27,4 +29,5 @@ private:
     socklen_t client_address_size;
     std::thread client_thread;
     void handle_client(int client_socket);
+    void printHelp();
 };

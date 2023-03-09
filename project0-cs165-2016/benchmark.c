@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <chrono>
+
 
 #include "hash_table.h"
 
