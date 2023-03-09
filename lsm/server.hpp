@@ -16,8 +16,6 @@ public:
     void createLSMTree(int argc, char** argv);
     void run();
     void close();
-    std::atomic_bool stop_requested; 
-    static Server* instance;
 private:
     // Unique pointer to LSMTree
     std::unique_ptr<LSMTree> lsmTree;
@@ -29,5 +27,4 @@ private:
     socklen_t client_address_size;
     std::thread client_thread;
     void handle_client(int client_socket);
-
 };

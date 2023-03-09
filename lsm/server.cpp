@@ -1,3 +1,4 @@
+#include <signal.h>
 #include "server.hpp"
 
 // Placeholders for LSM-Tree commands
@@ -35,6 +36,9 @@ void Server::handle_client(int client_socket) {
 
     // Read commands from client
     char buffer[1024];
+    // Check if client is still connected
+
+
     while (true) {
         // Receive command
         ssize_t n_read = recv(client_socket, buffer, sizeof(buffer), 0);
@@ -43,7 +47,7 @@ void Server::handle_client(int client_socket) {
             break;
         } else if (n_read == 0) {
             std::cout << "Client disconnected" << std::endl;
-            break;
+            return;
         }
         std::string command(buffer, n_read);
 
