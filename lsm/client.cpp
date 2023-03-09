@@ -29,6 +29,10 @@ int main() {
     std::string command_str;
     char buffer[1024];
     ssize_t n_read;
+
+     // Start measuring time
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     while (std::getline(std::cin, command_str)) {
         send(client_socket, command_str.c_str(), command_str.size(), 0);
 
@@ -57,6 +61,13 @@ int main() {
             break;
         }
     }
+
+    // End measuring time
+    auto end_time = std::chrono::high_resolution_clock::now();
+    // Calculate duration
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+     // Print duration
+    std::cout << "Processing the workload took " << duration.count() << " microseconds" << std::endl;
 
     // Clean up resources
     close(client_socket);
