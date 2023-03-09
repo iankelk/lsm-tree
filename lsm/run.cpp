@@ -77,10 +77,20 @@ void Run::put(KEY_t key, VAL_t val) {
 VAL_t * Run::get(KEY_t key) {
     VAL_t *val;
 
+    // Print if run is empty
+    cout << "run size: " + to_string(size) + "\n";
+
     // Check if the run is empty
     if (size == 0) {
         return nullptr;
     }
+
+    // Print if the key is in the bloom filter and if it is in the range of the fence pointers
+    cout << "key: " + to_string(key) + "\n";
+    cout << "fence_pointers.front(): " + to_string(fence_pointers.front()) + "\n";
+    cout << "max_key: " + to_string(max_key) + "\n";
+    cout << "bloom_filter.contains(key): " + to_string(bloom_filter.contains(key)) + "\n";
+
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
     if (key < fence_pointers.front() || key > max_key || !bloom_filter.contains(key)) {

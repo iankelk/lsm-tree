@@ -49,7 +49,9 @@ int main() {
                 std::istringstream iss(response_str);
                 std::string token;
                 while (std::getline(iss, token)) {
-                    std::cout << token << std::endl;
+                    if (token.size() > 0 && (token[0] != 'o')) {
+                        std::cout << token << std::endl;
+                    }
                 }
                 response_ss.str("");
                 memset(buffer, 0, sizeof(buffer));

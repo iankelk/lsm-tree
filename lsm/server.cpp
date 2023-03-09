@@ -1,31 +1,10 @@
 #include <signal.h>
 #include "server.hpp"
 
-// Placeholders for LSM-Tree commands
-// void put(KEY_t key, VAL_t value) {
-//     // TODO: Implement put command
-// }
-
-int get(int key)
-{
-    // TODO: Implement get command
-    return 0;
-}
-
 std::vector<std::pair<int, int>> range(int lower_key, int upper_key)
 {
     // TODO: Implement range command
     return std::vector<std::pair<int, int>>();
-}
-
-void del(int key)
-{
-    // TODO: Implement delete command
-}
-
-void load(const std::string &file_name)
-{
-    // TODO: Implement load command
 }
 
 void printStats()
@@ -64,6 +43,7 @@ void Server::handle_client(int client_socket)
         ss >> op;
         KEY_t key, lower_key, upper_key;
         VAL_t value;
+        VAL_t* value_ptr;
         std::string file_name;
 
         char response[1024];
@@ -72,14 +52,26 @@ void Server::handle_client(int client_socket)
         {
         case 'p':
             ss >> key >> value;
+            // Throw error if key is less than VALUE_MIN or greater than VALUE_MAX
+            if (value < VAL_MIN || value > VAL_MAX) {
+                snprintf(response, sizeof(response), "ERROR: Value %d out of range [%d, %d], skipping\n", value, VAL_MIN, VAL_MAX);
+                send(client_socket, response, strlen(response), 0);
+                break;
+            }
+
             lsmTree->put(key, value);
-            snprintf(response, sizeof(response), "PUT %d %d\n", key, value);
+            snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
         case 'g':
             ss >> key;
-            snprintf(response, sizeof(response), "%d\n", get(key));
-            // send(client_socket, response, strlen(response), 0);
+            value_ptr = lsmTree->get(key);
+            if (value_ptr != nullptr) {
+                snprintf(response, sizeof(response), "%d\n", *value_ptr);
+            }
+            else {
+                snprintf(response, sizeof(response), "\r\n");
+            }
             break;
         case 'r':
             ss >> lower_key >> upper_key;
@@ -93,14 +85,14 @@ void Server::handle_client(int client_socket)
             break;
         case 'd':
             ss >> key;
-            del(key);
-            snprintf(response, sizeof(response), "DEL %d\n", key);
+            lsmTree->del(key);
+            snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
         case 'l':
             ss >> file_name;
-            load(file_name);
-            snprintf(response, sizeof(response), "LOADED %s\n", file_name.c_str());
+            lsmTree->load(file_name);
+            snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
         case 's':

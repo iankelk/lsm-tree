@@ -5,6 +5,9 @@
 #include <cassert>
 #include <stdexcept>
 #include <cmath>
+#include <fstream>
+#include <sstream>
+
 
 #include "unistd.h"
 
@@ -29,11 +32,6 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
-
-    if (val < VAL_MIN || val > VAL_MAX) {
-        die("Could not insert value " + to_string(val) + ": out of range.");
-    }
-
     if(buffer.put(key, val)) {
         return;
     }
@@ -155,3 +153,60 @@ void LSMTree::merge_levels(int currentLevelNum) {
         }
         cout << "PRINTING TREE COMPLETE\n\n";
     }
+
+    // Given a key, search the tree for the key. If the key is found, return the value. 
+    // If the key is not found, return an empty string.
+    VAL_t* LSMTree::get(KEY_t key) {
+        VAL_t *val;
+        // Search the buffer for the key
+        val = buffer.get(key);
+        // If the key is found in the buffer, return the value
+        if (val != nullptr) {
+            // Check that val is not the TOMBSTONE
+            if (*val == TOMBSTONE) {
+                return nullptr;
+            }
+            return val;
+        }
+
+        // If the key is not found in the buffer, search the levels
+        for (auto level = levels.begin(); level != levels.end(); level++) {
+            // Iterate through the runs in the level and check if the key is in the run
+            for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+                val = (*run)->get(key);
+                // If the key is found in the run, return the value
+                if (val != nullptr) {
+                    // Check that val is not the TOMBSTONE
+                    if (*val == TOMBSTONE) {
+                        return nullptr;
+                    }
+                    return val;
+                }
+            }
+        }
+        // If the key is not found in the buffer or the levels, return nullptr
+        return nullptr;
+    }
+
+void LSMTree::del(KEY_t key) {
+    put(key, TOMBSTONE);
+}
+
+void LSMTree::load(const string& filename) {
+    KEY_t key;
+    VAL_t val;
+    std::ifstream file(filename);
+    std::string line;
+    // If file can be located
+    if (!file) {
+        std::cerr << "Unable to open file " << filename << endl;
+        exit(1);   // call system to stop
+    }
+    while (getline(file, line)) {
+        // print the line
+        //cout << "LINE: " << line << "\n";
+        stringstream ss(line);
+        ss >> key >> val;
+        put(key, val);
+    }
+}

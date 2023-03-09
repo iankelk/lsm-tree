@@ -19,10 +19,10 @@ public:
     LSMTree(int, float, int, int, int, Level::Policy);
     void printTree();
     void put(KEY_t, VAL_t);
-    // void get(KEY_t);
+    VAL_t* get(KEY_t);
     // void range(KEY_t, KEY_t);
-    // void del(KEY_t);
-    // void load(std::string);
+    void del(KEY_t key);
+    void load(const string& filename);
 private:
     Memtable buffer;
     int bf_capacity;
