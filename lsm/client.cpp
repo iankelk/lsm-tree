@@ -7,6 +7,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include "data_types.hpp"
+
 int main() {
     // Connect to server
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -27,7 +29,7 @@ int main() {
 
     // Send commands to server
     std::string command_str;
-    char buffer[1024];
+    char buffer[BUFFER_SIZE];
     ssize_t n_read;
 
      // Start measuring time

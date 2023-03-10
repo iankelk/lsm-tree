@@ -37,6 +37,9 @@ typedef int32_t VAL_t;
 #define FILE_DESCRIPTOR_UNINITIALIZED -1
 #define SSTABLE_FILE_TEMPLATE "/tmp/lsm-XXXXXX"
 
+// CLIENT / SERVER DEFINITIONS
+#define BUFFER_SIZE 2048
+
 // Key Value Pair
 struct kv_pair {
     KEY_t key;

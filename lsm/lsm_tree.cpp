@@ -312,6 +312,8 @@ string LSMTree::printStats() {
     output += "\n";
     // print output
     cout << output << endl;
+    // print the length of output
+    cout << "Length of output: " << output.length() << endl;
     // Return the output string
     return output;
 }

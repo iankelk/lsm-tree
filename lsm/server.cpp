@@ -20,7 +20,7 @@ void Server::handle_client(int client_socket)
     std::cout << "New client connected" << std::endl;
 
     // Read commands from client
-    char buffer[1024];
+    char buffer[BUFFER_SIZE];
     // Check if client is still connected
 
     while (true)
@@ -46,7 +46,7 @@ void Server::handle_client(int client_socket)
         VAL_t* value_ptr;
         std::string file_name;
 
-        char response[1024];
+        char response[BUFFER_SIZE];
 
         switch (op) {
         case 'p':
@@ -98,7 +98,7 @@ void Server::handle_client(int client_socket)
             lsmTree->printTree();
             snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
             break;
-        case 's':
+        case 's':            
             std::strcpy(response, lsmTree->printStats().c_str());
             break;
         default:
