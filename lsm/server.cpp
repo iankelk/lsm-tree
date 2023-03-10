@@ -48,8 +48,7 @@ void Server::handle_client(int client_socket)
 
         char response[1024];
 
-        switch (op)
-        {
+        switch (op) {
         case 'p':
             ss >> key >> value;
             // Throw error if key is less than VALUE_MIN or greater than VALUE_MAX
@@ -95,9 +94,12 @@ void Server::handle_client(int client_socket)
             snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
-        case 's':
+        case 'i':
             lsmTree->printTree();
             snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
+            break;
+        case 's':
+            std::strcpy(response, lsmTree->printStats().c_str());
             break;
         default:
             snprintf(response, sizeof(response), "Invalid command\n");

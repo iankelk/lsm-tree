@@ -23,6 +23,7 @@ public:
     // void range(KEY_t, KEY_t);
     void del(KEY_t key);
     void load(const string& filename);
+    string printStats();
 private:
     Memtable buffer;
     int bf_capacity;
@@ -30,6 +31,8 @@ private:
     int bf_bitset_size;
     int fanout;
     Level::Policy level_policy;
+    int countLogicalPairs();
+
 
     vector<Level> levels;
     void merge_levels(int currentLevelNum);

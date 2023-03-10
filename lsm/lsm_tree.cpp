@@ -7,6 +7,8 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <set>
+#include <map>
 
 
 #include "unistd.h"
@@ -136,57 +138,57 @@ void LSMTree::merge_levels(int currentLevelNum) {
     // Zero the number of key/value pairs in the current level
     it->kv_pairs = 0;
 }
-    // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
-    // the number of runs per each level.
-    void LSMTree::printTree() {
-        cout << "\nPRINTING TREE...\n";
-        cout << "Number of entries in the buffer: " << buffer.table_.size() << "\n";
-        cout << "Number of levels: " << levels.size() << "\n";
-        for (auto it = levels.begin(); it != levels.end(); it++) {
-            cout << "Number of runs in level " << it->level_num << ": " << it->runs.size() << "\n";
-            // print the number of key/value pairs in each run using the numKVPairs() function
-            cout << "Number of KV pairs in level " << it->level_num << ": " << it->numKVPairs() << "\n";
+// Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
+// the number of runs per each level.
+void LSMTree::printTree() {
+    cout << "\nPRINTING TREE...\n";
+    cout << "Number of entries in the buffer: " << buffer.table_.size() << "\n";
+    cout << "Number of levels: " << levels.size() << "\n";
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        cout << "Number of runs in level " << it->level_num << ": " << it->runs.size() << "\n";
+        // print the number of key/value pairs in each run using the numKVPairs() function
+        cout << "Number of KV pairs in level " << it->level_num << ": " << it->numKVPairs() << "\n";
+    }
+    // For each level, print if it is the last level
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        cout << "Is level " << it->level_num << " the last level? " << it->is_last_level << "\n";
+    }
+    cout << "PRINTING TREE COMPLETE\n\n";
+}
+
+// Given a key, search the tree for the key. If the key is found, return the value. 
+// If the key is not found, return an empty string.
+VAL_t* LSMTree::get(KEY_t key) {
+    VAL_t *val;
+    // Search the buffer for the key
+    val = buffer.get(key);
+    // If the key is found in the buffer, return the value
+    if (val != nullptr) {
+        // Check that val is not the TOMBSTONE
+        if (*val == TOMBSTONE) {
+            return nullptr;
         }
-        // For each level, print if it is the last level
-        for (auto it = levels.begin(); it != levels.end(); it++) {
-            cout << "Is level " << it->level_num << " the last level? " << it->is_last_level << "\n";
-        }
-        cout << "PRINTING TREE COMPLETE\n\n";
+        return val;
     }
 
-    // Given a key, search the tree for the key. If the key is found, return the value. 
-    // If the key is not found, return an empty string.
-    VAL_t* LSMTree::get(KEY_t key) {
-        VAL_t *val;
-        // Search the buffer for the key
-        val = buffer.get(key);
-        // If the key is found in the buffer, return the value
-        if (val != nullptr) {
-            // Check that val is not the TOMBSTONE
-            if (*val == TOMBSTONE) {
-                return nullptr;
-            }
-            return val;
-        }
-
-        // If the key is not found in the buffer, search the levels
-        for (auto level = levels.begin(); level != levels.end(); level++) {
-            // Iterate through the runs in the level and check if the key is in the run
-            for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-                val = (*run)->get(key);
-                // If the key is found in the run, return the value
-                if (val != nullptr) {
-                    // Check that val is not the TOMBSTONE
-                    if (*val == TOMBSTONE) {
-                        return nullptr;
-                    }
-                    return val;
+    // If the key is not found in the buffer, search the levels
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        // Iterate through the runs in the level and check if the key is in the run
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            val = (*run)->get(key);
+            // If the key is found in the run, return the value
+            if (val != nullptr) {
+                // Check that val is not the TOMBSTONE
+                if (*val == TOMBSTONE) {
+                    return nullptr;
                 }
+                return val;
             }
         }
-        // If the key is not found in the buffer or the levels, return nullptr
-        return nullptr;
     }
+    // If the key is not found in the buffer or the levels, return nullptr
+    return nullptr;
+}
 
 void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
@@ -210,3 +212,107 @@ void LSMTree::load(const string& filename) {
         put(key, val);
     }
 }
+
+// Create a set of all the keys in the tree. Start from the bottom level and work up.
+// If an upper level has a key with a TOMBSTONE, remove the key from the set.
+// Return the size of the set.
+int LSMTree::countLogicalPairs() {
+    // Create a set of all the keys in the tree
+    std::set<KEY_t> keys;
+    // Create a pointer to a map of key/value pairs
+    std::map<KEY_t, VAL_t> kvMap;
+
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            // Get the map of key/value pairs from the run
+            kvMap = (*run)->getMap();
+            // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+            for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+                if (it->second == TOMBSTONE) {
+                    if (keys.find(it->first) != keys.end()) {
+                        keys.erase(it->first);
+                    }
+                } else {
+                    keys.insert(it->first);
+                }
+            }
+        }  
+    }
+    // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+    for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
+        if (it->second == TOMBSTONE) {
+            if (keys.find(it->first) != keys.end()) {
+                keys.erase(it->first);
+            }
+        } else {
+            keys.insert(it->first);
+        }
+    }
+    // Return the size of the set
+    return keys.size();
+}
+
+// The printStats() function creates a string with the following information:
+// (1) the number of logical key value pairs in the tree Logical Pairs: [some count]; 
+// (2) the number of keys in each level of the tree LVL1: [Some count], ... , LVLN [some count]; 
+// (3) a dump of the tree that includes the key, value, and which level it is on [Key]:[Value]:[Level]
+
+// Here is an example:
+// Logical Pairs: 12
+// LVL1: 3, LVL3: 11
+// 45:56:L1 56:84:L1 91:45:L1
+// 7:32:L3 19:73:L3 32:91:L3 45:64:L3 58:3:L3 61:10:L3 66:4:L3 85:15:L3 91:71:L3 95:87:L3 97:76:L3
+// Note: The information about the number of logical key-value pairs excludes all TOMBSTONE and stale entries. 
+// However, they may be included in the per-level information if they exist in the tree.
+
+string LSMTree::printStats() {
+        // Create a string to hold the output
+    string output = "";
+    // Create a string to hold the number of logical key value pairs in the tree
+    string logicalPairs = "Logical Pairs: " + to_string(countLogicalPairs()) + "\n";
+    // Create a string to hold the number of keys in each level of the tree
+    string levelKeys = "";
+    // Create a string to hold the dump of the tree
+    string treeDump = "";
+    // Iterate through the levels and add the number of keys in each level to the levelKeys string
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        levelKeys += "LVL" + to_string(it->level_num) + ": " + to_string(it->numKVPairs()) + ", ";
+    }
+    // Remove the last comma and space from the levelKeys string
+    levelKeys = levelKeys.substr(0, levelKeys.size() - 2);
+    levelKeys += "\n";
+    // Iterate through the levels and add the key/value pairs to the treeDump string
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            // Get the map of key/value pairs from the run
+            std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
+            // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
+            for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+                if (it->second == TOMBSTONE) {
+                    treeDump += to_string(it->first) + ":TOMBSTONE:L" + to_string(level->level_num) + " ";
+                } else {
+                    treeDump += to_string(it->first) + ":" + to_string(it->second) + ":L" + to_string(level->level_num) + " ";
+                }
+            }
+        }
+    }
+    // Iterate through the buffer and add the key/value pairs to the treeDump string
+    for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
+        if (it->second == TOMBSTONE) {
+            treeDump += to_string(it->first) + ":TOMBSTONE:L0 ";
+        } else {
+            treeDump += to_string(it->first) + ":" + to_string(it->second) + ":L0 ";
+        }
+    }
+    // Remove the last space from the treeDump string
+    treeDump = treeDump.substr(0, treeDump.size() - 1);
+    // Add the logicalPairs, levelKeys, and treeDump strings to the output string
+    output += logicalPairs + levelKeys + treeDump;
+    // Add a newline to the end of output
+    output += "\n";
+    // print output
+    cout << output << endl;
+    // Return the output string
+    return output;
+}
+            

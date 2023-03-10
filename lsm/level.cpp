@@ -10,6 +10,8 @@ void Level::put(unique_ptr<Run> run_ptr) {
     // print the actual number of kv_pairs using numKVPairs()
     cout << "Actual number of kv_pairs: " << numKVPairs() << endl;
 
+    assert(kv_pairs == numKVPairs());
+
     // Check if there is enough space in the level to add the run
     if (numKVPairs() + run_ptr->max_kv_pairs > max_kv_pairs) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
@@ -105,24 +107,6 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         }
     }
 
-
-
-
-
-    // // Create a new run with the merged data
-    // // TODO: FANOUT should be a parameter
-    // Run merged_run(new_max_kv_pairs, capacity, error_rate, bitset_size);
-    // for (const auto &kv : merged_map) {
-    //     // Check if the key-value pair is a tombstone and if the level is the last level
-    //     if (!(is_last_level && kv.second == TOMBSTONE)) {
-    //         merged_run.put(kv.first, kv.second);
-    //     }
-    // }
-
-    // Add the merged run to the runs queue
-    //runs.emplace_front(move(unique_ptr<Run> (&merged_run)));
-    //runs.emplace_front(move(merged_run));
-    // Set the number of runs to 1
     num_runs = runs.size();
     // print the number of runs in the level
     cout << "Compaction @ end: Number of runs in level: " << num_runs << endl;
