@@ -185,6 +185,11 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         }
     }
     closeFile();
+
+    // If the last key in the range is the end key, remove it since end is not inclusive
+    if (range_map.size() > 0 && range_map.rbegin()->first == end) {
+        range_map.erase(range_map.rbegin()->first);
+    }
     return range_map;
 }
 

@@ -74,7 +74,7 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         // Iterate through the key-value pairs in the run map
         for (const auto &kv : run_map) {
             // Check if the key is already in the merged map
-            if (const auto &[it, inserted] = merged_map.emplace(kv.first, kv.second); !inserted) {
+            if (const auto &[it, inserted] = merged_map.try_emplace(kv.first, kv.second); !inserted) {
                 // The key already exists, so replace the value with the new value
                 it->second = kv.second;
             }

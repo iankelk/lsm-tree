@@ -214,11 +214,8 @@ unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
             // If keys from the range are found in the run, add them to the range map
             if (temp_map.size() != 0) {
                 for (const auto &kv : temp_map) {
-                    // Check if the key is already in the range_map map
-                    if (const auto &[it, inserted] = range_map->emplace(kv.first, kv.second); !inserted) {
-                        // The key already exists, so replace the value with the new value
-                        it->second = kv.second;
-                    }
+                    // Only add the key/value pair if the key is not already in the range map
+                    range_map->try_emplace(kv.first, kv.second);
                 }
                 //range_map->insert(temp_map.begin(), temp_map.end());
             }
