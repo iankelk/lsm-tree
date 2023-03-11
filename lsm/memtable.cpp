@@ -20,15 +20,16 @@ bool Memtable::put(KEY_t key, VAL_t value) {
 }
 
 // Get the value associated with a key
-VAL_t* Memtable::get(KEY_t key) const {
+unique_ptr<VAL_t> Memtable::get(KEY_t key) const {
     auto it = table_.find(key);
     if (it == table_.end()) {
         return nullptr;
     }
-    VAL_t *val = new VAL_t;
+    unique_ptr<VAL_t> val = make_unique<VAL_t>();
     *val = it->second;
     return val;
 }
+
 
 // Get all key-value pairs within a range, inclusive of the start and exclusive of the end key
 map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {

@@ -52,10 +52,12 @@ void Server::handle_client(int client_socket)
         ss >> op;
         KEY_t key, start, end;
         VAL_t value;
-        VAL_t* value_ptr;
+        //VAL_t* value_ptr;
+        
         // create pointer to map<KEY_t, VAL_t> called results
         std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
         std::string file_name;
+        std::unique_ptr<VAL_t> value_ptr;
 
         //char response[BUFFER_SIZE];
         // Create a string of indefinite length called response

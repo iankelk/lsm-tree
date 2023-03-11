@@ -141,12 +141,13 @@ void LSMTree::merge_levels(int currentLevelNum) {
 
 // Given a key, search the tree for the key. If the key is found, return the value. 
 // If the key is not found, return an empty string.
-VAL_t* LSMTree::get(KEY_t key) {
+unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
+    unique_ptr<VAL_t> val;
     // if key is not within the range of the available keys, throw an exception
     if (key < KEY_MIN || key > KEY_MAX) {
         throw std::out_of_range("Key is out of range");
     }
-    VAL_t *val;
+    
     // Search the buffer for the key
     val = buffer.get(key);
     // If the key is found in the buffer, return the value
@@ -176,6 +177,8 @@ VAL_t* LSMTree::get(KEY_t key) {
     // If the key is not found in the buffer or the levels, return nullptr
     return nullptr;
 }
+
+
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
 // If the range is not empty, return a map of all the found pairs.
 unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {

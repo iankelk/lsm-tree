@@ -12,7 +12,7 @@ class Run {
 public:
     Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size);
     ~Run();
-    VAL_t * get(KEY_t key);
+    unique_ptr<VAL_t> get(KEY_t key);
     map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
     map<KEY_t, VAL_t> getMap();

@@ -14,7 +14,7 @@ public:
 
     int max_kv_pairs;
     bool put(KEY_t key, VAL_t value);
-    VAL_t* get(KEY_t key) const;
+    unique_ptr<VAL_t> get(KEY_t key) const;
     map<KEY_t, VAL_t> range(KEY_t start, KEY_t end) const;
     void clear();
     int size() const;

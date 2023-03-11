@@ -76,8 +76,8 @@ void Run::put(KEY_t key, VAL_t val) {
     size++;
 }
 
-VAL_t * Run::get(KEY_t key) {
-    VAL_t *val;
+unique_ptr<VAL_t> Run::get(KEY_t key) {
+    unique_ptr<VAL_t> val;
 
     // Print if run is empty
     cout << "run size: " + to_string(size) + "\n";
@@ -120,8 +120,7 @@ VAL_t * Run::get(KEY_t key) {
     // TODO: This is a linear search. Could be better with a binary search?
     while (read(fd, &kv, sizeof(kv_pair)) > 0) {
         if (kv.key == key) {
-            val = new VAL_t;
-            *val = kv.value;
+            val = make_unique<VAL_t>(kv.value);
         }
     }
     closeFile();
