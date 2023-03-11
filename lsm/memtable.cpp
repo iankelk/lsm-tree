@@ -30,13 +30,18 @@ VAL_t* Memtable::get(KEY_t key) const {
     return val;
 }
 
-// Get all key-value pairs within a range
+// Get all key-value pairs within a range, inclusive of the start and exclusive of the end key
 map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
     map<KEY_t, VAL_t> range;
     auto itStart = table_.lower_bound(start);
     auto itEnd = table_.upper_bound(end);
+    range = std::map<KEY_t, VAL_t>(itStart, itEnd);
+    // If the last key in the range is the end key, remove it
+    if (range.size() > 0 && range.rbegin()->first == end) {
+        range.erase(range.rbegin()->first);
+    }
     // Return a map of key-value pairs within the range
-    return std::map<KEY_t, VAL_t>(itStart, itEnd);
+    return range;
 }
 
 // Remove all key-value pairs from the memtable

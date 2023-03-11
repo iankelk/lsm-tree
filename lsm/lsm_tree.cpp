@@ -142,6 +142,10 @@ void LSMTree::merge_levels(int currentLevelNum) {
 // Given a key, search the tree for the key. If the key is found, return the value. 
 // If the key is not found, return an empty string.
 VAL_t* LSMTree::get(KEY_t key) {
+    // if key is not within the range of the available keys, throw an exception
+    if (key < KEY_MIN || key > KEY_MAX) {
+        throw std::out_of_range("Key is out of range");
+    }
     VAL_t *val;
     // Search the buffer for the key
     val = buffer.get(key);
@@ -172,7 +176,75 @@ VAL_t* LSMTree::get(KEY_t key) {
     // If the key is not found in the buffer or the levels, return nullptr
     return nullptr;
 }
+// Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
+// If the range is not empty, return a map of all the found pairs.
+unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
+    // if either start or end is not within the range of the available keys, throw an exception
+    if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
+        throw std::out_of_range("LSMTree::range: Key is out of range");
+    }
+    // If the start key is greater than the end key, throw an exception
+    if (start > end) {
+        throw std::out_of_range("LSMTree::range: Start key is greater than end key");
+    }
+    int allPossibleKeys = end - start;
 
+    // Search the buffer for the key range and return the range map as a unique_ptr
+    unique_ptr<map<KEY_t, VAL_t>> range_map = make_unique<map<KEY_t, VAL_t>>(buffer.range(start, end));
+
+    // If the range has the size of the entire range, return the range
+    if (range_map->size() == allPossibleKeys) {
+        // print out allPossibleKeys
+        cout << "All possible keys: " << allPossibleKeys << "\n";
+        // print out the size of the range map
+        cout << "All in the buffer! Size of range map: " << range_map->size() << "\n";
+        // Remove all the TOMBSTONES from the range map
+        removeTombstones(range_map);
+        return range_map;
+    }
+
+    // PRINT "Not all in the buffer!"
+    cout << "Not all in the buffer! Size of range map: " << range_map->size() << "\n";
+
+    // If all of the keys are not found in the buffer, search the levels
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        // Iterate through the runs in the level and check if the range is in the run
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            map<KEY_t, VAL_t> temp_map = (*run)->range(start, end);
+            // If keys from the range are found in the run, add them to the range map
+            if (temp_map.size() != 0) {
+                for (const auto &kv : temp_map) {
+                    // Check if the key is already in the range_map map
+                    if (const auto &[it, inserted] = range_map->emplace(kv.first, kv.second); !inserted) {
+                        // The key already exists, so replace the value with the new value
+                        it->second = kv.second;
+                    }
+                }
+                //range_map->insert(temp_map.begin(), temp_map.end());
+            }
+            // If the range map has the size of the entire range, return the range
+            if (range_map->size() == allPossibleKeys) {
+                removeTombstones(range_map);
+                return range_map;
+            }
+        }
+    }
+    // Print all the key and value pairs in the range map to cout
+    // Create an iterator to iterate through the map
+    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
+    // Iterate through the map and remove all TOMBSTONES
+    for (it = range_map->begin(); it != range_map->end(); it++) {
+        // print the key and value pair
+        std::cout << "KEY: " << it->first << " VALUE: " << it->second << "\n";
+    }
+
+    // Remove all the TOMBSTONES from the range map
+    removeTombstones(range_map);
+    // If every key in the range was not found in the buffer or the levels, return what we did find
+    return range_map;
+}
+
+// Given a key, delete the key-value pair from the tree.
 void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
 }
@@ -264,6 +336,14 @@ string LSMTree::printStats() {
     // Remove the last comma and space from the levelKeys string
     levelKeys = levelKeys.substr(0, levelKeys.size() - 2) + "\n";
     //levelKeys += "\n";
+    // Iterate through the buffer and add the key/value pairs to the treeDump string
+    for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
+        if (it->second == TOMBSTONE) {
+            treeDump += to_string(it->first) + ":TOMBSTONE:L0 ";
+        } else {
+            treeDump += to_string(it->first) + ":" + to_string(it->second) + ":L0 ";
+        }
+    }
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
@@ -277,14 +357,6 @@ string LSMTree::printStats() {
                     treeDump += to_string(it->first) + ":" + to_string(it->second) + ":L" + to_string(level->level_num) + " ";
                 }
             }
-        }
-    }
-    // Iterate through the buffer and add the key/value pairs to the treeDump string
-    for (auto it = buffer.table_.begin(); it != buffer.table_.end(); it++) {
-        if (it->second == TOMBSTONE) {
-            treeDump += to_string(it->first) + ":TOMBSTONE:L0 ";
-        } else {
-            treeDump += to_string(it->first) + ":" + to_string(it->second) + ":L0 ";
         }
     }
     // Remove the last space from the treeDump string
@@ -320,4 +392,19 @@ string LSMTree::printTree() {
     output = output.substr(0, output.size() - 1);
     return output;
 }
+
+// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> range_map
+void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map) {
+    // Create an iterator to iterate through the map
+    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
+    // Iterate through the map and remove all TOMBSTONES
+    while (it != range_map->end()) {
+        if (it->second == TOMBSTONE) {
+            it = range_map->erase(it);
+        } else {
+            it++;
+        }
+    }
+}
+
             

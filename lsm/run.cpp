@@ -24,6 +24,8 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
 {
     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
     fd = mkstemp(tmp_fn);
+    // Print out the max_kv_pairs and tmp_fn
+    cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw runtime_error("Failed to create temporary file for Run");
     }

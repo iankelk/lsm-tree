@@ -24,7 +24,7 @@ void printStats()
 // Thread function to handle client connections
 void Server::handle_client(int client_socket)
 {
-    std::vector<std::pair<int, int>> results = {};
+    //std::vector<std::pair<int, int>> results = {};
 
     std::cout << "New client connected" << std::endl;
 
@@ -50,9 +50,11 @@ void Server::handle_client(int client_socket)
         std::stringstream ss(command);
         char op;
         ss >> op;
-        KEY_t key, lower_key, upper_key;
+        KEY_t key, start, end;
         VAL_t value;
         VAL_t* value_ptr;
+        // create pointer to map<KEY_t, VAL_t> called results
+        std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
         std::string file_name;
 
         //char response[BUFFER_SIZE];
@@ -93,19 +95,18 @@ void Server::handle_client(int client_socket)
             }
             break;
         case 'r':
-            ss >> lower_key >> upper_key;
-            results = range(lower_key, upper_key);
-            for (const auto &p : results) {
-                // Make response "%d:%d ", p.first, p.second
-                response = std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
-
-                //snprintf(response, sizeof(response), "%d:%d ", p.first, p.second);
-                //send(client_socket, response, strlen(response), 0);
+            ss >> start >> end;
+            range_ptr = lsmTree->range(start, end);
+            if (range_ptr != nullptr) {
+                // Iterate over the map and store the key-value pairs in results
+                for (const auto &p : *range_ptr) {
+                    // Make response "%d:%d ", p.first, p.second
+                    response += std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
+                }
             }
-            // Make response "\n"
-            response = "\n";
-            //snprintf(response, sizeof(response), "\n");
-            // send(client_socket, response, strlen(response), 0);
+            else {
+                response = NO_VALUE;
+            }
             break;
         case 'd':
             ss >> key;

@@ -19,7 +19,7 @@ public:
     LSMTree(int, float, int, int, int, Level::Policy);
     void put(KEY_t, VAL_t);
     VAL_t* get(KEY_t);
-    // void range(KEY_t, KEY_t);
+    unique_ptr<map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
     void load(const string& filename);
     string printStats();
@@ -32,6 +32,7 @@ private:
     int fanout;
     Level::Policy level_policy;
     int countLogicalPairs();
+    void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
 
 
     vector<Level> levels;
