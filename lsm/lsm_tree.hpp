@@ -17,13 +17,13 @@
 class LSMTree {
 public:
     LSMTree(int, float, int, int, int, Level::Policy);
-    void printTree();
     void put(KEY_t, VAL_t);
     VAL_t* get(KEY_t);
     // void range(KEY_t, KEY_t);
     void del(KEY_t key);
     void load(const string& filename);
     string printStats();
+    string printTree();
 private:
     Memtable buffer;
     int bf_capacity;

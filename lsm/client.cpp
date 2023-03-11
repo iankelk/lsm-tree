@@ -53,17 +53,25 @@ int main() {
             //std::cout << "BUFFER:[" << buffer << "]" << std::endl;
             response.append(buffer, n_read);
             if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
+                response = response.substr(0, response.size() - std::strlen(END_OF_MESSAGE));
                 break;
             }
         }
+
+        // print response
+        //std::cout << "RESPONSE:[" << response << "]" << std::endl;
 
         if (n_read == -1) {
             std::cerr << "Error reading response from server" << std::endl;
             close(client_socket);
             return 1;
         }
+        // If response is empty, print a newline
+        if (response == NO_VALUE) {
+            //std::cout << "NO VALUE" << std::endl;
+            std::cout << std::endl;
         // If response is not empty and does not begin with an 'o' (for OK), print it
-        if (response.size() > 0 && response[0] != 'o') {
+        } else if (response.size() > 0 && response[0] != 'o') {
             std::cout << response << std::endl;
         }
     }
@@ -76,4 +84,11 @@ int main() {
     // Clean up resources
     close(client_socket);
     return 0;
+}
+
+// Remove END_OF_MESSAGE from the end of the response
+void remove_end_of_message(std::string &response) {
+    if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
+        response = response.substr(0, response.size() - std::strlen(END_OF_MESSAGE));
+    }
 }

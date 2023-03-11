@@ -138,23 +138,6 @@ void LSMTree::merge_levels(int currentLevelNum) {
     // Zero the number of key/value pairs in the current level
     it->kv_pairs = 0;
 }
-// Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
-// the number of runs per each level.
-void LSMTree::printTree() {
-    cout << "\nPRINTING TREE...\n";
-    cout << "Number of entries in the buffer: " << buffer.table_.size() << "\n";
-    cout << "Number of levels: " << levels.size() << "\n";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        cout << "Number of runs in level " << it->level_num << ": " << it->runs.size() << "\n";
-        // print the number of key/value pairs in each run using the numKVPairs() function
-        cout << "Number of KV pairs in level " << it->level_num << ": " << it->numKVPairs() << "\n";
-    }
-    // For each level, print if it is the last level
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        cout << "Is level " << it->level_num << " the last level? " << it->is_last_level << "\n";
-    }
-    cout << "PRINTING TREE COMPLETE\n\n";
-}
 
 // Given a key, search the tree for the key. If the key is found, return the value. 
 // If the key is not found, return an empty string.
@@ -279,8 +262,8 @@ string LSMTree::printStats() {
         levelKeys += "LVL" + to_string(it->level_num) + ": " + to_string(it->numKVPairs()) + ", ";
     }
     // Remove the last comma and space from the levelKeys string
-    levelKeys = levelKeys.substr(0, levelKeys.size() - 2);
-    levelKeys += "\n";
+    levelKeys = levelKeys.substr(0, levelKeys.size() - 2) + "\n";
+    //levelKeys += "\n";
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
@@ -309,12 +292,32 @@ string LSMTree::printStats() {
     // Add the logicalPairs, levelKeys, and treeDump strings to the output string
     output += logicalPairs + levelKeys + treeDump;
     // Add a newline to the end of output
-    output += "\n";
+    //output += "\n";
     // print output
     //cout << output << endl;
     // print the length of output
     cout << "Length of output: " << output.length() << endl;
     // Return the output string
+    return output;
+}
+
+// Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
+// the number of runs per each level.
+string LSMTree::printTree() {
+    string output = "";
+    output += "Number of entries in the buffer: " + std::to_string(buffer.size()) + "\n";
+    output += "Number of levels: " + std::to_string(levels.size()) + "\n";
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        output += "Number of SSTables in level " + std::to_string(it->level_num) + ": " + std::to_string(it->runs.size()) + "\n";
+        // print the number of key/value pairs in each run using the numKVPairs() function
+        output += "Number of key-value pairs in level " + std::to_string(it->level_num) + ": " + std::to_string(it->numKVPairs()) + "\n";
+    }
+    // For each level, print if it is the last level
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        output += "Is level " + std::to_string(it->level_num) + " the last level? " + (it->is_last_level ? "Yes" : "No") + "\n";
+    }
+    // Remove the last newline  from the output string
+    output = output.substr(0, output.size() - 1);
     return output;
 }
             

@@ -88,7 +88,7 @@ void Server::handle_client(int client_socket)
             }
             else {
                 // Make response "\r\n"
-                response = "\r\n";
+                response = NO_VALUE;
                 //snprintf(response, sizeof(response), "\r\n");
             }
             break;
@@ -124,10 +124,11 @@ void Server::handle_client(int client_socket)
             // send(client_socket, response, strlen(response), 0);
             break;
         case 'i':
-            lsmTree->printTree();
+            //lsmTree->printTree();
             // Make response "PRINT TREE PLACEHOLDER\n"
-            response = "PRINT TREE PLACEHOLDER\n";
+            //response = "PRINT TREE PLACEHOLDER\n";
             //snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
+            response = lsmTree->printTree();
             break;
         case 's':            
             response = lsmTree->printStats();

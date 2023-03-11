@@ -43,3 +43,8 @@ map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
 void Memtable::clear() {
     table_.clear();
 }
+
+// Return the number of key-value pairs in the memtable
+int Memtable::size() const {
+    return table_.size();
+}
