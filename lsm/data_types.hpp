@@ -41,6 +41,7 @@ typedef int32_t VAL_t;
 #define BUFFER_SIZE 2048
 #define SERVER_PORT 1234
 #define TRUNCATED "[RESPONSE TRUNCATED]\n"
+#define END_OF_MESSAGE "\0"
 
 // Key Value Pair
 struct kv_pair {

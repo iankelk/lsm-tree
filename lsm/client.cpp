@@ -42,31 +42,24 @@ int main() {
         }
         send(client_socket, command_str.c_str(), command_str.size(), 0);
 
-        // Receive responses from server
-        std::stringstream response_ss;
-        while ((n_read = recv(client_socket, buffer, sizeof(buffer), 0)) > 0) {
-            // Append received data to response stringstream
-            response_ss << std::string(buffer, n_read);
-        
-            // Check if the response is complete
-            if (response_ss.str().back() == '\n') {
-                // Parse response and clear buffer
-                std::string response_str = response_ss.str();
-                std::istringstream iss(response_str);
-                std::string token;
-                while (std::getline(iss, token)) {
-                    if (token.size() > 0 && (token[0] != 'o')) {
-                        std::cout << token << std::endl;
-                    }
-                }
-                response_ss.str("");
-                memset(buffer, 0, sizeof(buffer));
+        // Read the response from the server in chunks of BUFFER_SIZE in a loop until the end.
+        // The end of the message is marked with the END_OF_MESSAGE indicator.
+        std::string response;
+        while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+            buffer[n_read] = '\0';
+            response += buffer;
+            if (response.find(END_OF_MESSAGE) != std::string::npos) {
                 break;
             }
         }
         if (n_read == -1) {
-            std::cerr << "Error receiving data from server" << std::endl;
-            break;
+            std::cerr << "Error reading response from server" << std::endl;
+            close(client_socket);
+            return 1;
+        }
+        // If response is not empty and does not begin with an 'o' (for OK), print it
+        if (response.size() > 0 && response[0] != 'o') {
+            std::cout << response << std::endl;
         }
     }
 
