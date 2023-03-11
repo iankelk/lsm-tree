@@ -1,6 +1,15 @@
 #include <signal.h>
 #include "server.hpp"
 
+volatile sig_atomic_t termination_flag = 0;
+
+Server server(SERVER_PORT);
+
+void sigint_handler(int signal) {
+    termination_flag = 1;
+    server.close();
+}
+
 std::vector<std::pair<int, int>> range(int lower_key, int upper_key)
 {
     // TODO: Implement range command
@@ -23,7 +32,7 @@ void Server::handle_client(int client_socket)
     char buffer[BUFFER_SIZE];
     // Check if client is still connected
 
-    while (true)
+    while (!termination_flag)
     {
         // Receive command
         ssize_t n_read = recv(client_socket, buffer, sizeof(buffer), 0);
@@ -47,7 +56,7 @@ void Server::handle_client(int client_socket)
         std::string file_name;
 
         char response[BUFFER_SIZE];
-
+        
         switch (op) {
         case 'p':
             ss >> key >> value;
@@ -99,7 +108,9 @@ void Server::handle_client(int client_socket)
             snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
             break;
         case 's':            
-            std::strcpy(response, lsmTree->printStats().c_str());
+            std::strncpy(response, lsmTree->printStats().c_str(), BUFFER_SIZE-std::strlen(TRUNCATED));
+            std::strcat(response, TRUNCATED);
+            cout << response << endl;
             break;
         default:
             snprintf(response, sizeof(response), "Invalid command\n");
@@ -116,7 +127,7 @@ void Server::handle_client(int client_socket)
 void Server::run()
 {
     // Accept incoming connections
-    while (true) {
+    while (!termination_flag) {
         sockaddr_in client_address;
         socklen_t client_address_size = sizeof(client_address);
         int client_socket = accept(server_socket, (sockaddr *)&client_address, &client_address_size);
@@ -159,8 +170,7 @@ Server::Server(int port)
     std::cout << "Server started, listening on port " << port << std::endl;
 }
 
-void Server::close()
-{
+void Server::close() {
     if (server_socket != -1) {
         shutdown(server_socket, SHUT_RDWR);
         ::close(server_socket);
@@ -245,8 +255,13 @@ void Server::printHelp()
 }
 
 int main(int argc, char **argv) {
-    // Create server object
-    Server server(1234);
+    // Set signal handler for SIGINT
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = sigint_handler;
+    sigaction(SIGINT, &sa, NULL);
+
+    // Create LSM-Tree
     server.createLSMTree(argc, argv);
     server.run();
     // Clean up resources

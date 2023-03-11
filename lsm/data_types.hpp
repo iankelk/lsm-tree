@@ -39,6 +39,8 @@ typedef int32_t VAL_t;
 
 // CLIENT / SERVER DEFINITIONS
 #define BUFFER_SIZE 2048
+#define SERVER_PORT 1234
+#define TRUNCATED "[RESPONSE TRUNCATED]\n"
 
 // Key Value Pair
 struct kv_pair {

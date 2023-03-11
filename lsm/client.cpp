@@ -19,7 +19,7 @@ int main() {
 
     sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(1234);
+    server_address.sin_port = htons(SERVER_PORT);
     inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr);
     if (connect(client_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
         std::cerr << "Error connecting to server" << std::endl;
@@ -36,6 +36,10 @@ int main() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     while (std::getline(std::cin, command_str)) {
+        // If the command_str is empty, skip it
+        if (command_str.size() == 0) {
+            continue;
+        }
         send(client_socket, command_str.c_str(), command_str.size(), 0);
 
         // Receive responses from server
