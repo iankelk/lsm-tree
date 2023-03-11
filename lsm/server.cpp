@@ -153,8 +153,9 @@ void Server::handle_client(int client_socket)
             std::strncpy(chunk, response.c_str() + i, BUFFER_SIZE);
             send(client_socket, chunk, strlen(chunk), 0);
             i += BUFFER_SIZE;
+            send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
         }
-        send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+        
     }
     // Clean up resources
     close();

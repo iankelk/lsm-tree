@@ -42,7 +42,7 @@ int main() {
         }
         send(client_socket, command_str.c_str(), command_str.size(), 0);
 
-        // Read the response from the server in chunks of BUFFER_SIZE in a loop until the end.
+        // Read the response from the server in chunks of BUFFER_SIZE in a loop until END_OF_MESSAGE is reached
         // The end of the message is marked with the END_OF_MESSAGE indicator.
         std::string response;
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
@@ -52,6 +52,7 @@ int main() {
                 break;
             }
         }
+
         if (n_read == -1) {
             std::cerr << "Error reading response from server" << std::endl;
             close(client_socket);
