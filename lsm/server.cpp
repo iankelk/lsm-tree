@@ -74,7 +74,7 @@ void Server::handle_client(int client_socket)
 
             lsmTree->put(key, value);
             // Make response "ok\n"
-            response = "ok\n";
+            response = "ok";
             //snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
@@ -83,7 +83,7 @@ void Server::handle_client(int client_socket)
             value_ptr = lsmTree->get(key);
             if (value_ptr != nullptr) {
                 // Make response "%d\n", *value_ptr
-                response = std::to_string(*value_ptr) + "\n";
+                response = std::to_string(*value_ptr);
                 //snprintf(response, sizeof(response), "%d\n", *value_ptr);
             }
             else {
@@ -111,7 +111,7 @@ void Server::handle_client(int client_socket)
             ss >> key;
             lsmTree->del(key);
             // Make response "ok\n"
-            response = "ok\n";
+            response = "ok";
             //snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
@@ -119,7 +119,7 @@ void Server::handle_client(int client_socket)
             ss >> file_name;
             lsmTree->load(file_name);
             // Make response "ok\n"
-            response = "ok\n";
+            response = "ok";
             //snprintf(response, sizeof(response), "ok\n");
             // send(client_socket, response, strlen(response), 0);
             break;
@@ -130,31 +130,24 @@ void Server::handle_client(int client_socket)
             //snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
             break;
         case 's':            
-            // std::strncpy(response, lsmTree->printStats().c_str(), BUFFER_SIZE-std::strlen(TRUNCATED));
-            // std::strcat(response, TRUNCATED);
-            // cout << response << endl;
-            // copy the string to the buffer
-            //std::strcpy(response, lsmTree->printStats().c_str());
-            // Make response lsmTree->printStats()
             response = lsmTree->printStats();
             break;
         default:
             // Make response "Invalid command\n"
-            response = "Invalid command\n";
-            //snprintf(response, sizeof(response), "Invalid command\n");
-            // send(client_socket, response, strlen(response), 0);
+            response = "Invalid command";
         }
-        //send(client_socket, response, strlen(response), 0);
         // Send the message in chunks of BUFFER_SIZE in a loop until the end. 
         // Mark the end of the message with the END_OF_MESSAGE indicator.
-        int i = 0;
-        while (i < strlen(response.c_str())) {
-            char chunk[BUFFER_SIZE];
-            std::strncpy(chunk, response.c_str() + i, BUFFER_SIZE);
+        for (int i = 0; i < strlen(response.c_str()); i += BUFFER_SIZE) {
+            char chunk[BUFFER_SIZE] = {};
+            // Initialize chunk to all 0s
+            std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
+            // print the chunk to stdout
+            //std::cout << "CHUNK:[" << chunk << "]" << std::endl;
             send(client_socket, chunk, strlen(chunk), 0);
-            i += BUFFER_SIZE;
-            send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
         }
+        // Send the end of message indicator
+        send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
         
     }
     // Clean up resources
@@ -215,12 +208,6 @@ void Server::close() {
         ::close(server_socket);
     }
 }
-
-// // Shutdown everything
-// void Server::shutdown() {
-//     termination_flag = true;
-//     close();
-// }
 
 void Server::createLSMTree(int argc, char **argv)
 {

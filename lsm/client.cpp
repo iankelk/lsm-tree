@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <iostream>
 
 #include "data_types.hpp"
 
@@ -43,12 +44,15 @@ int main() {
         send(client_socket, command_str.c_str(), command_str.size(), 0);
 
         // Read the response from the server in chunks of BUFFER_SIZE in a loop until END_OF_MESSAGE is reached
-        // The end of the message is marked with the END_OF_MESSAGE indicator.
+        // The end of the message is marked with the END_OF_MESSAGE indicator. END_OF_MESSAGE is a string
+        // that is appended to the end of every response from the server. The client reads the response
+        // in chunks of BUFFER_SIZE until it sees the END_OF_MESSAGE indicator.
         std::string response;
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
-            buffer[n_read] = '\0';
-            response += buffer;
-            if (response.find(END_OF_MESSAGE) != std::string::npos) {
+            // print the contents of  buffer
+            //std::cout << "BUFFER:[" << buffer << "]" << std::endl;
+            response.append(buffer, n_read);
+            if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
                 break;
             }
         }
