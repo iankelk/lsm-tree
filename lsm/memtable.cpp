@@ -36,13 +36,6 @@ map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
     map<KEY_t, VAL_t> range;
     auto itStart = table_.lower_bound(start);
     auto itEnd = table_.upper_bound(end);
-
-    // Ensure that itEnd is within the bounds of the table_ map
-    if (itEnd != table_.end() && itEnd->first == end) {
-        // If itEnd points to the end key, decrement it to the previous key
-        --itEnd;
-    }
-
     range = std::map<KEY_t, VAL_t>(itStart, itEnd);
     // If the last key in the range is the end key, remove it
     if (range.size() > 0 && range.rbegin()->first == end) {

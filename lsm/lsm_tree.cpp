@@ -205,11 +205,20 @@ unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     if (start == end) {
         return nullptr;
     }
-    
+
     int allPossibleKeys = end - start;
 
     // Search the buffer for the key range and return the range map as a unique_ptr
     unique_ptr<map<KEY_t, VAL_t>> range_map = make_unique<map<KEY_t, VAL_t>>(buffer.range(start, end));
+
+    // Print all the key and value pairs in the range map to cout
+    // Create an iterator to iterate through the map
+    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
+    // Iterate through the map and remove all TOMBSTONES
+    for (it = range_map->begin(); it != range_map->end(); it++) {
+        // print the key and value pair
+        std::cout << "BUFFER KEY: " << it->first << " VALUE: " << it->second << "\n";
+    }
 
     // If the range has the size of the entire range, return the range
     if (range_map->size() == allPossibleKeys) {
@@ -225,21 +234,32 @@ unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // PRINT "Not all in the buffer!"
     cout << "Not all in the buffer! Size of range map: " << range_map->size() << "\n";
 
+    // print the number of levels
+    cout << "Number of levels: " << levels.size() << "\n";
+
     // If all of the keys are not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
+        // print level number
+        cout << "Level number: " << level->level_num << "\n";
         // Iterate through the runs in the level and check if the range is in the run
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
             map<KEY_t, VAL_t> temp_map = (*run)->range(start, end);
             // If keys from the range are found in the run, add them to the range map
             if (temp_map.size() != 0) {
+                // print the number of keys found in the run
+                cout << "SOMETHING Number of keys found in run: " << temp_map.size() << "\n";
                 for (const auto &kv : temp_map) {
                     // Only add the key/value pair if the key is not already in the range map
                     range_map->try_emplace(kv.first, kv.second);
                 }
-                //range_map->insert(temp_map.begin(), temp_map.end());
+            } else {
+                // print the number of keys found in the run
+                cout << "NOTHING Number of keys found in run: " << temp_map.size() << "\n";
             }
             // If the range map has the size of the entire range, return the range
             if (range_map->size() == allPossibleKeys) {
+                // print out allPossibleKeys
+                cout << "All possible keys!!!: " << allPossibleKeys << "\n";
                 removeTombstones(range_map);
                 return range_map;
             }
@@ -247,12 +267,13 @@ unique_ptr<map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     }
     // Print all the key and value pairs in the range map to cout
     // Create an iterator to iterate through the map
-    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
-    // Iterate through the map and remove all TOMBSTONES
-    for (it = range_map->begin(); it != range_map->end(); it++) {
-        // print the key and value pair
-        std::cout << "KEY: " << it->first << " VALUE: " << it->second << "\n";
-    }
+    //std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
+    // it = range_map->begin();
+    // // Iterate through the map and remove all TOMBSTONES
+    // for (it = range_map->begin(); it != range_map->end(); it++) {
+    //     // print the key and value pair
+    //     std::cout << "KEY: " << it->first << " VALUE: " << it->second << "\n";
+    // }
 
     // Remove all the TOMBSTONES from the range map
     removeTombstones(range_map);
