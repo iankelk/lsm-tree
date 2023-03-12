@@ -10,6 +10,8 @@
 
 using namespace std;
 
+void getNumOpenFiles();
+
 Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
     max_kv_pairs(max_kv_pairs),
     capacity(capacity),
@@ -21,11 +23,26 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
     size(0),
     max_key(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED)
+// {
+//     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
+//     if (mktemp(tmp_fn) == NULL) {
+//         throw runtime_error("Failed to generate unique temporary filename for Run");
+//     }
+//     fd = open(tmp_fn, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+//     // Print out the max_kv_pairs and tmp_fn
+//     // cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
+//     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+//         throw runtime_error("Failed to create temporary file for Run");
+//     }
+
+//     tmp_file = tmp_fn;
+// }
+
 {
     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
     fd = mkstemp(tmp_fn);
     // Print out the max_kv_pairs and tmp_fn
-    cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
+    //cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw runtime_error("Failed to create temporary file for Run");
     }
@@ -88,10 +105,10 @@ unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     // Print if the key is in the bloom filter and if it is in the range of the fence pointers
-    cout << "key: " + to_string(key) + "\n";
-    cout << "fence_pointers.front(): " + to_string(fence_pointers.front()) + "\n";
-    cout << "max_key: " + to_string(max_key) + "\n";
-    cout << "bloom_filter.contains(key): " + to_string(bloom_filter.contains(key)) + "\n";
+    // cout << "key: " + to_string(key) + "\n";
+    // cout << "fence_pointers.front(): " + to_string(fence_pointers.front()) + "\n";
+    // cout << "max_key: " + to_string(max_key) + "\n";
+    // cout << "bloom_filter.contains(key): " + to_string(bloom_filter.contains(key)) + "\n";
 
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
@@ -109,7 +126,7 @@ unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Failed to open temporary file for Run");
+        throw runtime_error("Run::get: Failed to open temporary file for Run");
     }
 
     // Search the page for the key
@@ -169,7 +186,7 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Failed to open temporary file for Run");
+        throw runtime_error("Run::range: Failed to open temporary file for Run");
     }
     // Search the pages for the keys in the range
     for (long page_index = start_page_index; page_index < end_page_index; page_index++) {
@@ -196,12 +213,15 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     map<KEY_t, VAL_t> map;
 
     // Print the tmp file name
-    cout << "tmp_file: " << tmp_file << endl;
+    //cout << "tmp_file: " << tmp_file << endl;
+
+    // Print how many open files there are
+    //getNumOpenFiles();
 
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Failed to open temporary file for Run");
+        throw runtime_error("Run::getMap: Failed to open temporary file for Run");
 
     }
     // Read all the key-value pairs from the temporary file
@@ -224,4 +244,20 @@ double Run::getErrorRate() {
 }
 int Run::getBitsetSize() {
     return bitset_size;
+}
+
+// Get number of open files function
+void getNumOpenFiles() {
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+        int fd_count = 0;
+        for (int fd = 0; fd < rlim.rlim_cur; fd++) {
+            if (fcntl(fd, F_GETFD) != -1) {
+                fd_count++;
+            }
+        }
+        std::cout << "Number of open file descriptors: " << fd_count << std::endl;
+    } else {
+        std::cerr << "Error getting RLIMIT_NOFILE: " << strerror(errno) << std::endl;
+    }
 }
