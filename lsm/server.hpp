@@ -1,3 +1,6 @@
+#ifndef SERVER_HPP
+#define SERVER_HPP
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -31,3 +34,5 @@ private:
     void handle_client(int client_socket);
     void printHelp();
 };
+
+#endif /* SERVER_HPP */

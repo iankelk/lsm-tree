@@ -1,5 +1,4 @@
 #include "memtable.hpp"
-using namespace std;
 
 // Insert a key-value pair into the memtable. If the key already exists, update its value to the new value. 
 // If the key does not exist and inserting it would cause the size of table_ to exceed max_kv_pairs, return false
@@ -20,20 +19,20 @@ bool Memtable::put(KEY_t key, VAL_t value) {
 }
 
 // Get the value associated with a key
-unique_ptr<VAL_t> Memtable::get(KEY_t key) const {
+std::unique_ptr<VAL_t> Memtable::get(KEY_t key) const {
     auto it = table_.find(key);
     if (it == table_.end()) {
         return nullptr;
     }
-    unique_ptr<VAL_t> val = make_unique<VAL_t>();
+    std::unique_ptr<VAL_t> val = std::make_unique<VAL_t>();
     *val = it->second;
     return val;
 }
 
 
 // Get all key-value pairs within a range, inclusive of the start and exclusive of the end key
-map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
-    map<KEY_t, VAL_t> range;
+std::map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
+    std::map<KEY_t, VAL_t> range;
     auto itStart = table_.lower_bound(start);
     auto itEnd = table_.upper_bound(end);
     range = std::map<KEY_t, VAL_t>(itStart, itEnd);

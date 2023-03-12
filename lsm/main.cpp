@@ -4,8 +4,6 @@
 #include "error.hpp"
 #include "unistd.h"
 
-using namespace std;
-
 /*
 int main(int argc, char *argv[]) {
     int bf_bits_per_key, fanout, memtable_size;

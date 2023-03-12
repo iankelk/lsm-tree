@@ -1,7 +1,8 @@
+#ifndef DYNAMIC_BITSET_HPP
+#define DYNAMIC_BITSET_HPP
+
 #include <vector>
 #include <stdexcept>
-
-using namespace std;
 
 class DynamicBitset {
 public:
@@ -15,5 +16,7 @@ public:
     bool test(size_t pos);
 
 private:
-    vector<bool> m_bits;
+    std::vector<bool> m_bits;
 };
+
+#endif /* DYNAMIC_BITSET_HPP */

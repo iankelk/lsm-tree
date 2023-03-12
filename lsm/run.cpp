@@ -8,8 +8,6 @@
 
 #include "run.hpp"
 
-using namespace std;
-
 void getNumOpenFiles();
 
 Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
@@ -23,28 +21,12 @@ Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
     size(0),
     max_key(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED)
-// {
-//     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
-//     if (mktemp(tmp_fn) == NULL) {
-//         throw runtime_error("Failed to generate unique temporary filename for Run");
-//     }
-//     fd = open(tmp_fn, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-//     // Print out the max_kv_pairs and tmp_fn
-//     // cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
-//     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-//         throw runtime_error("Failed to create temporary file for Run");
-//     }
-
-//     tmp_file = tmp_fn;
-// }
 
 {
     char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
     fd = mkstemp(tmp_fn);
-    // Print out the max_kv_pairs and tmp_fn
-    //cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Failed to create temporary file for Run");
+        throw std::runtime_error("Failed to create temporary file for Run");
     }
     tmp_file = tmp_fn;
 }
@@ -66,14 +48,8 @@ void Run::closeFile() {
 void Run::put(KEY_t key, VAL_t val) {
     int result;
     if (size >= max_kv_pairs) {
-        // print max_kv_pairs and size
-        cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
-        cout << "size: " + to_string(size) + "\n";
-        throw runtime_error("Attempting to add to full Run");
+        throw std::runtime_error("Attempting to add to full Run");
     }
-    // print max_kv_pairs and size
-    //cout << "max_kv_pairs: " + to_string(max_kv_pairs) + "\n";
-    //cout << "size: " + to_string(size) + "\n";
 
     kv_pair kv = {key, val};
     bloom_filter.add(key);
@@ -93,11 +69,11 @@ void Run::put(KEY_t key, VAL_t val) {
     size++;
 }
 
-unique_ptr<VAL_t> Run::get(KEY_t key) {
-    unique_ptr<VAL_t> val;
+std::unique_ptr<VAL_t> Run::get(KEY_t key) {
+    std::unique_ptr<VAL_t> val;
 
     // Print if run is empty
-    cout << "run size: " + to_string(size) + "\n";
+    std::cout << "run size: " + std::to_string(size) + "\n";
 
     // Check if the run is empty
     if (size == 0) {
@@ -120,13 +96,13 @@ unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto page_index = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
 
     if (page_index < 0) {
-        throw runtime_error("Negative index from fence pointer");
+        throw std::runtime_error("Negative index from fence pointer");
     }
 
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Run::get: Failed to open temporary file for Run");
+        throw std::runtime_error("Run::get: Failed to open temporary file for Run");
     }
 
     // Search the page for the key
@@ -137,7 +113,7 @@ unique_ptr<VAL_t> Run::get(KEY_t key) {
     // TODO: This is a linear search. Could be better with a binary search?
     while (read(fd, &kv, sizeof(kv_pair)) > 0) {
         if (kv.key == key) {
-            val = make_unique<VAL_t>(kv.value);
+            val = std::make_unique<VAL_t>(kv.value);
         }
     }
     closeFile();
@@ -145,9 +121,11 @@ unique_ptr<VAL_t> Run::get(KEY_t key) {
 }
 
 // Return a map of all the key-value pairs in the range [start, end]
-map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
+std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
+    long searchPageStart, searchPageEnd;
+
     // Initialize an empty map
-    map<KEY_t, VAL_t> range_map;
+    std::map<KEY_t, VAL_t> range_map;
 
     // Check if the run is empty
     if (size == 0) {
@@ -158,38 +136,38 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (end < fence_pointers.front() || start > max_key) {
         return range_map;
     }
+    // Check if the start of the range is less than the first fence pointer
     if (start < fence_pointers.front()) {
-        start = fence_pointers.front();
+        searchPageStart = 0;
+    } else {
+        // Binary search for the page containing the start key in the fence pointers vector
+        auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), start);
+        searchPageStart = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
     }
-    if (end > fence_pointers.back()) {
-        end = max_key;
+    // Check if the end of the range is greater than the max key
+    if (end > max_key) {
+        searchPageEnd = fence_pointers.size();
+    } else {
+        // Binary search for the page containing the end key in the fence pointers vector
+        auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), end);
+        searchPageEnd = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter));
     }
-    // Binary search for the page containing the start key in the fence pointers vector.
-    // Since the first page that contains data in the requested range is included in the subrange,
-    // the index needs to be shifted back by one page, so that it points to the start of the first
-    // page containing data in the requested range.
-    auto upper_bound_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), start);
-    auto start_page_index = static_cast<long>(std::distance(fence_pointers.begin(), upper_bound_iter)) - 1;
-    // Binary search for the page containing the end key in the fence pointers vector. 
-    // Since the page immediately following the last page that contains data in the requested range
-    // is not included in the subrange, subrange_page_end does not need to be shifted back by one page.
-    upper_bound_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), end);
-    auto end_page_index = static_cast<long>(std::distance(fence_pointers.begin(), upper_bound_iter));
+
     // Check that the start and end page indices are valid
-    if (start_page_index < 0 || end_page_index < 0) {
-        throw runtime_error("Negative index from fence pointer");
+    if (searchPageStart < 0 || searchPageEnd < 0) {
+        throw std::runtime_error("Negative index from fence pointer");
     }
     // Check that the start page index is less than the end page index
-    if (start_page_index >= end_page_index) {
-        throw runtime_error("Start page index is greater than or equal to end page index");
+    if (searchPageStart >= searchPageEnd) {
+        throw std::runtime_error("Start page index is greater than or equal to end page index");
     }
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Run::range: Failed to open temporary file for Run");
+        throw std::runtime_error("Run::range: Failed to open temporary file for Run");
     }
     // Search the pages for the keys in the range
-    for (long page_index = start_page_index; page_index < end_page_index; page_index++) {
+    for (long page_index = searchPageStart; page_index < searchPageEnd; page_index++) {
         long offset = page_index * getpagesize();
         lseek(fd, offset, SEEK_SET);
         kv_pair kv;
@@ -209,19 +187,13 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     return range_map;
 }
 
- map<KEY_t, VAL_t> Run::getMap() {
-    map<KEY_t, VAL_t> map;
-
-    // Print the tmp file name
-    //cout << "tmp_file: " << tmp_file << endl;
-
-    // Print how many open files there are
-    //getNumOpenFiles();
+ std::map<KEY_t, VAL_t> Run::getMap() {
+    std::map<KEY_t, VAL_t> map;
 
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw runtime_error("Run::getMap: Failed to open temporary file for Run");
+        throw std::runtime_error("Run::getMap: Failed to open temporary file for Run");
 
     }
     // Read all the key-value pairs from the temporary file
@@ -235,15 +207,6 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
 long Run::getMaxKvPairs() {
     return max_kv_pairs;
-}
-int Run::getCapacity() {
-    return capacity;
-}
-double Run::getErrorRate() {
-    return error_rate;
-}
-int Run::getBitsetSize() {
-    return bitset_size;
 }
 
 // Get number of open files function

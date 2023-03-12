@@ -1,10 +1,8 @@
 #include "level.hpp"
 #include <iostream>
 
-using namespace std;
-
 // Add run to the beginning of the Level runs queue 
-void Level::put(unique_ptr<Run> run_ptr) {
+void Level::put(std::unique_ptr<Run> run_ptr) {
     // print the kv_pairs, run_ptr->max_kv_pairs, max_kv_pairs, and the level_num in one line
     // cout << "WTF kv_pairs: " << kv_pairs << " run_ptr->max_kv_pairs: " << run_ptr->max_kv_pairs << " max_kv_pairs: " << max_kv_pairs << " level_num: " << level_num << endl;
     // print the actual number of kv_pairs using numKVPairs()
@@ -13,12 +11,12 @@ void Level::put(unique_ptr<Run> run_ptr) {
     //assert(kv_pairs == numKVPairs());
 
     // Check if there is enough space in the level to add the run
-    if (numKVPairs() + run_ptr->max_kv_pairs > max_kv_pairs) {
+    if (numKVPairs() + run_ptr->getMaxKvPairs() > max_kv_pairs) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
     // Increment the kv_pairs in the level
-    kv_pairs += runs.front()->max_kv_pairs;
+    kv_pairs += runs.front()->getMaxKvPairs();
 
     // Calculate the number of runs in the runs queue
     num_runs = runs.size();
@@ -35,21 +33,21 @@ void Level::put(unique_ptr<Run> run_ptr) {
 
 // Dump the contents of the level
 void Level::dump() {
-    cout << "Level: " << endl;
-    cout << "  num_runs: " << num_runs << endl;
-    cout << "  kv_pairs: " << kv_pairs << endl;
-    cout << "  max_kv_pairs: " << max_kv_pairs << endl;
-    cout << "  buffer_size: " << buffer_size << endl;
-    cout << "  fanout: " << fanout << endl;
-    cout << "  level_num: " << level_num << endl;
-    cout << "  is_last_level: " << is_last_level << endl;
-    cout << "  level_policy: " << level_policy << endl;
-    cout << "  runs: " << endl;
+    std::cout << "Level: " << std::endl;
+    std::cout << "  num_runs: " << num_runs << std::endl;
+    std::cout << "  kv_pairs: " << kv_pairs << std::endl;
+    std::cout << "  max_kv_pairs: " << max_kv_pairs << std::endl;
+    std::cout << "  buffer_size: " << buffer_size << std::endl;
+    std::cout << "  fanout: " << fanout << std::endl;
+    std::cout << "  level_num: " << level_num <<std:: endl;
+    std::cout << "  is_last_level: " << is_last_level << std::endl;
+    std::cout << "  level_policy: " << level_policy << std::endl;
+    std::cout << "  runs: " << std::endl;
     // Iterate through the runs in the level
     for (auto &run : runs) {
         // Print out the map of the run returned by getMap()
         for (auto kv : run->getMap()) {
-            cout << "    " << kv.first << " : " << kv.second << " : L" << level_num << endl;
+            std::cout << "    " << kv.first << " : " << kv.second << " : L" << level_num << std::endl;
         }
     }
 }
@@ -62,7 +60,7 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         return;
     }
     // Create a new map to hold the merged data
-    map<KEY_t, VAL_t> merged_map;
+    std::map<KEY_t, VAL_t> merged_map;
 
     // Print the ACTUAL REAL size of the level
     // cout << "Num KV pairs in level: " << numKVPairs() << endl;
@@ -70,7 +68,7 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
     // Iterate through the runs in the level
     for  (const auto& run : runs) {
         // Get the map of the run
-        map<KEY_t, VAL_t> run_map = run->getMap();
+        std::map<KEY_t, VAL_t> run_map = run->getMap();
         // print the size of the run_map
         //cout << "Size of run_map: " << run_map.size() << endl;
         // Iterate through the key-value pairs in the run map
@@ -89,7 +87,7 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
     // Clear the runs queue
     runs.clear();
 
-    put(make_unique<Run>(merged_map.size(), capacity, error_rate, bitset_size));
+    put(std::make_unique<Run>(merged_map.size(), capacity, error_rate, bitset_size));
 
     // cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
 
@@ -119,10 +117,10 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
 long Level::sumMaxKvPairs() {
     long sum = 0;
     for (const auto& run : runs) {
-        sum += run->max_kv_pairs;
+        sum += run->getMaxKvPairs();
     }
     // print sum
-    cout << "Sum of max_kv_pairs: " << sum << endl;
+    std::cout << "Sum of max_kv_pairs: " << sum << std::endl;
     return sum;
 }
 
@@ -173,7 +171,7 @@ bool Level::willLowerLevelFit() {
 int Level::numKVPairs() {
     int num_kv_pairs = 0;
     for (const auto& run : runs) {
-        num_kv_pairs += run->max_kv_pairs;
+        num_kv_pairs += run->getMaxKvPairs();
     }
     return num_kv_pairs;
 }

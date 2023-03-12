@@ -1,5 +1,5 @@
-#ifndef BLOOM_FILTER_H
-#define BLOOM_FILTER_H
+#ifndef BLOOM_FILTER_HPP
+#define BLOOM_FILTER_HPP
 
 #include <cmath>
 #include <functional>
@@ -25,4 +25,4 @@ private:
     std::hash<std::string> hasher;
 };
 
-#endif /* BLOOM_FILTER_H */
+#endif /* BLOOM_FILTER_HPP */

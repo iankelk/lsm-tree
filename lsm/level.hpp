@@ -6,8 +6,6 @@
 
 #include "run.hpp"
 
-using namespace std;
-
 class Level {
 public:
     enum Policy {
@@ -32,9 +30,9 @@ public:
     // Fanout
     int fanout;
     // Vector of level sizes cached
-    map<int, long> level_sizes;
+    std::map<int, long> level_sizes;
     // runs is a std::deque of std::unique_ptr pointing to runs in the level
-    deque<unique_ptr<Run>> runs;
+    std::deque<std::unique_ptr<Run>> runs;
     // constructor
     Level(long bs, int f, Policy l, int ln) : buffer_size(bs), fanout(f), level_policy(l), level_num(ln), num_runs(0),
     max_kv_pairs(pow(f, ln) * bs) {}
@@ -43,7 +41,7 @@ public:
         //cout << "LEVEL DESTRUCTOR\n";
     };
     // put takes a pointer to a Run as a parameter and adds a std::unique_ptr to the runs queue
-    void put(unique_ptr<Run> run_ptr);
+    void put(std::unique_ptr<Run> run_ptr);
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
