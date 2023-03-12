@@ -3,38 +3,21 @@
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> run_ptr) {
-    // print the kv_pairs, run_ptr->max_kv_pairs, max_kv_pairs, and the level_num in one line
-    // cout << "WTF kv_pairs: " << kv_pairs << " run_ptr->max_kv_pairs: " << run_ptr->max_kv_pairs << " max_kv_pairs: " << max_kv_pairs << " level_num: " << level_num << endl;
-    // print the actual number of kv_pairs using numKVPairs()
-    // cout << "Actual number of kv_pairs: " << numKVPairs() << endl;
-
-    //assert(kv_pairs == numKVPairs());
+    assert(kv_pairs == numKVPairs());
 
     // Check if there is enough space in the level to add the run
-    if (numKVPairs() + run_ptr->getMaxKvPairs() > max_kv_pairs) {
+    if (kv_pairs + run_ptr->getMaxKvPairs() > max_kv_pairs) {
         throw std::out_of_range("put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
     // Increment the kv_pairs in the level
-    kv_pairs += runs.front()->getMaxKvPairs();
-
-    // Calculate the number of runs in the runs queue
-    num_runs = runs.size();
-
-    //assert(kv_pairs == numKVPairs());
-
-    // // print the number of key-value pairs in the level
-    // cout << "Number of key-value pairs in level: " << kv_pairs << endl;
-    // // print the max number of key-value pairs in the level
-    // cout << "Max number of key-value pairs in level: " << max_kv_pairs << endl;
-    // // print the temporary file name of the run
-    // cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
+    kv_pairs += runs.front()->getMaxKvPairs(); 
 }
 
 // Dump the contents of the level
 void Level::dump() {
     std::cout << "Level: " << std::endl;
-    std::cout << "  num_runs: " << num_runs << std::endl;
+    std::cout << "  number of runs: " << runs.size() << std::endl;
     std::cout << "  kv_pairs: " << kv_pairs << std::endl;
     std::cout << "  max_kv_pairs: " << max_kv_pairs << std::endl;
     std::cout << "  buffer_size: " << buffer_size << std::endl;
@@ -62,9 +45,6 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
     // Create a new map to hold the merged data
     std::map<KEY_t, VAL_t> merged_map;
 
-    // Print the ACTUAL REAL size of the level
-    // cout << "Num KV pairs in level: " << numKVPairs() << endl;
-
     // Iterate through the runs in the level
     for  (const auto& run : runs) {
         // Get the map of the run
@@ -84,8 +64,9 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
     // print the size of the merged_map
     // cout << "Size of merged_map: " << merged_map.size() << endl;
 
-    // Clear the runs queue
+    // Clear the runs queue and reset the kv_pairs
     runs.clear();
+    kv_pairs = 0;
 
     put(std::make_unique<Run>(merged_map.size(), capacity, error_rate, bitset_size));
 
@@ -103,16 +84,9 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         }
     }
 
-    //assert(kv_pairs == numKVPairs());
-
-
-    //kv_pairs = merged_map.size();
+    assert(kv_pairs == numKVPairs());
 
     runs.front()->closeFile();
-    num_runs = runs.size();
-    // print the number of runs in the level
-    // cout << "Compaction @ end: Number of runs in level: " << num_runs << endl;
-          
 }
 long Level::sumMaxKvPairs() {
     long sum = 0;
@@ -140,7 +114,6 @@ long Level::getLevelSize(int level_num) {
 // Returns true if there is enough space in the level to flush the buffer
 bool Level::willBufferFit() {
     // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
-    // return (numKVPairs() + buffer_size <= max_kv_pairs);
     assert(numKVPairs() == kv_pairs);
     return (kv_pairs + buffer_size <= max_kv_pairs);
 }
@@ -149,20 +122,8 @@ bool Level::willBufferFit() {
 bool Level::willLowerLevelFit() {
     // Get the previous level number, or 1 if this is the first level
     int prevLevel = (level_num - 2) > 0 ? (level_num - 2) : 1;
-    // Check if the prevLevel - 1 is in the level_sizes vector. If it is, get the level size from the vector. 
-    // If not, calculate the level size using calculateLevelSize()
+    // Get the size of the previous level
     long prevLevelSize = getLevelSize(prevLevel);
-    // print the previous level size, the kv_pairs, and the max_kv_pairs
-    // cout << "prevLevelSize: " << prevLevelSize << " kv_pairs: " << kv_pairs << " max_kv_pairs: " << max_kv_pairs << endl;
-
-    // bool willFit = (numKVPairs() + prevLevelSize <= max_kv_pairs);
-    // // print whether the level will fit
-    // cout << "willFit: " << willFit << endl;
-    // Check if the sum of the current level's runs' kv_pairs and the previous level's size is less than or equal to this level's max_kv_pairs
-    // print the number of kv_pairs in the level
-    //cout << "numKVPairs(): " << numKVPairs() << endl;
-    //cout << "kv_pairs: " << kv_pairs << endl;
-
     assert(numKVPairs() == kv_pairs);
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }

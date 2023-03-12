@@ -304,9 +304,6 @@ int testRun() {
     return 0;
 }
 
-//    Level(int n, long s, bool l) : max_runs(n), max_run_size(s), leveling(l), num_runs(0) {}
-
-
 int testLevel() {
 
     // Create a level with maximum of 2 runs of size 4
@@ -341,18 +338,15 @@ int testLevel() {
     level.put(move(run_ptr1));
     level.put(move(run_ptr2));
     assert(level.runs.size() == 2);
-    assert(level.num_runs == 2);
 
     // Test dumping the level
     level.dump();
     //level.put(run3);
     //assert(level.runs.size() == 2);
-    //assert(level.num_runs == 2);
 /*
     // Test compacting the level
     level.compactLevel();
     assert(level.runs.size() == 1);
-    assert(level.num_runs == 1);
 
     // Test dumping the level
     level.dump();

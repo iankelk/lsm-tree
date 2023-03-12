@@ -17,8 +17,6 @@ public:
     int level_num;
     // boolean if the level is the last level.
     bool is_last_level = false;
-    // num_runs is the number of runs that are currently in a level
-    int num_runs = 0;
     // leveling is true if the level is leveled, and false if it is tiered
     Policy level_policy;
     // kv_pairs is the number of key-value pairs in the level
@@ -34,7 +32,7 @@ public:
     // runs is a std::deque of std::unique_ptr pointing to runs in the level
     std::deque<std::unique_ptr<Run>> runs;
     // constructor
-    Level(long bs, int f, Policy l, int ln) : buffer_size(bs), fanout(f), level_policy(l), level_num(ln), num_runs(0),
+    Level(long bs, int f, Policy l, int ln) : buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
     max_kv_pairs(pow(f, ln) * bs) {}
     // destructor
     ~Level() {
@@ -61,7 +59,6 @@ public:
     // copy constructor
     Level(Level&& other) noexcept
         : level_num(other.level_num),
-          num_runs(other.num_runs),
           fanout(other.fanout),
           max_kv_pairs(other.max_kv_pairs),
           buffer_size(other.buffer_size),
@@ -71,7 +68,6 @@ public:
     // copy assignment operator 
     Level& operator=(Level&& other) noexcept {
         level_num = other.level_num;
-        num_runs = other.num_runs;
         fanout = other.fanout;
         max_kv_pairs = other.max_kv_pairs;
         buffer_size = other.buffer_size;

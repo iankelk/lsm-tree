@@ -15,17 +15,11 @@ LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int b
     bf_capacity(bf_capacity), bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
     buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
 {
-    // TODO: correct the leveling to read from the command line
-    //level_policy = DEFAULT_LEVELING_POLICY;
-
-    // Level(int n, bool l, int ln) : max_runs(n), leveling(l), level_num(ln), num_runs(0) {}
-    // buffer_size(bs), fanout(f), level_policy(l), level_num(ln)
+    // Create the first level
     levels.emplace_back(buffer.max_kv_pairs, fanout, level_policy, FIRST_LEVEL_NUM);
 
     // Set the first level in the levels vector to be the last level
     levels.front().is_last_level = true;
-    // print out the max_kv_pairs of the buffer
-    //cout << "Buffer max_kv_pairs: " << buffer.max_kv_pairs << "\n";
 }
 
 // Insert a key-value pair of integers into the LSM tree
@@ -64,9 +58,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (level_policy == Level::LEVELED) {
         levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
     }
-
-    // Update the number of key-value pairs in the first level
-    levels.front().kv_pairs = levels.front().numKVPairs();
 
     // Clear the buffer
     buffer.clear();
@@ -128,22 +119,13 @@ void LSMTree::merge_levels(int currentLevelNum) {
     if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->is_last_level) {
         next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
     }
-
+    // Update the number of key/value pairs in the next level. 
     next->kv_pairs = next->numKVPairs();
-    
-    // Increment the number of runs in the next level
-    next->num_runs = next->runs.size();
-    // print out the filename of the first run in the next level
-    //cout << "Filename of first run in next level: " << next->runs.front()->tmp_file << "\n";
 
     // Clear the current level
     it->runs.clear();
-    // Zero the number of runs in the current level
-    it->num_runs = it->runs.size();
     // Zero the number of key/value pairs in the current level
     it->kv_pairs = 0;
-
-    
 }
 
 // Given a key, search the tree for the key. If the key is found, return the value. 
@@ -323,9 +305,11 @@ std::string LSMTree::printStats() {
     std::string levelKeys = "";
     // Create a string to hold the dump of the tree
     std::string treeDump = "";
+
     // Iterate through the levels and add the number of keys in each level to the levelKeys string
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        levelKeys += "LVL" + std::to_string(it->level_num) + ": " + std::to_string(it->numKVPairs()) + ", ";
+        //assert(it->numKVPairs() == it->kv_pairs);
+        levelKeys += "LVL" + std::to_string(it->level_num) + ": " + std::to_string(it->kv_pairs) + ", ";
     }
     // Remove the last comma and space from the levelKeys string
     levelKeys = levelKeys.substr(0, levelKeys.size() - 2) + "\n";
@@ -368,14 +352,14 @@ std::string LSMTree::printTree() {
     output += "Number of levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of SSTables in level " + std::to_string(it->level_num) + ": " + std::to_string(it->runs.size()) + "\n";
-        // print the number of key/value pairs in each run using the numKVPairs() function
-        output += "Number of key-value pairs in level " + std::to_string(it->level_num) + ": " + std::to_string(it->numKVPairs()) + "\n";
+        //assert(it->numKVPairs() == it->kv_pairs);
+        output += "Number of key-value pairs in level " + std::to_string(it->level_num) + ": " + std::to_string(it->kv_pairs) + "\n";
     }
     // For each level, print if it is the last level
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Is level " + std::to_string(it->level_num) + " the last level? " + (it->is_last_level ? "Yes" : "No") + "\n";
     }
-    // Remove the last newline  from the output string
+    // Remove the last newline from the output string
     output = output.substr(0, output.size() - 1);
     return output;
 }
