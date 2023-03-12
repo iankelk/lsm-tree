@@ -161,8 +161,8 @@ map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (start < fence_pointers.front()) {
         start = fence_pointers.front();
     }
-    if (end > max_key) {
-        end = fence_pointers.back();
+    if (end > fence_pointers.back()) {
+        end = max_key;
     }
     // Binary search for the page containing the start key in the fence pointers vector.
     // Since the first page that contains data in the requested range is included in the subrange,
