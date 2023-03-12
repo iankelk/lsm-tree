@@ -10,28 +10,14 @@ void sigint_handler(int signal) {
     server.close();
 }
 
-std::vector<std::pair<int, int>> range(int lower_key, int upper_key)
-{
-    // TODO: Implement range command
-    return std::vector<std::pair<int, int>>();
-}
-
-void printStats()
-{
-    // TODO: Implement print stats command
-}
-
 // Thread function to handle client connections
 void Server::handle_client(int client_socket)
 {
-    //std::vector<std::pair<int, int>> results = {};
-
     std::cout << "New client connected" << std::endl;
 
     // Read commands from client
     char buffer[BUFFER_SIZE];
     // Check if client is still connected
-
     while (!termination_flag)
     {
         // Receive command
@@ -52,15 +38,13 @@ void Server::handle_client(int client_socket)
         ss >> op;
         KEY_t key, start, end;
         VAL_t value;
-        //VAL_t* value_ptr;
         
-        // create pointer to map<KEY_t, VAL_t> called results
+        // Pointers to store the results of get and range
+        std::unique_ptr<VAL_t> value_ptr;
         std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
         std::string file_name;
-        std::unique_ptr<VAL_t> value_ptr;
 
-        //char response[BUFFER_SIZE];
-        // Create a string of indefinite length called response
+        // Response to send back to client
         std::string response;
         
         switch (op) {
@@ -68,32 +52,22 @@ void Server::handle_client(int client_socket)
             ss >> key >> value;
             // Throw error if key is less than VALUE_MIN or greater than VALUE_MAX
             if (value < VAL_MIN || value > VAL_MAX) {
-                // Create the error message "ERROR: Value %d out of range [%d, %d], skipping\n", value, VAL_MIN, VAL_MAX
-                // and store it in response
                 response = "ERROR: Value " + std::to_string(value) + " out of range [" + std::to_string(VAL_MIN) + ", " + std::to_string(VAL_MAX) + "]\n";
-                //snprintf(response, sizeof(response), "ERROR: Value %d out of range [%d, %d], skipping\n", value, VAL_MIN, VAL_MAX);
-                //send(client_socket, response, strlen(response), 0);
                 break;
             }
 
             lsmTree->put(key, value);
-            // Make response "ok\n"
+            // TODO: Define and handle a proper confirmation message
             response = "ok";
-            //snprintf(response, sizeof(response), "ok\n");
-            // send(client_socket, response, strlen(response), 0);
             break;
         case 'g':
             ss >> key;
             value_ptr = lsmTree->get(key);
             if (value_ptr != nullptr) {
-                // Make response "%d\n", *value_ptr
                 response = std::to_string(*value_ptr);
-                //snprintf(response, sizeof(response), "%d\n", *value_ptr);
             }
             else {
-                // Make response "\r\n"
                 response = NO_VALUE;
-                //snprintf(response, sizeof(response), "\r\n");
             }
             break;
         case 'r':
@@ -113,41 +87,28 @@ void Server::handle_client(int client_socket)
         case 'd':
             ss >> key;
             lsmTree->del(key);
-            // Make response "ok\n"
             response = "ok";
-            //snprintf(response, sizeof(response), "ok\n");
-            // send(client_socket, response, strlen(response), 0);
             break;
         case 'l':
             ss >> file_name;
             lsmTree->load(file_name);
-            // Make response "ok\n"
             response = "ok";
-            //snprintf(response, sizeof(response), "ok\n");
-            // send(client_socket, response, strlen(response), 0);
             break;
         case 'i':
-            //lsmTree->printTree();
-            // Make response "PRINT TREE PLACEHOLDER\n"
-            //response = "PRINT TREE PLACEHOLDER\n";
-            //snprintf(response, sizeof(response), "PRINT TREE %s\n", "PLACEHOLDER");
             response = lsmTree->printTree();
             break;
         case 's':            
             response = lsmTree->printStats();
             break;
         default:
-            // Make response "Invalid command\n"
+            // TODO: Provide help message
             response = "Invalid command";
         }
         // Send the message in chunks of BUFFER_SIZE in a loop until the end. 
         // Mark the end of the message with the END_OF_MESSAGE indicator.
         for (int i = 0; i < strlen(response.c_str()); i += BUFFER_SIZE) {
             char chunk[BUFFER_SIZE] = {};
-            // Initialize chunk to all 0s
             std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
-            // print the chunk to stdout
-            //std::cout << "CHUNK:[" << chunk << "]" << std::endl;
             send(client_socket, chunk, strlen(chunk), 0);
         }
         // Send the end of message indicator

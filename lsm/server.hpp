@@ -12,7 +12,6 @@
 
 #include "lsm_tree.hpp"
 
-// Define the server class
 class Server
 {
 public:
@@ -22,7 +21,6 @@ public:
     void close();
 
 private:
-    // Unique pointer to LSMTree
     std::unique_ptr<LSMTree> lsmTree;
     int port;
     int server_socket;
