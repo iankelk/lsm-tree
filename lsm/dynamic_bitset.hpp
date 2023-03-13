@@ -2,7 +2,7 @@
 #define DYNAMIC_BITSET_HPP
 
 #include <vector>
-#include <stdexcept>
+//#include <stdexcept>
 
 class DynamicBitset {
 public:

@@ -1,9 +1,9 @@
 #ifndef BLOOM_FILTER_HPP
 #define BLOOM_FILTER_HPP
 
-#include <cmath>
-#include <functional>
-#include <string>
+// #include <cmath>
+// #include <functional>
+// #include <string>
 
 #include "dynamic_bitset.hpp"
 #include "data_types.hpp"

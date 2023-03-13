@@ -2,7 +2,7 @@
 #define MEMTABLE_HPP
 
 #include <map>
-#include <vector>
+//#include <vector>
 #include "data_types.hpp"
 
 class Memtable {

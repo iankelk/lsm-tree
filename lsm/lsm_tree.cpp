@@ -275,7 +275,6 @@ int LSMTree::countLogicalPairs() {
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats() {
-    // Create a string to hold the output
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
     std::string logicalPairs = "Logical Pairs: " + std::to_string(countLogicalPairs()) + "\n";
@@ -286,7 +285,6 @@ std::string LSMTree::printStats() {
 
     // Iterate through the levels and add the number of keys in each level to the levelKeys string
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        //assert(it->numKVPairs() == it->kv_pairs);
         levelKeys += "LVL" + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getKvPairs()) + ", ";
     }
     // Remove the last comma and space from the levelKeys string
@@ -303,7 +301,6 @@ std::string LSMTree::printStats() {
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            // Get the map of key/value pairs from the run
             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {

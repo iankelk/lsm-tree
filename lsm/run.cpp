@@ -10,12 +10,12 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
+Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset_size) :
     max_kv_pairs(max_kv_pairs),
-    capacity(capacity),
-    error_rate(error_rate),
-    bitset_size(bitset_size),
-    bloom_filter(capacity, error_rate, bitset_size),
+    bf_capacity(bf_capacity),
+    bf_error_rate(bf_error_rate),
+    bf_bitset_size(bf_bitset_size),
+    bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
     fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
     size(0),
@@ -72,20 +72,10 @@ void Run::put(KEY_t key, VAL_t val) {
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
 
-    // Print if run is empty
-    std::cout << "run size: " + std::to_string(size) + "\n";
-
     // Check if the run is empty
     if (size == 0) {
         return nullptr;
     }
-
-    // Print if the key is in the bloom filter and if it is in the range of the fence pointers
-    // cout << "key: " + to_string(key) + "\n";
-    // cout << "fence_pointers.front(): " + to_string(fence_pointers.front()) + "\n";
-    // cout << "max_key: " + to_string(max_key) + "\n";
-    // cout << "bloom_filter.contains(key): " + to_string(bloom_filter.contains(key)) + "\n";
-
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
     if (key < fence_pointers.front() || key > max_key || !bloom_filter.contains(key)) {
