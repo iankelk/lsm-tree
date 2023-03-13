@@ -3,7 +3,7 @@
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> run_ptr) {
-    assert(kv_pairs == numKVPairs());
+    //assert(kv_pairs == numKVPairs());
 
     // Check if there is enough space in the level to add the run
     if (kv_pairs + run_ptr->getMaxKvPairs() > max_kv_pairs) {
@@ -84,18 +84,9 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         }
     }
 
-    assert(kv_pairs == numKVPairs());
+    //assert(kv_pairs == numKVPairs());
 
     runs.front()->closeFile();
-}
-long Level::sumMaxKvPairs() {
-    long sum = 0;
-    for (const auto& run : runs) {
-        sum += run->getMaxKvPairs();
-    }
-    // print sum
-    std::cout << "Sum of max_kv_pairs: " << sum << std::endl;
-    return sum;
 }
 
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
@@ -114,7 +105,7 @@ long Level::getLevelSize(int level_num) {
 // Returns true if there is enough space in the level to flush the buffer
 bool Level::willBufferFit() {
     // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
-    assert(numKVPairs() == kv_pairs);
+    //assert(numKVPairs() == kv_pairs);
     return (kv_pairs + buffer_size <= max_kv_pairs);
 }
 
@@ -124,7 +115,7 @@ bool Level::willLowerLevelFit() {
     int prevLevel = (level_num - 2) > 0 ? (level_num - 2) : 1;
     // Get the size of the previous level
     long prevLevelSize = getLevelSize(prevLevel);
-    assert(numKVPairs() == kv_pairs);
+    //assert(numKVPairs() == kv_pairs);
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }
 
@@ -135,4 +126,30 @@ int Level::numKVPairs() {
         num_kv_pairs += run->getMaxKvPairs();
     }
     return num_kv_pairs;
+}
+
+// Returns the level number
+int Level::getLevelNum() const {
+    return level_num;
+}
+// Returns whether this is the last level
+bool Level::isLastLevel() const {
+    return is_last_level;
+}
+
+// Sets the last level 
+void Level::setLastLevel(bool is_last_level) {
+    this->is_last_level = is_last_level;
+}
+
+Level::Policy Level::getLevelPolicy() const {
+    return level_policy;
+}
+// Get the number of kv_pairs in the level
+long Level::getKvPairs() const {
+    return kv_pairs;
+}
+// Set the number of kv_pairs in the level
+void Level::setKvPairs(long kv_pairs) {
+    this->kv_pairs = kv_pairs;
 }

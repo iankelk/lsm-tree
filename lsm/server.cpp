@@ -151,7 +151,7 @@ Server::Server(int port)
     server_address.sin_family = AF_INET;
     server_address.sin_addr.s_addr = INADDR_ANY;
     server_address.sin_port = htons(port);
-    if (::bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
+    if (bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
         std::cerr << "Error binding server socket" << std::endl;
         close();
         exit(1);

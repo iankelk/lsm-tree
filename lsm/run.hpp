@@ -27,7 +27,6 @@ private:
     std::string tmp_file;
     long size;
     int fd;
-    
 };
 
 #endif /* LSM_RUN_HPP */

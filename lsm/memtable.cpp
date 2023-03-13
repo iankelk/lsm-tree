@@ -53,3 +53,11 @@ void Memtable::clear() {
 int Memtable::size() const {
     return table_.size();
 }
+// Return a map of all key-value pairs in the memtable
+std::map<KEY_t, VAL_t> Memtable::getMap() const {
+    return table_;
+}
+// Return the maximum number of key-value pairs allowed in the memtable
+long Memtable::getMaxKvPairs() const {
+    return max_kv_pairs;
+}

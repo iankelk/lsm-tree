@@ -36,8 +36,6 @@ private:
     Level::Policy level_policy;
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
-
-
     std::vector<Level> levels;
     void merge_levels(int currentLevelNum);
 };
