@@ -1,8 +1,6 @@
 #ifndef DYNAMIC_BITSET_HPP
 #define DYNAMIC_BITSET_HPP
-
 #include <vector>
-//#include <stdexcept>
 
 class DynamicBitset {
 public:

@@ -1,11 +1,6 @@
-#include <cassert>
-#include <cstdio>
-#include <cstdlib>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <unistd.h>
 #include <iostream>
-
 #include "run.hpp"
 
 void getNumOpenFiles();

@@ -1,14 +1,6 @@
-//#include <sstream>
-//#include <string>
-//#include <vector>
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-
-
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <iostream>
-
 #include "data_types.hpp"
 
 int main() {

@@ -1,14 +1,9 @@
+#include <set>
 #include <iostream>
-#include <string>
-#include <cassert>
-#include <stdexcept>
-#include <cmath>
 #include <fstream>
 #include <sstream>
-#include <set>
-#include <map>
+#include <unistd.h>
 
-#include "unistd.h"
 #include "lsm_tree.hpp"
 
 LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) :

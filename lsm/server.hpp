@@ -1,15 +1,7 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
-
-// #include <iostream>
-// #include <sstream>
-// #include <string>
-// #include <vector>
-// #include <mutex>
-// #include <unistd.h>
 #include <thread>
 #include <netinet/in.h>
-
 #include "lsm_tree.hpp"
 
 class Server

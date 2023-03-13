@@ -1,13 +1,7 @@
 #ifndef LEVEL_HPP
 #define LEVEL_HPP
-
-
-//#include <iostream>
-
-
 #include <queue>
 #include <cmath>
-
 #include "run.hpp"
 
 class Level {

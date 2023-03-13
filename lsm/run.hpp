@@ -1,10 +1,8 @@
 #ifndef LSM_RUN_HPP
 #define LSM_RUN_HPP
-
 #include <vector>
 #include <map>
 #include <string>
-//#include "data_types.hpp"
 #include "bloom_filter.hpp"
 
 class Run {

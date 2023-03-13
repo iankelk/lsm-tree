@@ -1,8 +1,5 @@
-//#include <cstdlib>
-
 #include <iostream>
 #include <cmath>
-
 #include "bloom_filter.hpp"
 #include "data_types.hpp"
 

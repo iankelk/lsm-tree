@@ -1,8 +1,6 @@
 #ifndef MEMTABLE_HPP
 #define MEMTABLE_HPP
-
 #include <map>
-//#include <vector>
 #include "data_types.hpp"
 
 class Memtable {

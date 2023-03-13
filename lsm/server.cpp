@@ -1,5 +1,7 @@
 #include <signal.h>
 #include <sstream>
+#include <iostream>
+#include <unistd.h>
 #include "server.hpp"
 
 volatile sig_atomic_t termination_flag = 0;

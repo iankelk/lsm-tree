@@ -1,5 +1,4 @@
 #include <string>
-
 #include "dynamic_bitset.hpp"
 
 void DynamicBitset::resize(size_t size) {
