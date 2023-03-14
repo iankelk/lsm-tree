@@ -12,7 +12,6 @@ Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset
     bf_bitset_size(bf_bitset_size),
     //bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
     bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
-    fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
     size(0),
     max_key(0),
@@ -25,6 +24,7 @@ Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset
         throw std::runtime_error("Failed to create temporary file for Run");
     }
     tmp_file = tmp_fn;
+    fence_pointers.reserve(max_kv_pairs / getpagesize());
 }
 
 Run::~Run() {

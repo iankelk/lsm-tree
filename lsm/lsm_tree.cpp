@@ -50,7 +50,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     buffer.clear();
     buffer.put(key, val);
 
-    serializeLSMTreeToFile("/tmp/LSMTree.json");
+    //serializeLSMTreeToFile("/tmp/LSMTree.json");
 }
 
 

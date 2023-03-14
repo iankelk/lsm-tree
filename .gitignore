@@ -1,3 +1,6 @@
 
 bigger.txt
 bigs2.txt
+bin/client.dSYM/Contents/Resources/DWARF/client
+bin/server
+bin/server.dSYM/Contents/Resources/DWARF/server
