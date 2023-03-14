@@ -6,13 +6,12 @@
 
 #include "lsm_tree.hpp"
 
-LSMTree::LSMTree(int bf_capacity, float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) :
-    bf_capacity(bf_capacity), bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
+LSMTree::LSMTree(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) :
+    bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
+    numFalsePositives(0), numTruePositives(0), buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM);
-
     // Set the first level in the levels vector to be the last level
     levels.front().setLastLevel(true);
 }
@@ -28,9 +27,9 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (!levels.front().willBufferFit()) {
         merge_levels(FIRST_LEVEL_NUM);
     }
-    
+
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), buffer.size(), bf_error_rate, bf_bitset_size));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, bf_bitset_size));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -43,14 +42,14 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // If level_policy is true, then compact the first level
     if (level_policy == Level::LEVELED) {
-        levels.front().compactLevel(buffer.size(), bf_error_rate, bf_bitset_size);
+        levels.front().compactLevel(bf_error_rate, bf_bitset_size);
     }
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
     buffer.put(key, val);
 
-    serializeLSMTreeToFile("/tmp/LSMTree.json");
+    //serializeLSMTreeToFile("/tmp/LSMTree.json");
 }
 
 
@@ -90,11 +89,15 @@ void LSMTree::merge_levels(int currentLevelNum) {
     it = levels.begin() + currentLevelNum - 1;
     next = levels.begin() + currentLevelNum;
 
+    if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !it->isLastLevel())) {
+        it->compactLevel(bf_error_rate, bf_bitset_size);
+    }
+
     // Merge the current level into the next level by moving the entire deque of runs into the next level
     next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
 
-    if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->isLastLevel()) {
-        next->compactLevel(buffer.size(), bf_error_rate, bf_bitset_size);
+    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && next->isLastLevel())) {
+        next->compactLevel(bf_error_rate, bf_bitset_size);
     }
     // Update the number of key/value pairs in the next level. 
     next->setKvPairs(next->numKVPairs());
@@ -354,7 +357,6 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_ma
 json LSMTree::serialize() const {
     json j;
     j["buffer"] = buffer.serialize();
-    j["bf_capacity"] = bf_capacity;
     j["bf_error_rate"] = bf_error_rate;
     j["bf_bitset_size"] = bf_bitset_size;
     j["fanout"] = fanout;

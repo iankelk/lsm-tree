@@ -35,8 +35,7 @@ void Level::dump() {
     }
 }
 
-// Run::Run(long max_kv_pairs, int capacity, double error_rate, int bitset_size) :
-void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
+void Level::compactLevel(double error_rate, int bitset_size) {
     
     // Nothing to compact if there is only one run
     if (runs.size() == 1) {
@@ -61,20 +60,11 @@ void Level::compactLevel(int capacity, double error_rate, int bitset_size) {
         }
     }
 
-    // print the size of the merged_map
-    // cout << "Size of merged_map: " << merged_map.size() << endl;
-
     // Clear the runs queue and reset the kv_pairs
     runs.clear();
     kv_pairs = 0;
 
-    put(std::make_unique<Run>(merged_map.size(), capacity, error_rate, bitset_size));
-
-    // cout << "Temporary file name of run: " << runs.front()->tmp_file << endl;
-
-
-    // // Emplace_front a new run with the merged data to the runs queue
-    // runs.emplace_front(make_unique<Run>(new_max_kv_pairs, capacity, error_rate, bitset_size));
+    put(std::make_unique<Run>(merged_map.size(), error_rate, bitset_size));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {

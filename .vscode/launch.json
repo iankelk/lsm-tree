@@ -10,7 +10,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/bin/server",
-        "args": ["-n", "2", "-f", "2"],
+        "args": ["-n", "100", "-f", "2"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],

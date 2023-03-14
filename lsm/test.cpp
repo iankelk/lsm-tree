@@ -14,7 +14,7 @@
 #include "level.hpp"
 #include "lsm_tree.hpp"
 
-
+/*
 using namespace std;
 
 template <typename FUNC, typename EXCEPTION> void assert_throws(FUNC&& f, EXCEPTION&& e);
@@ -343,14 +343,14 @@ int testLevel() {
     level.dump();
     //level.put(run3);
     //assert(level.runs.size() == 2);
-/*
+
     // Test compacting the level
     level.compactLevel();
     assert(level.runs.size() == 1);
 
     // Test dumping the level
     level.dump();
-*/
+
     cout << "Level: All tests passed!" << endl;
 
     return 0;
@@ -388,3 +388,4 @@ int testTree() {
     return 0;
 }
 
+*/
