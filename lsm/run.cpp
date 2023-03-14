@@ -165,6 +165,8 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < offset_end) {
             if (kv.key >= start && kv.key <= end) {
                 range_map[kv.key] = kv.value;
+            } else if (kv.key > end) {
+                break;
             }
             offset += sizeof(kv_pair);
         }   
