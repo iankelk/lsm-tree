@@ -5,13 +5,11 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset_size) :
+Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size) :
     max_kv_pairs(max_kv_pairs),
-    bf_capacity(bf_capacity),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
-    //bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
-    bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
+    bloom_filter(max_kv_pairs, bf_error_rate, bf_bitset_size),
     tmp_file(""),
     size(0),
     max_key(0),
@@ -92,15 +90,20 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     // Search the page for the key
-    long offset = page_index * getpagesize();
+    long offset = page_index * getpagesize() * sizeof(kv_pair);
+    long end = offset + getpagesize() * sizeof(kv_pair);
+
     lseek(fd, offset, SEEK_SET);
     kv_pair kv;
-    // Search the page and keep the most recently added value 
+    // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
     // TODO: This is a linear search. Could be better with a binary search?
-    while (read(fd, &kv, sizeof(kv_pair)) > 0) {
+    // while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
+    while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
+            break;
         }
+        offset += sizeof(kv_pair);
     }
     closeFile();
     return val;
@@ -198,7 +201,6 @@ long Run::getMaxKvPairs() {
 json Run::serialize() const {
     nlohmann::json j;
     j["max_kv_pairs"] = max_kv_pairs;
-    j["bf_capacity"] = bf_capacity;
     j["bf_error_rate"] = bf_error_rate;
     j["bf_bitset_size"] = bf_bitset_size;
     j["bloom_filter"] = bloom_filter.serialize();
