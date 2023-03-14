@@ -155,6 +155,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw std::runtime_error("Run::range: Failed to open temporary file for Run");
     }
+    bool stopSearch = false;
     // Search the pages for the keys in the range
     for (long page_index = searchPageStart; page_index < searchPageEnd; page_index++) {
         long offset = page_index * getpagesize() * sizeof(kv_pair);
@@ -166,10 +167,14 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
             if (kv.key >= start && kv.key <= end) {
                 range_map[kv.key] = kv.value;
             } else if (kv.key > end) {
+                stopSearch = true;
                 break;
             }
             offset += sizeof(kv_pair);
-        }   
+        }
+        if (stopSearch) {
+            break;
+        }  
     }
     closeFile();
 
