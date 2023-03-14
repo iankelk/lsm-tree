@@ -157,15 +157,17 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     }
     // Search the pages for the keys in the range
     for (long page_index = searchPageStart; page_index < searchPageEnd; page_index++) {
-        long offset = page_index * getpagesize();
+        long offset = page_index * getpagesize() * sizeof(kv_pair);
+        long offset_end = searchPageEnd * getpagesize() * sizeof(kv_pair);
         lseek(fd, offset, SEEK_SET);
         kv_pair kv;
         // Search the page and keep the most recently added value'
-        while (read(fd, &kv, sizeof(kv_pair)) > 0) {
+        while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < offset_end) {
             if (kv.key >= start && kv.key <= end) {
                 range_map[kv.key] = kv.value;
             }
-        }
+            offset += sizeof(kv_pair);
+        }   
     }
     closeFile();
 
