@@ -12,8 +12,7 @@ public:
         LAZY_LEVELED
     };
     // constructor
-    Level(long bs, int f, Policy l, int ln) :
-    buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
+    Level(long bs, int f, Policy l, int ln) : buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
     is_last_level(false), kv_pairs(0), max_kv_pairs(pow(f, ln) * bs) {};
     // destructor
     ~Level() {
@@ -26,7 +25,7 @@ public:
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
-    void compactLevel(double error_rate, int bitset_size);
+    void compactLevel(int capacity, double error_rate, int bitset_size);
     // getLevelSize returns the size of the level
     long getLevelSize(int level_num); 
     // Returns true if there is enough space in the level to add a run with max_kv_pairs
@@ -47,7 +46,7 @@ public:
     long getKvPairs() const;
     // Set the number of kv_pairs in the level
     void setKvPairs(long kv_pairs);
-
+    //std::string policyToString(Level::Policy policy);
     static std::string policyToString(Policy policy) {
         switch (policy) {
             case Policy::TIERED: return "TIERED";
@@ -92,7 +91,6 @@ private:
     int fanout;
     // Vector of level sizes cached
     std::map<int, long> level_sizes;
-
 };
 
 #endif /* LEVEL_HPP */

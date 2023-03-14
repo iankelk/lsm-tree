@@ -5,12 +5,13 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, LSMTree& lsm_tree) :
+Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset_size) :
     max_kv_pairs(max_kv_pairs),
+    bf_capacity(bf_capacity),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
-    lsm_tree(lsm_tree),
-    bloom_filter(max_kv_pairs, bf_error_rate, bf_bitset_size),
+    //bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
+    bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
     fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
     size(0),
@@ -52,9 +53,6 @@ void Run::put(KEY_t key, VAL_t val) {
     // We can assume it is sorted because the buffer is sorted
     if (size % getpagesize() == 0) {
         fence_pointers.push_back(key);
-        // print the key
-        std::cout << "Adding key to fence pointers: " + std::to_string(key) + "\n";
-
     }
     // If the key is greater than the max key, update the max key
     if (key > max_key) {
@@ -95,26 +93,16 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     // Search the page for the key
     long offset = page_index * getpagesize();
-    long end = offset + getpagesize();
     lseek(fd, offset, SEEK_SET);
     kv_pair kv;
     // Search the page and keep the most recently added value 
     // TODO: This is a linear search. Could be better with a binary search?
-    // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
-    while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
+    while (read(fd, &kv, sizeof(kv_pair)) > 0) {
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
-            //*ptrNumTruePositives = *ptrNumTruePositives + 1;
         }
-        offset += sizeof(kv_pair);
     }
-    // if (val == nullptr) {
-    //     *ptrNumFalsePositives = *ptrNumFalsePositives + 1;
-    // }
     closeFile();
-    // Print number of true and false positives
-    // std::cout << "False Positives: " + std::to_string(*fp_ptr) + "\n";
-    // std::cout << "True Positives: " + std::to_string(*tp_ptr) + "\n";
     return val;
 }
 
@@ -210,6 +198,7 @@ long Run::getMaxKvPairs() {
 json Run::serialize() const {
     nlohmann::json j;
     j["max_kv_pairs"] = max_kv_pairs;
+    j["bf_capacity"] = bf_capacity;
     j["bf_error_rate"] = bf_error_rate;
     j["bf_bitset_size"] = bf_bitset_size;
     j["bloom_filter"] = bloom_filter.serialize();

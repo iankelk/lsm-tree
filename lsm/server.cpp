@@ -180,18 +180,22 @@ void Server::close() {
 void Server::createLSMTree(int argc, char **argv)
 {
     // Process command line arguments based on your LSM-Tree implementation
-    int opt, bf_bitset_size, buffer_num_pages, fanout;
+    int opt, bf_capacity, bf_bitset_size, buffer_num_pages, fanout;
     float bf_error_rate;
     Level::Policy level_policy;
 
+    bf_capacity = DEFAULT_CAPACITY;
     bf_error_rate = DEFAULT_ERROR_RATE;
     bf_bitset_size = DEFAULT_BITSET_SIZE;
     buffer_num_pages = DEFAULT_NUM_PAGES;
     fanout = DEFAULT_FANOUT;
     level_policy = DEFAULT_LEVELING_POLICY;
 
-    while ((opt = getopt(argc, argv, "e:b:n:f:l:h")) != -1) {
+    while ((opt = getopt(argc, argv, "c:e:b:n:f:l:h")) != -1) {
         switch (opt) {
+        case 'c':
+            bf_capacity = atoi(optarg);
+            break;
         case 'e':
             bf_error_rate = atof(optarg);
             break;
@@ -227,7 +231,7 @@ void Server::createLSMTree(int argc, char **argv)
         }
     }
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
+    lsmTree = std::make_unique<LSMTree>(bf_capacity, bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
 }
 
 void Server::printHelp()
@@ -240,6 +244,7 @@ void Server::printHelp()
 
     std::cout << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
+              << "  -c <capacity>        Bloom filter capacity (default: " << DEFAULT_CAPACITY << ")\n"
               << "  -e <error_rate>      Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
               << "  -b <bitset_size>     Bloom filter Bitset size in bytes (default: " << DEFAULT_BITSET_SIZE << ")\n"
               << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"

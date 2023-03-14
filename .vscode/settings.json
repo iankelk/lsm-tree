@@ -78,15 +78,7 @@
         "filesystem": "cpp",
         "queue": "cpp",
         "thread": "cpp",
-        "__availability": "cpp",
-        "functional": "cpp",
-        "memory_resource": "cpp",
-        "utility": "cpp",
-        "*.ipp": "cpp",
-        "any": "cpp",
-        "forward_list": "cpp",
-        "ranges": "cpp",
-        "span": "cpp"
+        "__availability": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }

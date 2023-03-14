@@ -5,7 +5,7 @@
 
 class LSMTree {
 public:
-    LSMTree(float, int, int, int, Level::Policy);
+    LSMTree(int, float, int, int, int, Level::Policy);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
@@ -17,6 +17,7 @@ public:
     void serializeLSMTreeToFile(const std::string& filename);
 private:
     Memtable buffer;
+    int bf_capacity;
     double bf_error_rate;
     int bf_bitset_size;
     int fanout;
@@ -25,8 +26,6 @@ private:
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
     std::vector<Level> levels;
     void merge_levels(int currentLevelNum);
-    int numFalsePositives;
-    int numTruePositives;
 };
 
 #endif /* LSM_TREE_HPP */
