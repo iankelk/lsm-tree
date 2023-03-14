@@ -5,11 +5,13 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size) :
+Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, LSMTree& lsm_tree) :
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
+    lsm_tree(lsm_tree),
     bloom_filter(max_kv_pairs, bf_error_rate, bf_bitset_size),
+    fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
     size(0),
     max_key(0),
@@ -22,7 +24,6 @@ Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size) :
         throw std::runtime_error("Failed to create temporary file for Run");
     }
     tmp_file = tmp_fn;
-    fence_pointers.reserve(max_kv_pairs / getpagesize());
 }
 
 Run::~Run() {
