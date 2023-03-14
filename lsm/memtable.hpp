@@ -2,6 +2,8 @@
 #define MEMTABLE_HPP
 #include <map>
 #include "data_types.hpp"
+#include <nlohmann/json.hpp>
+using json = nlohmann:: json;
 
 class Memtable {
 public:
@@ -15,6 +17,7 @@ public:
     int size() const;
     std::map<KEY_t, VAL_t> getMap() const;    
     long getMaxKvPairs() const;
+    json serialize() const;
 private:
     long max_kv_pairs;
     std::map<KEY_t, VAL_t> table_;  

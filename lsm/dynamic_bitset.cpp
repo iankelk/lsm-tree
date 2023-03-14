@@ -30,3 +30,19 @@ bool DynamicBitset::test(size_t pos) {
     return m_bits[pos];
 }
 
+// json DynamicBitset::serialize() const {
+//     json j;
+//     j["bits"] = m_bits;
+//     return j;
+// }
+
+json DynamicBitset::serialize() const {
+    json j;
+    std::vector<int> bits_as_ints;
+    bits_as_ints.reserve(m_bits.size());
+    for (const auto& bit : m_bits) {
+        bits_as_ints.push_back(bit ? 1 : 0);
+    }
+    j["bits"] = bits_as_ints;
+    return j;
+}

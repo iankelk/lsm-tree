@@ -30,7 +30,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
     
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_capacity, bf_error_rate, bf_bitset_size));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), buffer.size(), bf_error_rate, bf_bitset_size));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -43,12 +43,14 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // If level_policy is true, then compact the first level
     if (level_policy == Level::LEVELED) {
-        levels.front().compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+        levels.front().compactLevel(buffer.size(), bf_error_rate, bf_bitset_size);
     }
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
     buffer.put(key, val);
+
+    serializeLSMTreeToFile("/tmp/LSMTree.json");
 }
 
 
@@ -92,7 +94,7 @@ void LSMTree::merge_levels(int currentLevelNum) {
     next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
 
     if (level_policy == Level::LEVELED || level_policy == Level::LAZY_LEVELED && next->isLastLevel()) {
-        next->compactLevel(bf_capacity, bf_error_rate, bf_bitset_size);
+        next->compactLevel(buffer.size(), bf_error_rate, bf_bitset_size);
     }
     // Update the number of key/value pairs in the next level. 
     next->setKvPairs(next->numKVPairs());
@@ -349,4 +351,27 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_ma
     }
 }
 
-            
+json LSMTree::serialize() const {
+    json j;
+    j["buffer"] = buffer.serialize();
+    j["bf_capacity"] = bf_capacity;
+    j["bf_error_rate"] = bf_error_rate;
+    j["bf_bitset_size"] = bf_bitset_size;
+    j["fanout"] = fanout;
+    j["level_policy"] = Level::policyToString(level_policy);
+    j["levels"] = json::array();
+    for (const auto& level : levels) {
+        j["levels"].push_back(level.serialize());
+    }
+    return j;
+}
+
+void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
+    // Serialize the LSMTree to JSON
+    json treeJson = serialize();
+    // Write the JSON to file
+    std::ofstream outfile(filename);
+    outfile << treeJson.dump();
+    outfile.close();
+}
+

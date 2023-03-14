@@ -15,6 +15,7 @@ public:
     std::map<KEY_t, VAL_t> getMap();
     long getMaxKvPairs();
     void closeFile();
+    json serialize() const;
 private:
     KEY_t max_key;
     long max_kv_pairs;

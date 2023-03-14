@@ -10,6 +10,7 @@ Run::Run(long max_kv_pairs, int bf_capacity, double bf_error_rate, int bf_bitset
     bf_capacity(bf_capacity),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
+    //bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
     bloom_filter(bf_capacity, bf_error_rate, bf_bitset_size),
     fence_pointers(max_kv_pairs / getpagesize()),
     tmp_file(""),
@@ -193,6 +194,21 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 long Run::getMaxKvPairs() {
     return max_kv_pairs;
 }
+
+json Run::serialize() const {
+    nlohmann::json j;
+    j["max_kv_pairs"] = max_kv_pairs;
+    j["bf_capacity"] = bf_capacity;
+    j["bf_error_rate"] = bf_error_rate;
+    j["bf_bitset_size"] = bf_bitset_size;
+    j["bloom_filter"] = bloom_filter.serialize();
+    j["fence_pointers"] = fence_pointers;
+    j["tmp_file"] = tmp_file;
+    j["size"] = size;
+    j["max_key"] = max_key;
+    return j;
+}
+
 
 // Get number of open files function
 void getNumOpenFiles() {

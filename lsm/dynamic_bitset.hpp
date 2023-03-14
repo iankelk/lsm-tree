@@ -1,6 +1,8 @@
 #ifndef DYNAMIC_BITSET_HPP
 #define DYNAMIC_BITSET_HPP
 #include <vector>
+#include <nlohmann/json.hpp>
+using json = nlohmann:: json;
 
 class DynamicBitset {
 public:
@@ -12,6 +14,7 @@ public:
     void set(size_t pos);
     void reset(size_t pos);
     bool test(size_t pos);
+    json serialize() const;
 
 private:
     std::vector<bool> m_bits;

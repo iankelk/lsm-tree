@@ -61,3 +61,11 @@ std::map<KEY_t, VAL_t> Memtable::getMap() const {
 long Memtable::getMaxKvPairs() const {
     return max_kv_pairs;
 }
+
+// Serialize the memtable to a JSON object
+json Memtable::serialize() const {
+    json j;
+    j["max_kv_pairs"] = max_kv_pairs;
+    j["table"] = table_;
+    return j;
+}

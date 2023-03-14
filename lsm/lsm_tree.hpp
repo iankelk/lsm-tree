@@ -13,6 +13,8 @@ public:
     void load(const std::string& filename);
     std::string printStats();
     std::string printTree();
+    json serialize() const;
+    void serializeLSMTreeToFile(const std::string& filename);
 private:
     Memtable buffer;
     int bf_capacity;

@@ -46,6 +46,17 @@ public:
     long getKvPairs() const;
     // Set the number of kv_pairs in the level
     void setKvPairs(long kv_pairs);
+    //std::string policyToString(Level::Policy policy);
+    static std::string policyToString(Policy policy) {
+        switch (policy) {
+            case Policy::TIERED: return "TIERED";
+            case Policy::LEVELED: return "LEVELED";
+            case Policy::LAZY_LEVELED: return "LAZY_LEVELED";
+            default: return "ERROR";
+        }
+    }
+
+    json serialize() const;
     // copy constructor
     Level(Level&& other) noexcept
         : level_num(other.level_num),

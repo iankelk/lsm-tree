@@ -14,6 +14,8 @@ BloomFilter::BloomFilter(int capacity, double error_rate, int bitset_size) :
     this->bits_per_level = std::ceil((double)num_bits / num_levels);
     int total_bits = num_levels * bits_per_level;
     this->bits = DynamicBitset((this->bitset_size > total_bits) ? this->bitset_size : total_bits);
+    std::cout << "Bloom filter: " << num_bits << " bits, " << num_levels << " levels, " << bits_per_level << " bits per level" << std::endl;
+    std::cout << "Bloom filter: " << this->bits.size() << " bits total" << std::endl;
 }
 
 
@@ -37,4 +39,15 @@ bool BloomFilter::contains(const KEY_t key) {
         }
     }
     return true;
+}
+
+json BloomFilter::serialize() const {
+    json j;
+    j["capacity"] = capacity;
+    j["error_rate"] = error_rate;
+    j["bitset_size"] = bitset_size;
+    j["num_levels"] = num_levels;
+    j["bits_per_level"] = bits_per_level;
+    j["bits"] = bits.serialize();
+    return j;
 }

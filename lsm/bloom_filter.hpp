@@ -2,6 +2,8 @@
 #define BLOOM_FILTER_HPP
 #include "dynamic_bitset.hpp"
 #include "data_types.hpp"
+#include <nlohmann/json.hpp>
+using json = nlohmann:: json;
 
 class BloomFilter {
 public:
@@ -9,6 +11,7 @@ public:
 
     void add(const KEY_t key);
     bool contains(const KEY_t key);
+    json serialize() const;
 
 private:
     int capacity;

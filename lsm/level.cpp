@@ -153,3 +153,19 @@ long Level::getKvPairs() const {
 void Level::setKvPairs(long kv_pairs) {
     this->kv_pairs = kv_pairs;
 }
+
+json Level::serialize() const {
+    json j;
+    j["max_kv_pairs"] = max_kv_pairs;
+    j["buffer_size"] = buffer_size;
+    j["fanout"] = fanout;
+    j["level_num"] = level_num;
+    j["is_last_level"] = is_last_level;
+    j["level_policy"] = policyToString(level_policy);
+    j["kv_pairs"] = kv_pairs;
+    j["runs"] = json::array();
+    for (const auto& run : runs) {
+        j["runs"].push_back(run->serialize());
+    }
+    return j;
+}

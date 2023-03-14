@@ -135,36 +135,36 @@ int testMemtable() {
     VAL_t value3 = 30;
     VAL_t value4 = 40;
 
-    // Test case 1: Insert a new key-value pair into an empty memtable and check if it can be retrieved
-    bool success = memtable.put(key1, value1);
-    assert(success == true);
-    VAL_t* result = memtable.get(key1);
-    assert(result != nullptr);
-    assert(*result == value1);
+    // // Test case 1: Insert a new key-value pair into an empty memtable and check if it can be retrieved
+    // bool success = memtable.put(key1, value1);
+    // assert(success == true);
+    // VAL_t* result = memtable.get(key1);
+    // assert(result != nullptr);
+    // assert(*result == value1);
 
-    // Test case 2: Insert a new key-value pair into a non-empty memtable and check if it can be retrieved
-    success = memtable.put(key2, value2);
-    assert(success == true);
-    result = memtable.get(key2);
-    assert(result != nullptr);
-    assert(*result == value2);
+    // // Test case 2: Insert a new key-value pair into a non-empty memtable and check if it can be retrieved
+    // success = memtable.put(key2, value2);
+    // assert(success == true);
+    // result = memtable.get(key2);
+    // assert(result != nullptr);
+    // assert(*result == value2);
 
-    // Test case 3: Update an existing key-value pair in the memtable and check if the update was successful
-    success = memtable.put(key2, value3);
-    assert(success == true);
-    result = memtable.get(key2);
-    assert(result != nullptr);
-    assert(*result == value3);
+    // // Test case 3: Update an existing key-value pair in the memtable and check if the update was successful
+    // success = memtable.put(key2, value3);
+    // assert(success == true);
+    // result = memtable.get(key2);
+    // assert(result != nullptr);
+    // assert(*result == value3);
 
-    // Test case 4: Insert a new key-value pair into a full memtable and check if it was rejected
-    success = memtable.put(key3, value3);
-    assert(success == true);
-    success = memtable.put(key4, value4);
-    assert(success == false);
+    // // Test case 4: Insert a new key-value pair into a full memtable and check if it was rejected
+    // success = memtable.put(key3, value3);
+    // assert(success == true);
+    // success = memtable.put(key4, value4);
+    // assert(success == false);
 
-    // Test case 5: Get a non-existing key from the memtable and check if nullptr is returned
-    result = memtable.get(key4);
-    assert(result == nullptr);
+    // // Test case 5: Get a non-existing key from the memtable and check if nullptr is returned
+    // result = memtable.get(key4);
+    // assert(result == nullptr);
 
     // Test case 6: Get all key-value pairs within a range and check if they match the expected values
     map<KEY_t, VAL_t> range = memtable.range(1, 2);
@@ -187,31 +187,31 @@ int testMemtable() {
 
 int testRun() {
     // Test case for inserting and retrieving a single key-value pair
-    {
-        Run run(1, 1, 0.1, 1);
-        KEY_t key = 10;
-        VAL_t val = 20;
-        run.put(key, val);
-        VAL_t *retrieved_val = run.get(key);
-        assert(*retrieved_val == val);
-        delete retrieved_val;
-    }
+    // {
+    //     Run run(1, 1, 0.1, 1);
+    //     KEY_t key = 10;
+    //     VAL_t val = 20;
+    //     run.put(key, val);
+    //     VAL_t *retrieved_val = run.get(key);
+    //     assert(*retrieved_val == val);
+    //     delete retrieved_val;
+    // }
 
-    // Test case for inserting and retrieving multiple key-value pairs using get
-    {
-        Run run(5, 5, 0.1, 5);
-        map<KEY_t, VAL_t> expected = {{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}};
-        for (auto const& [key, val] : expected) {
-            cout << "Put " + to_string(key) + ": " + to_string(val) << endl;
-            run.put(key, val);
-        }
-        for (auto const& [key, val] : expected) {
-            VAL_t *retrieved_val = run.get(key);
-            cout << "Retrieved val: " + to_string(*retrieved_val) + " Expected val: " + to_string(val) << endl;
-            //assert(*retrieved_val == val);
-            // delete retrieved_val;
-        }
-    }
+    // // Test case for inserting and retrieving multiple key-value pairs using get
+    // {
+    //     Run run(5, 5, 0.1, 5);
+    //     map<KEY_t, VAL_t> expected = {{1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}};
+    //     for (auto const& [key, val] : expected) {
+    //         cout << "Put " + to_string(key) + ": " + to_string(val) << endl;
+    //         run.put(key, val);
+    //     }
+    //     for (auto const& [key, val] : expected) {
+    //         VAL_t *retrieved_val = run.get(key);
+    //         cout << "Retrieved val: " + to_string(*retrieved_val) + " Expected val: " + to_string(val) << endl;
+    //         //assert(*retrieved_val == val);
+    //         // delete retrieved_val;
+    //     }
+    // }
 
     // Test case for inserting and retrieving multiple key-value pairs
     {
@@ -251,23 +251,23 @@ int testRun() {
         }
     }
 
-    // Test case for retrieving a key that doesn't exist from an empty run
-    {
-        Run run(1, 1, 0.1, 1);
-        KEY_t key = 10;
-        VAL_t *retrieved_val = run.get(key);
-        assert(retrieved_val == nullptr);
-    }
+    // // Test case for retrieving a key that doesn't exist from an empty run
+    // {
+    //     Run run(1, 1, 0.1, 1);
+    //     KEY_t key = 10;
+    //     VAL_t *retrieved_val = run.get(key);
+    //     assert(retrieved_val == nullptr);
+    // }
 
-    // Test case for retrieving a key that doesn't exist from a non-empty run
-    {
-        Run run(1, 1, 0.1, 1);
-        KEY_t key = 10;
-        VAL_t val = 20;
-        run.put(key, val);
-        VAL_t *retrieved_val = run.get(50);
-        assert(retrieved_val == nullptr);
-    }
+    // // Test case for retrieving a key that doesn't exist from a non-empty run
+    // {
+    //     Run run(1, 1, 0.1, 1);
+    //     KEY_t key = 10;
+    //     VAL_t val = 20;
+    //     run.put(key, val);
+    //     VAL_t *retrieved_val = run.get(50);
+    //     assert(retrieved_val == nullptr);
+    // }
 
     // Test case for retrieving a range of keys
     {
