@@ -34,7 +34,12 @@ int main() {
         if (command_str.size() == 0) {
             continue;
         }
+
         send(client_socket, command_str.c_str(), command_str.size(), 0);
+
+        if (command_str == "q") {
+            break;
+        }
 
         // Read the response from the server in chunks of BUFFER_SIZE in a loop until END_OF_MESSAGE is reached END_OF_MESSAGE
         // is a string appended to the end of every response from the server. The client reads the response in chunks of 

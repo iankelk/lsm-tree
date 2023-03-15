@@ -15,6 +15,7 @@ public:
     std::string printTree();
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);
+    void deserialize(const std::string& filename);
 private:
     Memtable buffer;
     double bf_error_rate;

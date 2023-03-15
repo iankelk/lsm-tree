@@ -20,10 +20,13 @@ typedef int32_t VAL_t;
 #define TOMBSTONE -2147483648
 
 #define DEFAULT_FANOUT 2 // 10
-#define DEFAULT_NUM_PAGES 100 // 1000
+#define DEFAULT_NUM_PAGES 1 // 1000
 #define DEFAULT_ERROR_RATE 0.05
 #define DEFAULT_BITSET_SIZE 250
 #define DEFAULT_LEVELING_POLICY Level::LAZY_LEVELED
+
+// LSM TREE DEFINITIONS
+#define LSM_TREE_FILE "/tmp/lsm-tree.json"
 
 // FIRST LEVEL DEFINITION
 #define FIRST_LEVEL_NUM 1
@@ -37,6 +40,8 @@ typedef int32_t VAL_t;
 #define SERVER_PORT 1234
 #define END_OF_MESSAGE "<END_OF_MESSAGE>"
 #define NO_VALUE "<NO_VALUE>"
+#define OK "<OK>"
+
 
 // Key Value Pair
 struct kv_pair {

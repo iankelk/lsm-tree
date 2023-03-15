@@ -14,8 +14,8 @@ BloomFilter::BloomFilter(int capacity, double error_rate, int bitset_size) :
     this->bits_per_level = std::ceil((double)num_bits / num_levels);
     int total_bits = num_levels * bits_per_level;
     this->bits = DynamicBitset((this->bitset_size > total_bits) ? this->bitset_size : total_bits);
-    std::cout << "Bloom filter: " << num_bits << " bits, " << num_levels << " levels, " << bits_per_level << " bits per level" << std::endl;
-    std::cout << "Bloom filter: " << this->bits.size() << " bits total" << std::endl;
+    // std::cout << "Bloom filter: " << num_bits << " bits, " << num_levels << " levels, " << bits_per_level << " bits per level" << std::endl;
+    // std::cout << "Bloom filter: " << this->bits.size() << " bits total" << std::endl;
 }
 
 
@@ -50,4 +50,16 @@ json BloomFilter::serialize() const {
     j["bits_per_level"] = bits_per_level;
     j["bits"] = bits.serialize();
     return j;
+}
+
+void BloomFilter::deserialize(const json& j) {
+    if (!j.contains("capacity") || !j.contains("error_rate") || !j.contains("bitset_size") ||
+        !j.contains("num_levels") || !j.contains("bits_per_level") || !j.contains("bits")) {
+        throw std::runtime_error("Invalid JSON format for deserializing BloomFilter");
+    }
+
+    BloomFilter(j["capacity"], j["error_rate"], j["bitset_size"]);
+    num_levels = j["num_levels"];
+    bits_per_level = j["bits_per_level"];
+    bits.deserialize(j["bits"]);
 }

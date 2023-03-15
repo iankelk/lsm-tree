@@ -5,7 +5,7 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size) :
+Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile) :
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
@@ -16,13 +16,15 @@ Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size) :
     fd(FILE_DESCRIPTOR_UNINITIALIZED)
 
 {
-    char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
-    fd = mkstemp(tmp_fn);
-    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw std::runtime_error("Failed to create temporary file for Run");
-    }
-    tmp_file = tmp_fn;
-    fence_pointers.reserve(max_kv_pairs / getpagesize());
+    if (createFile) {
+        char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
+        fd = mkstemp(tmp_fn);
+        if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+            throw std::runtime_error("Failed to create temporary file for Run");
+        }
+        tmp_file = tmp_fn;
+        fence_pointers.reserve(max_kv_pairs / getpagesize());
+    }    
 }
 
 Run::~Run() {
@@ -30,6 +32,11 @@ Run::~Run() {
     closeFile();
     //cout << "FD after destruct: " + to_string(fd) + "\n"; 
     assert(fd == FILE_DESCRIPTOR_UNINITIALIZED);
+    //remove(tmp_file.c_str());
+}
+
+void Run::deleteFile() {
+    closeFile();
     remove(tmp_file.c_str());
 }
 
@@ -235,4 +242,16 @@ void getNumOpenFiles() {
     } else {
         std::cerr << "Error getting RLIMIT_NOFILE: " << strerror(errno) << std::endl;
     }
+}
+
+void Run::deserialize(const json& j) {
+    max_kv_pairs = j["max_kv_pairs"];
+    bf_error_rate = j["bf_error_rate"];
+    bf_bitset_size = j["bf_bitset_size"];
+
+    bloom_filter.deserialize(j["bloom_filter"]);
+    fence_pointers = j["fence_pointers"].get<std::vector<KEY_t>>();
+    tmp_file = j["tmp_file"];
+    size = j["size"];
+    max_key = j["max_key"];
 }

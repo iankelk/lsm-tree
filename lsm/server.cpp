@@ -103,6 +103,13 @@ void Server::handle_client(int client_socket)
         case 's':            
             response = lsmTree->printStats();
             break;
+        case 'q':
+            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
+            response = "ok";
+            send(client_socket, response.c_str(), strlen(response.c_str()), 0);
+            send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+            close();
+            exit(0);
         default:
             // TODO: Provide help message
             response = "Invalid command";
@@ -228,6 +235,7 @@ void Server::createLSMTree(int argc, char **argv)
     }
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
+    lsmTree->deserialize(LSM_TREE_FILE);
 }
 
 void Server::printHelp()

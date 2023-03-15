@@ -12,6 +12,8 @@ public:
     void add(const KEY_t key);
     bool contains(const KEY_t key);
     json serialize() const;
+    void deserialize(const json& j);
+
 
 private:
     int capacity;

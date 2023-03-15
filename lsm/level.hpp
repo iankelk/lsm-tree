@@ -15,6 +15,8 @@ public:
     Level(long bs, int f, Policy l, int ln) :
     buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
     is_last_level(false), kv_pairs(0), max_kv_pairs(pow(f, ln) * bs) {};
+    // Create default constructor
+    Level() = default;
     // destructor
     ~Level() {
         //cout << "LEVEL DESTRUCTOR\n";
@@ -47,6 +49,9 @@ public:
     long getKvPairs() const;
     // Set the number of kv_pairs in the level
     void setKvPairs(long kv_pairs);
+    // Get the max number of kv_pairs in the level
+    long getMaxKvPairs() const;
+
 
     static std::string policyToString(Policy policy) {
         switch (policy) {
@@ -57,7 +62,19 @@ public:
         }
     }
 
+    // Create a stringToPolicy function using switch statements
+    static Policy stringToPolicy(std::string policy) {
+        switch (policy[0]) {
+            case 'T': return Policy::TIERED;
+            case 'L': return Policy::LEVELED;
+            case 'Z': return Policy::LAZY_LEVELED;
+            default: return Policy::TIERED;
+        }
+    }
+
     json serialize() const;
+    void deserialize(const json& j);
+
     // copy constructor
     Level(Level&& other) noexcept
         : level_num(other.level_num),
@@ -65,6 +82,7 @@ public:
           max_kv_pairs(other.max_kv_pairs),
           buffer_size(other.buffer_size),
           level_policy(other.level_policy),
+          kv_pairs(other.kv_pairs),
           runs(std::move(other.runs)) {
     }
     // copy assignment operator 
@@ -74,6 +92,7 @@ public:
         max_kv_pairs = other.max_kv_pairs;
         buffer_size = other.buffer_size;
         level_policy = other.level_policy;
+        kv_pairs = other.kv_pairs;
         runs = std::move(other.runs);
         return *this;
     }

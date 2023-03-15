@@ -69,3 +69,12 @@ json Memtable::serialize() const {
     j["table"] = table_;
     return j;
 }
+
+// Deserialize the memtable from a JSON object
+void Memtable::deserialize(const json& j) {
+    max_kv_pairs = j["max_kv_pairs"].get<long>();
+    std::map<KEY_t, VAL_t> table = j["table"].get<std::map<KEY_t, VAL_t>>();
+    for (const auto& kv : table) {
+        put(kv.first, kv.second);
+    }
+}

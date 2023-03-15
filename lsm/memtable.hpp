@@ -18,6 +18,7 @@ public:
     std::map<KEY_t, VAL_t> getMap() const;    
     long getMaxKvPairs() const;
     json serialize() const;
+    void deserialize(const json& j);
 private:
     long max_kv_pairs;
     std::map<KEY_t, VAL_t> table_;  

@@ -15,6 +15,7 @@ public:
     void reset(size_t pos);
     bool test(size_t pos);
     json serialize() const;
+    void deserialize(const json& j);
 
 private:
     std::vector<bool> m_bits;

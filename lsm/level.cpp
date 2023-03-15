@@ -60,11 +60,17 @@ void Level::compactLevel(double error_rate, int bitset_size) {
         }
     }
 
+    // Delete all the old files in the runs queue that have now been compacted
+    for (const auto &run : runs) {
+        run->closeFile();
+        run->deleteFile();
+    }
+
     // Clear the runs queue and reset the kv_pairs
     runs.clear();
     kv_pairs = 0;
 
-    put(std::make_unique<Run>(merged_map.size(), error_rate, bitset_size));
+    put(std::make_unique<Run>(merged_map.size(), error_rate, bitset_size, true));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
@@ -144,6 +150,11 @@ void Level::setKvPairs(long kv_pairs) {
     this->kv_pairs = kv_pairs;
 }
 
+// Return the maximum number of key-value pairs allowed in the memtable
+long Level::getMaxKvPairs() const {
+    return max_kv_pairs;
+}
+
 json Level::serialize() const {
     json j;
     j["max_kv_pairs"] = max_kv_pairs;
@@ -158,4 +169,54 @@ json Level::serialize() const {
         j["runs"].push_back(run->serialize());
     }
     return j;
+}
+
+// void Level::deserialize(const json& j) {
+//     long buffer_size = j["buffer_size"];
+//     int fanout = j["fanout"];
+//     int level_num = j["level_num"];
+//     bool is_last_level = j["is_last_level"];
+//     Policy level_policy;
+
+//     std::string policy_str = j["level_policy"];
+//     level_policy = stringToPolicy(policy_str);
+
+//     Level(buffer_size, fanout, level_policy, level_num);
+//     setLastLevel(is_last_level);
+//     setKvPairs(j["kv_pairs"]);
+
+//     for (const auto& run_json : j["runs"]) {
+//         runs.emplace_back(std::make_unique<Run>(Run::deserialize(run_json)));
+//         runs.emplace_back(std::move(std::make_unique<Run>(Run::deserialize(run_json))));
+
+//     }
+// }
+
+
+void Level::deserialize(const json& j) {
+    buffer_size = j["buffer_size"];
+    fanout = j["fanout"];
+    level_num = j["level_num"];
+    is_last_level = j["is_last_level"];
+    max_kv_pairs = j["max_kv_pairs"];
+    kv_pairs = j["kv_pairs"];
+
+    if (level_num == 1) {
+        std::cout << "Deserializing level 1" << std::endl;
+    } 
+    std::string policy_str = j["level_policy"];
+    level_policy = stringToPolicy(policy_str);
+
+    // runs.clear(); // clear the existing runs
+    // this->~Level(); // destroy the existing Level
+    // new (this) Level(buffer_size, fanout, level_policy, level_num); // create a new Level in the same memory location
+
+    //setLastLevel(is_last_level);
+    //setKvPairs(j["kv_pairs"]);
+
+    for (auto& run_json : j["runs"]) {
+        std::unique_ptr<Run> run = std::make_unique<Run>(max_kv_pairs, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, false);
+        run->deserialize(run_json);
+        runs.emplace_back(std::move(run));
+    }
 }

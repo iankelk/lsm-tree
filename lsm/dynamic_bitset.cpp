@@ -30,12 +30,6 @@ bool DynamicBitset::test(size_t pos) {
     return m_bits[pos];
 }
 
-// json DynamicBitset::serialize() const {
-//     json j;
-//     j["bits"] = m_bits;
-//     return j;
-// }
-
 json DynamicBitset::serialize() const {
     json j;
     std::vector<int> bits_as_ints;
@@ -45,4 +39,21 @@ json DynamicBitset::serialize() const {
     }
     j["bits"] = bits_as_ints;
     return j;
+}
+
+void DynamicBitset::deserialize(const json& j) {
+    if (!j.contains("bits") || !j["bits"].is_array()) {
+        throw std::runtime_error("Invalid JSON format for deserializing DynamicBitset");
+    }
+
+    std::vector<int> bits_as_ints = j["bits"];
+    resize(bits_as_ints.size());
+    
+    for (size_t i = 0; i < bits_as_ints.size(); ++i) {
+        if (bits_as_ints[i] == 1) {
+            set(i);
+        } else if (bits_as_ints[i] != 0) {
+            throw std::runtime_error("Invalid bit value encountered during deserialization");
+        }
+    }
 }

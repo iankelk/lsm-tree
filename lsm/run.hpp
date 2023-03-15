@@ -7,7 +7,7 @@
 
 class Run {
 public:
-    Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size);
+    Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile);
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
@@ -16,6 +16,8 @@ public:
     long getMaxKvPairs();
     void closeFile();
     json serialize() const;
+    void deserialize(const json& j);
+    void deleteFile();
 private:
     KEY_t max_key;
     long max_kv_pairs;

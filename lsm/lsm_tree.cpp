@@ -29,7 +29,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
     
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, bf_bitset_size));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, bf_bitset_size, true));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -330,6 +330,7 @@ std::string LSMTree::printTree() {
         output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";
         //assert(it->numKVPairs() == it->kv_pairs);
         output += "Number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getKvPairs()) + "\n";
+        output += "Max number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getMaxKvPairs()) + "\n";
     }
     // For each level, print if it is the last level
     for (auto it = levels.begin(); it != levels.end(); it++) {
@@ -377,3 +378,30 @@ void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
     outfile.close();
 }
 
+void LSMTree::deserialize(const std::string& filename) {
+    std::ifstream infile(filename);
+    if (!infile) {
+        std::cerr << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
+        return;
+    }
+
+    std::cout << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
+
+    json treeJson;
+    infile >> treeJson;
+
+    bf_error_rate = treeJson["bf_error_rate"].get<float>();
+    bf_bitset_size = treeJson["bf_bitset_size"].get<int>();
+    fanout = treeJson["fanout"].get<int>();
+    level_policy = Level::stringToPolicy(treeJson["level_policy"].get<std::string>());
+    buffer.deserialize(treeJson["buffer"]);
+
+    levels.clear();
+    for (const auto& levelJson : treeJson["levels"]) {
+        levels.emplace_back();
+        levels.back().deserialize(levelJson);
+    }
+    infile.close();
+    std::cout << "Finished!" << std::endl;
+
+}
