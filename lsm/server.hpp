@@ -11,7 +11,7 @@ public:
     void createLSMTree(int argc, char **argv);
     void run();
     void close();
-
+    void printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy);
 private:
     std::unique_ptr<LSMTree> lsmTree;
     int port;

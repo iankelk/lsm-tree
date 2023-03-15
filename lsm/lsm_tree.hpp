@@ -11,6 +11,7 @@ public:
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
     void load(const std::string& filename);
+    bool isLastLevel(std::vector<Level>::iterator it);
     std::string printStats();
     std::string printTree();
     json serialize() const;

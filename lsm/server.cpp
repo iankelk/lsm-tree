@@ -236,6 +236,7 @@ void Server::createLSMTree(int argc, char **argv)
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
     lsmTree->deserialize(LSM_TREE_FILE);
+    printLSMTreeParameters(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
 }
 
 void Server::printHelp()
@@ -255,6 +256,15 @@ void Server::printHelp()
               << "  -l <level_policy>    Level policy (default: " << level_policy_map[DEFAULT_LEVELING_POLICY] << ")\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
+}
+
+void Server::printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) {
+    std::cout << "LSMTree parameters:" << std::endl;
+    std::cout << "  Bloom filter error rate: " << bf_error_rate << std::endl;
+    std::cout << "  Bloom filter Bitset size: " << bf_bitset_size << " bits" << std::endl;
+    std::cout << "  Number of buffer pages: " << buffer_num_pages << std::endl;
+    std::cout << "  LSM-tree fanout: " << fanout << std::endl;
+    std::cout << "  Level policy: " << Level::policyToString(level_policy) << std::endl;
 }
 
 int main(int argc, char **argv) {

@@ -40,7 +40,7 @@ public:
     // Returns the level number
     int getLevelNum() const;
     // Sets the last level 
-    void setLastLevel(bool is_last_level);
+    void setLastLevel(bool last_level);
     // Gets the last level
     bool isLastLevel() const;
     // Returns the level policy

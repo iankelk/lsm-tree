@@ -12,8 +12,11 @@ LSMTree::LSMTree(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, 
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM);
-    // Set the first level in the levels vector to be the last level
-    levels.front().setLastLevel(true);
+}
+
+// Calulate whether an std::vector<Level>::iterator is pointing to the last level
+bool LSMTree::isLastLevel(std::vector<Level>::iterator it) {
+    return (it + 1 == levels.end());
 }
 
 // Insert a key-value pair of integers into the LSM tree
@@ -65,8 +68,6 @@ void LSMTree::merge_levels(int currentLevelNum) {
 
     // If the current level has space for another run, return
     if (it->willLowerLevelFit()) {
-        // print the current level number
-        std::cout << "It FITS! Current level number: " << currentLevelNum << "\n";
         return;
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
@@ -75,8 +76,6 @@ void LSMTree::merge_levels(int currentLevelNum) {
             // Get the iterators "it" and "next" which are lost when the vector is resized
             it = levels.end() - 2;
             next = levels.end() - 1;
-            it->setLastLevel(false);
-            next->setLastLevel(true);
         // If the next level has space for another run, move the next pointer to the next level
         } else {
             next = it + 1;
@@ -89,19 +88,19 @@ void LSMTree::merge_levels(int currentLevelNum) {
     it = levels.begin() + currentLevelNum - 1;
     next = levels.begin() + currentLevelNum;
 
-    if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !it->isLastLevel())) {
+    if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !isLastLevel(next))) {
         it->compactLevel(bf_error_rate, bf_bitset_size);
-    }
-
-    // Merge the current level into the next level by moving the entire deque of runs into the next level
-    next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
-
-    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && next->isLastLevel())) {
+        // Move the single run pointed to by runs.begin() into the next level
+        next->runs.push_back(std::move(it->runs.front()));
+    } 
+    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && isLastLevel(next))) {
+        // Merge the current level into the next level by moving the entire deque of runs into the next level
+        next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
         next->compactLevel(bf_error_rate, bf_bitset_size);
     }
+
     // Update the number of key/value pairs in the next level. 
     next->setKvPairs(next->numKVPairs());
-
     // Clear the current level and reset the number of key/value pairs to 0
     it->runs.clear();
     it->setKvPairs(0);
@@ -334,7 +333,7 @@ std::string LSMTree::printTree() {
     }
     // For each level, print if it is the last level
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Is level " + std::to_string(it->getLevelNum()) + " the last level? " + (it->isLastLevel() ? "Yes" : "No") + "\n";
+        output += "Is level " + std::to_string(it->getLevelNum()) + " the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
     }
     // Remove the last newline from the output string
     output = output.substr(0, output.size() - 1);
