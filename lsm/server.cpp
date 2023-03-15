@@ -109,7 +109,7 @@ void Server::handle_client(int client_socket)
             sendResponse(client_socket, response);
             termination_flag = 1;
             close();
-            exit(0);
+            break;
         default:
             response = printDSLHelp();
         }

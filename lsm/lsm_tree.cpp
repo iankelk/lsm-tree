@@ -171,7 +171,6 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // Search the buffer for the key range and return the range map as a unique_ptr
     std::unique_ptr<std::map<KEY_t, VAL_t>> range_map = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
 
-    // Print all the key and value pairs in the range map to cout
     // Create an iterator to iterate through the map
     std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
 
@@ -373,12 +372,14 @@ json LSMTree::serialize() const {
 }
 
 void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
+    std::cout << "Writing LSMTree to file: " << filename << std::endl;
     // Serialize the LSMTree to JSON
     json treeJson = serialize();
     // Write the JSON to file
     std::ofstream outfile(filename);
     outfile << treeJson.dump();
     outfile.close();
+    std::cout << "Finished writing LSMTree to file: " << filename << std::endl;
 }
 
 void LSMTree::deserialize(const std::string& filename) {
@@ -406,5 +407,5 @@ void LSMTree::deserialize(const std::string& filename) {
     }
     infile.close();
     std::cout << "Finished!\n" << std::endl;
-    std::cout << "Configuration will be loaded from the saved database.\n" << std::endl;
+    std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
