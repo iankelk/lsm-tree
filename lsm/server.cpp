@@ -76,7 +76,7 @@ void Server::handle_client(int client_socket)
         case 'r':
             ss >> start >> end;
             range_ptr = lsmTree->range(start, end);
-            if (range_ptr != nullptr) {
+            if (range_ptr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
                 for (const auto &p : *range_ptr) {
                     // Make response "%d:%d ", p.first, p.second

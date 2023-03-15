@@ -37,7 +37,7 @@ typedef int32_t VAL_t;
 
 // CLIENT / SERVER DEFINITIONS
 #define BUFFER_SIZE 2048
-#define SERVER_PORT 1235
+#define SERVER_PORT 1237
 #define END_OF_MESSAGE "<END_OF_MESSAGE>"
 #define NO_VALUE "<NO_VALUE>"
 #define OK "<OK>"

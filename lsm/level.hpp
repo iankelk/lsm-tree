@@ -39,10 +39,6 @@ public:
     int numKVPairs();
     // Returns the level number
     int getLevelNum() const;
-    // Sets the last level 
-    void setLastLevel(bool last_level);
-    // Gets the last level
-    bool isLastLevel() const;
     // Returns the level policy
     Policy getLevelPolicy() const;
     // Get the number of kv_pairs in the level
