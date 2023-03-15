@@ -175,7 +175,7 @@ Server::Server(int port)
         close();
         exit(1);
     }
-    std::cout << "\n\nServer started, listening on port " << port << std::endl;
+    std::cout << "\nServer started, listening on port " << port << std::endl;
 }
 
 void Server::close() {
@@ -238,7 +238,7 @@ void Server::createLSMTree(int argc, char **argv)
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
     lsmTree->deserialize(LSM_TREE_FILE);
-    printLSMTreeParameters(bf_error_rate, bf_bitset_size, buffer_num_pages, fanout, level_policy);
+    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBfBitsetSize(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy());
 }
 
 void Server::printHelp()

@@ -405,6 +405,6 @@ void LSMTree::deserialize(const std::string& filename) {
         levels.back().deserialize(levelJson);
     }
     infile.close();
-    std::cout << "Finished!" << std::endl;
-
+    std::cout << "Finished!\n" << std::endl;
+    std::cout << "Configuration will be loaded from the saved database.\n" << std::endl;
 }

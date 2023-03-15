@@ -166,9 +166,6 @@ void Level::deserialize(const json& j) {
     max_kv_pairs = j["max_kv_pairs"];
     kv_pairs = j["kv_pairs"];
 
-    if (level_num == 1) {
-        std::cout << "Deserializing level 1" << std::endl;
-    } 
     std::string policy_str = j["level_policy"];
     level_policy = stringToPolicy(policy_str);
 

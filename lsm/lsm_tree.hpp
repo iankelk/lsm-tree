@@ -17,6 +17,11 @@ public:
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
+    float getBfErrorRate() const { return bf_error_rate; }
+    int getBfBitsetSize() const { return bf_bitset_size; }
+    int getBufferNumPages() { return buffer.getMaxKvPairs(); }
+    int getFanout() const { return fanout; }
+    Level::Policy getLevelPolicy() const { return level_policy; }
 private:
     Memtable buffer;
     double bf_error_rate;
