@@ -28,11 +28,7 @@ Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool creat
 }
 
 Run::~Run() {
-    //cout << "RUN DESTRUCTOR\n";
     closeFile();
-    //cout << "FD after destruct: " + to_string(fd) + "\n"; 
-    assert(fd == FILE_DESCRIPTOR_UNINITIALIZED);
-    //remove(tmp_file.c_str());
 }
 
 void Run::deleteFile() {

@@ -70,7 +70,7 @@ void Level::compactLevel(double error_rate, int bitset_size) {
     runs.clear();
     kv_pairs = 0;
 
-    put(std::make_unique<Run>(merged_map.size(), error_rate, bitset_size, true));
+    put(std::make_unique<Run>(getLevelSize(level_num), error_rate, bitset_size, true));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
