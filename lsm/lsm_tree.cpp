@@ -153,10 +153,14 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         throw std::out_of_range("LSMTree::range: Key is out of range");
     }
-    // If the start key is greater than the end key, throw an exception
+    // If the start key is greater than the end key, swap them
     if (start > end) {
-        throw std::out_of_range("LSMTree::range: Start key is greater than end key");
+        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them." << std::endl;    
+        KEY_t temp = start;
+        start = end;
+        end = temp;
     }
+
     // If the start key is equal to the end key, return nullptr
     if (start == end) {
         return nullptr;

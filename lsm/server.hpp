@@ -11,7 +11,6 @@ public:
     void createLSMTree(int argc, char **argv);
     void run();
     void close();
-    void printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy);
 private:
     std::unique_ptr<LSMTree> lsmTree;
     int port;
@@ -23,6 +22,9 @@ private:
     std::thread client_thread;
     void handle_client(int client_socket);
     void printHelp();
+    std::string printDSLHelp();
+    void sendResponse(int client_socket, const std::string &response);
+    void printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy);
 };
 
 #endif /* SERVER_HPP */

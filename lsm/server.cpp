@@ -106,29 +106,31 @@ void Server::handle_client(int client_socket)
         case 'q':
             lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
             response = "ok";
-            send(client_socket, response.c_str(), strlen(response.c_str()), 0);
-            send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+            sendResponse(client_socket, response);
+            termination_flag = 1;
             close();
             exit(0);
         default:
-            // TODO: Provide help message
-            response = "Invalid command";
+            response = printDSLHelp();
         }
-        // Send the message in chunks of BUFFER_SIZE in a loop until the end. 
-        // Mark the end of the message with the END_OF_MESSAGE indicator.
-        for (int i = 0; i < strlen(response.c_str()); i += BUFFER_SIZE) {
-            char chunk[BUFFER_SIZE] = {};
-            std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
-            send(client_socket, chunk, strlen(chunk), 0);
-        }
-        // Send the end of message indicator
-        send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
-        
+        sendResponse(client_socket, response);
     }
     // Clean up resources
     close();
     std::cout << "Client disconnected" << std::endl;
 }
+
+// Send a response to the client in chunks of BUFFER_SIZE bytes
+void Server::sendResponse(int client_socket, const std::string &response) {
+    for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
+        char chunk[BUFFER_SIZE] = {};
+        std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
+        send(client_socket, chunk, strlen(chunk), 0);
+    }
+    // Send the end of message indicator
+    send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+}
+
 
 void Server::run()
 {
@@ -173,7 +175,7 @@ Server::Server(int port)
         close();
         exit(1);
     }
-    std::cout << "Server started, listening on port " << port << std::endl;
+    std::cout << "\n\nServer started, listening on port " << port << std::endl;
 }
 
 void Server::close() {
@@ -241,19 +243,13 @@ void Server::createLSMTree(int argc, char **argv)
 
 void Server::printHelp()
 {
-    // Create a mapping of the DEFAULT_LEVELING_POLICY enum to a string
-    std::map<Level::Policy, std::string> level_policy_map;
-    level_policy_map[Level::Policy::TIERED] = "TIERED";
-    level_policy_map[Level::Policy::LEVELED] = "LEVELED";
-    level_policy_map[Level::Policy::LAZY_LEVELED] = "LAZY_LEVELED";
-
     std::cout << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
               << "  -e <error_rate>      Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
               << "  -b <bitset_size>     Bloom filter Bitset size in bytes (default: " << DEFAULT_BITSET_SIZE << ")\n"
               << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <level_policy>    Level policy (default: " << level_policy_map[DEFAULT_LEVELING_POLICY] << ")\n"
+              << "  -l <level_policy>    Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
@@ -265,6 +261,38 @@ void Server::printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int
     std::cout << "  Number of buffer pages: " << buffer_num_pages << std::endl;
     std::cout << "  LSM-tree fanout: " << fanout << std::endl;
     std::cout << "  Level policy: " << Level::policyToString(level_policy) << std::endl;
+    std::cout << "\nLSM Tree ready and waiting for input" << std::endl;
+}
+
+std::string Server::printDSLHelp() {
+    std::string helpText = 
+        "LSM-Tree Domain Specific Language Help:\n\n"
+        "Commands:\n"
+        "1. Put (Insert/Update a key-value pair)\n"
+        "   Syntax: p [INT1] [INT2]\n"
+        "   Example: p 10 7\n\n"
+        "2. Get (Retrieve the value associated with a key)\n"
+        "   Syntax: g [INT1]\n"
+        "   Example: g 10\n\n"
+        "3. Range (Retrieve key-value pairs within a range of keys)\n"
+        "   Syntax: r [INT1] [INT2]\n"
+        "   Example: r 10 12\n\n"
+        "4. Delete (Remove a key-value pair)\n"
+        "   Syntax: d [INT1]\n"
+        "   Example: d 10\n\n"
+        "5. Load (Insert key-value pairs from a binary file)\n"
+        "   Syntax: l \"/path/to/file_name\"\n"
+        "   Example: l \"~/load_file.bin\"\n\n"
+        "6. Print Stats (Display information about the current state of the tree)\n"
+        "   Syntax: s\n"
+        "   Example: \n"
+        "     Logical Pairs: 10\n"
+        "     LVL1: 3, LVL3: 9\n"
+        "     45:56:L1 56:84:L1 91:45:L1\n"
+        "     7:32:L3 19:73:L3 32:91:L3 45:64:L3 58:3:L3 85:15:L3 91:71:L3 95:87:L3 97:76:L3\n\n"
+        "Refer to the documentation for detailed examples and explanations of each command.\n";
+
+    return helpText;
 }
 
 int main(int argc, char **argv) {
