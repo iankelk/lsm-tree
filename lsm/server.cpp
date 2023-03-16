@@ -37,83 +37,7 @@ void Server::handle_client(int client_socket)
 
         // Parse command
         std::stringstream ss(command);
-        char op;
-        ss >> op;
-        KEY_t key, start, end;
-        VAL_t value;
-        
-        // Pointers to store the results of get and range
-        std::unique_ptr<VAL_t> value_ptr;
-        std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
-        std::string file_name;
-
-        // Response to send back to client
-        std::string response;
-        
-        switch (op) {
-        case 'p':
-            ss >> key >> value;
-            // Throw error if key is less than VALUE_MIN or greater than VALUE_MAX
-            if (value < VAL_MIN || value > VAL_MAX) {
-                response = "ERROR: Value " + std::to_string(value) + " out of range [" + std::to_string(VAL_MIN) + ", " + std::to_string(VAL_MAX) + "]\n";
-                break;
-            }
-
-            lsmTree->put(key, value);
-            // TODO: Define and handle a proper confirmation message
-            response = "ok";
-            break;
-        case 'g':
-            ss >> key;
-            value_ptr = lsmTree->get(key);
-            if (value_ptr != nullptr) {
-                response = std::to_string(*value_ptr);
-            }
-            else {
-                response = NO_VALUE;
-            }
-            break;
-        case 'r':
-            ss >> start >> end;
-            range_ptr = lsmTree->range(start, end);
-            if (range_ptr->size() > 0) {
-                // Iterate over the map and store the key-value pairs in results
-                for (const auto &p : *range_ptr) {
-                    // Make response "%d:%d ", p.first, p.second
-                    response += std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
-                }
-            }
-            else {
-                response = NO_VALUE;
-            }
-            break;
-        case 'd':
-            ss >> key;
-            lsmTree->del(key);
-            response = "ok";
-            break;
-        case 'l':
-            ss >> file_name;
-            lsmTree->load(file_name);
-            response = "ok";
-            break;
-        case 'i':
-            response = lsmTree->printTree();
-            break;
-        case 's':            
-            response = lsmTree->printStats();
-            break;
-        case 'q':
-            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
-            response = "ok";
-            sendResponse(client_socket, response);
-            termination_flag = 1;
-            close();
-            break;
-        default:
-            response = printDSLHelp();
-        }
-        sendResponse(client_socket, response);
+        handleCommand(ss, client_socket);
     }
     // Clean up resources
     close();
@@ -131,6 +55,89 @@ void Server::sendResponse(int client_socket, const std::string &response) {
     send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
 }
 
+void Server::handleCommand(std::stringstream& ss, int client_socket) {
+     char op;
+     ss >> op;
+     KEY_t key, start, end;
+        VAL_t value;
+        
+        // Pointers to store the results of get and range
+        std::unique_ptr<VAL_t> value_ptr;
+        std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
+        std::string file_name;
+
+        // Response to send back to client
+        std::string response;
+        
+        switch (op) {
+        case 'p':
+            ss >> key >> value;
+            // Report error if key is less than VALUE_MIN or greater than VALUE_MAX
+            if (value < VAL_MIN || value > VAL_MAX) {
+                response = "ERROR: Value " + std::to_string(value) + " out of range [" + std::to_string(VAL_MIN) + ", " + std::to_string(VAL_MAX) + "]\n";
+                break;
+            }
+
+            lsmTree->put(key, value);
+            response = OK;
+            break;
+        case 'g':
+            ss >> key;
+            value_ptr = lsmTree->get(key);
+            if (value_ptr != nullptr) {
+                response = std::to_string(*value_ptr);
+            }
+            else {
+                response = NO_VALUE;
+            }
+            break;
+        case 'r':
+            ss >> start >> end;
+            range_ptr = lsmTree->range(start, end);
+            if (range_ptr->size() > 0) {
+                // Iterate over the map and store the key-value pairs in results
+                for (const auto &p : *range_ptr) {
+                    // Return key-value pairs as key:value separated by spaces
+                    response += std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
+                }
+            }
+            else {
+                response = NO_VALUE;
+            }
+            break;
+        case 'd':
+            ss >> key;
+            lsmTree->del(key);
+            response = OK;
+            break;
+        case 'l':
+            ss >> file_name;
+            lsmTree->load(file_name);
+            response = OK;
+            break;
+        case 'b':
+            ss >> file_name;
+            lsmTree->benchmark(file_name);
+            response = OK;
+            break;
+        case 'i':
+            response = lsmTree->printTree();
+            break;
+        case 's':            
+            response = lsmTree->printStats();
+            break;
+        case 'q':
+            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
+            response = OK;
+            sendResponse(client_socket, response);
+            termination_flag = 1;
+            close();
+            break;
+        default:
+            response = printDSLHelp();
+        }
+        sendResponse(client_socket, response);
+}
 
 void Server::run()
 {
@@ -150,8 +157,7 @@ void Server::run()
     }
 }
 
-Server::Server(int port)
-{
+Server::Server(int port) : port(port) {
     // Create server socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == -1) {
@@ -186,8 +192,7 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(int argc, char **argv)
-{
+void Server::createLSMTree(int argc, char **argv) {
     // Process command line arguments based on your LSM-Tree implementation
     int opt, bf_bitset_size, buffer_num_pages, fanout;
     float bf_error_rate;
@@ -283,7 +288,10 @@ std::string Server::printDSLHelp() {
         "5. Load (Insert key-value pairs from a binary file)\n"
         "   Syntax: l \"/path/to/file_name\"\n"
         "   Example: l \"~/load_file.bin\"\n\n"
-        "6. Print Stats (Display information about the current state of the tree)\n"
+        "6. Benchmark (Run commands from a text file quietly with no output)\n"
+        "   Syntax: b \"/path/to/file_name\"\n"
+        "   Example: b \"~/workload.txt\"\n\n"
+        "7. Print Stats (Display information about the current state of the tree)\n"
         "   Syntax: s\n"
         "   Example: \n"
         "     Logical Pairs: 10\n"

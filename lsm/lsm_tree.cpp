@@ -210,30 +210,114 @@ void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
 }
 
-void LSMTree::load(const std::string& filename) {
-    KEY_t key;
-    VAL_t val;
+// Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
+void LSMTree::benchmark(const std::string& filename) {
+    int count = 0;
+    // Create a file stream
     std::ifstream file(filename);
-    std::string line;
 
-     // Start measuring time
-    auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Loading " << filename << std::endl;
-
-    // If file can be located
+    // Check that the file exists
     if (!file) {
         std::cerr << "Unable to open file " << filename << std::endl;
-        exit(1);   // call system to stop
+        return;
     }
-    while (getline(file, line)) {
-        std::stringstream ss(line);
-        ss >> key >> val;
-        put(key, val);
+
+    // Get the size of the file
+    file.seekg(0, file.end);
+    int length = file.tellg();
+    file.seekg(0, file.beg);
+
+    // Create a buffer to hold the key/value pairs and read the file into the buffer
+    char *buffered_file = new char[length];
+    file.read(buffered_file, length);
+
+    // Create an input string stream to read the file
+    std::istringstream iss(buffered_file);
+    std::string line;
+
+    // Start measuring time
+    auto start_time = std::chrono::high_resolution_clock::now();
+    std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
+
+    // Read the file line by line and parse and execute the commands
+    while (std::getline(iss, line)) {
+        std::istringstream line_ss(line);
+        char command_code;
+        line_ss >> command_code;
+        switch (command_code) {
+            case 'p': {
+                KEY_t key;
+                VAL_t val;
+                line_ss >> key >> val;
+                put(key, val);
+                break;
+            }
+            case 'd': {
+                KEY_t key;
+                line_ss >> key;
+                del(key);
+                break;
+            }
+            case 'g': {
+                KEY_t key;
+                line_ss >> key;
+                get(key);
+                break;
+            }
+            case 'r': {
+                KEY_t start;
+                KEY_t end;
+                line_ss >> start >> end;
+                range(start, end);
+                break;
+            }
+            default: {
+                std::cerr << "Invalid command code: " << command_code << std::endl;
+                break;
+            }
+        }
+        count++;
+        if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
+            std::cout << "Benchmark: " << count << " commands executed" << std::endl;
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
+        }
+    }
+    delete[] buffered_file;
+    
+    // End measuring time, calculate the duration, and print it
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds" << std::endl;
+}
+
+void LSMTree::load(const std::string& filename) {
+    std::vector<kv_pair> kv_pairs;
+    kv_pair kv;
+    // Create a file stream
+    std::ifstream file(filename, std::ios::binary);
+
+    // Check that the file exists
+    if (!file) {
+        std::cerr << "Unable to open file " << filename << std::endl;
+        return;
+    }
+    // Read the file into the vector of kv_pair structs.
+    while (file.read((char*)&kv, sizeof(kv_pair))) {
+        kv_pairs.push_back(kv);
+    }
+    std::cout << "Loaded: " << filename << std::endl;
+    // Start measuring time. This way we only measure the time it takes put() to insert the key/value pairs
+    auto start_time = std::chrono::high_resolution_clock::now();
+    // Iterate through the vector and call put() on each key/value pair
+    for (auto it = kv_pairs.begin(); it != kv_pairs.end(); it++) {
+        put(it->key, it->value);
     }
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Loading " << filename << " file took " << duration.count() << " microseconds" << std::endl;
+    std::cout << "Processing " << filename << " file took " << duration.count() << " microseconds" << std::endl;
 }
 
 // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
@@ -327,6 +411,8 @@ std::string LSMTree::printTree() {
     std::string output = "";
     output += "Number of logical key-value pairs: " + std::to_string(countLogicalPairs()) + "\n";
     output += "Number of entries in the buffer: " + std::to_string(buffer.size()) + "\n";
+    output += "Maximum number of key-value pairs in the buffer: " + std::to_string(buffer.getMaxKvPairs()) + "\n";
+    output += "Maximum size in bytes of the buffer: " + std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair)) + "\n";
     output += "Number of levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";

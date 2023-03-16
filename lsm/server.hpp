@@ -21,6 +21,7 @@ private:
     socklen_t client_address_size;
     std::thread client_thread;
     void handle_client(int client_socket);
+    void handleCommand(std::stringstream& ss, int client_socket);
     void printHelp();
     std::string printDSLHelp();
     void sendResponse(int client_socket, const std::string &response);

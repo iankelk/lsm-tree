@@ -27,6 +27,7 @@ typedef int32_t VAL_t;
 
 // LSM TREE DEFINITIONS
 #define LSM_TREE_FILE "/tmp/lsm-tree.json"
+#define BENCHMARK_REPORT_FREQUENCY 10000
 
 // FIRST LEVEL DEFINITION
 #define FIRST_LEVEL_NUM 1

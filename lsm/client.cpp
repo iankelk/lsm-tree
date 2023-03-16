@@ -47,7 +47,6 @@ int main() {
         std::string response;
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
             // print the contents of  buffer
-            //std::cout << "BUFFER:[" << buffer << "]" << std::endl;
             response.append(buffer, n_read);
             if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
                 // Remove END_OF_MESSAGE from the response
@@ -65,8 +64,8 @@ int main() {
         if (response == NO_VALUE) {
             //std::cout << "NO VALUE" << std::endl;
             std::cout << std::endl;
-        // If response is not empty and does not begin with an 'o' (for OK), print it
-        } else if (response.size() > 0 && response[0] != 'o') {
+        // If response is not empty and is not OK (which is just a silent acknowledgement), print the response
+        } else if (response.size() > 0 && response != OK) {
             std::cout << response << std::endl;
         }
     }
