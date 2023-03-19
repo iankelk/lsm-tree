@@ -2,10 +2,11 @@
 #include <unistd.h>
 #include <iostream>
 #include "run.hpp"
+#include "lsm_tree.hpp"
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile) :
+Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile, LSMTree* lsm_tree = nullptr) :
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
@@ -13,7 +14,8 @@ Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool creat
     tmp_file(""),
     size(0),
     max_key(0),
-    fd(FILE_DESCRIPTOR_UNINITIALIZED)
+    fd(FILE_DESCRIPTOR_UNINITIALIZED),
+    lsm_tree(lsm_tree)
 
 {
     if (createFile) {
@@ -104,9 +106,14 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
+            lsm_tree->incrementBfTruePositives();
             break;
         }
         offset += sizeof(kv_pair);
+    }
+    if (val == nullptr) {
+        // If the key was not found, increment the false positive count
+        lsm_tree->incrementBfFalsePositives();
     }
     closeFile();
     return val;

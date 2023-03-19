@@ -1,4 +1,6 @@
 #include "level.hpp"
+#include "run.hpp"
+#include "lsm_tree.hpp"
 #include <iostream>
 
 // Add run to the beginning of the Level runs queue 
@@ -69,7 +71,7 @@ void Level::compactLevel(double error_rate, int bitset_size) {
     runs.clear();
     kv_pairs = 0;
 
-    put(std::make_unique<Run>(getLevelSize(level_num), error_rate, bitset_size, true));
+    put(std::make_unique<Run>(getLevelSize(level_num), error_rate, bitset_size, true, lsm_tree));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
@@ -170,7 +172,7 @@ void Level::deserialize(const json& j) {
     level_policy = stringToPolicy(policy_str);
 
     for (auto& run_json : j["runs"]) {
-        std::unique_ptr<Run> run = std::make_unique<Run>(max_kv_pairs, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, false);
+        std::unique_ptr<Run> run = std::make_unique<Run>(max_kv_pairs, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, false, lsm_tree);
         run->deserialize(run_json);
         runs.emplace_back(std::move(run));
     }

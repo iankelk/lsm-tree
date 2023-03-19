@@ -2,6 +2,9 @@
 #define LSM_TREE_HPP
 #include "memtable.hpp"
 #include "level.hpp"
+#include "run.hpp"
+
+class Run;
 
 class LSMTree {
 public:
@@ -23,6 +26,9 @@ public:
     int getBufferNumPages() { return buffer.getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return level_policy; }
+    void incrementBfFalsePositives() { bfFalsePositives++; }
+    void incrementBfTruePositives() { bfTruePositives++; }
+    float getBfFalsePositiveRate() { return (float)bfFalsePositives / (bfFalsePositives + bfTruePositives); }
 private:
     Memtable buffer;
     double bf_error_rate;
@@ -33,6 +39,8 @@ private:
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
     std::vector<Level> levels;
     void merge_levels(int currentLevelNum);
+    int bfFalsePositives = 0;
+    int bfTruePositives = 0;
 };
 
 #endif /* LSM_TREE_HPP */

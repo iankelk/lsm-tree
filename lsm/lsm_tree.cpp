@@ -7,11 +7,11 @@
 #include "lsm_tree.hpp"
 
 LSMTree::LSMTree(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy) :
-    bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy),
+    bf_error_rate(bf_error_rate), bf_bitset_size(bf_bitset_size), fanout(fanout), level_policy(level_policy), bfFalsePositives(0), bfTruePositives(0),
     buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
 {
     // Create the first level
-    levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM);
+    levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM, this);
 }
 
 // Calulate whether an std::vector<Level>::iterator is pointing to the last level
@@ -32,7 +32,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
     
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, bf_bitset_size, true));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, bf_bitset_size, true, this));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -72,7 +72,7 @@ void LSMTree::merge_levels(int currentLevelNum) {
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
         if (it + 1 == levels.end()) {
-            levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, currentLevelNum + 1);
+            levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, currentLevelNum + 1, this);
             // Get the iterators "it" and "next" which are lost when the vector is resized
             it = levels.end() - 2;
             next = levels.end() - 1;
@@ -410,6 +410,7 @@ std::string LSMTree::printStats() {
 std::string LSMTree::printTree() {
     std::string output = "";
     output += "Number of logical key-value pairs: " + std::to_string(countLogicalPairs()) + "\n";
+    output += "Bloom filter false positive rate: " + std::to_string(getBfFalsePositiveRate()) + "\n";
     output += "Number of entries in the buffer: " + std::to_string(buffer.size()) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + std::to_string(buffer.getMaxKvPairs()) + "\n";
     output += "Maximum size in bytes of the buffer: " + std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair)) + "\n";

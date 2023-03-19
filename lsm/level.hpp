@@ -4,6 +4,9 @@
 #include <cmath>
 #include "run.hpp"
 
+class LSMTree;
+class Run;
+
 class Level {
 public:
     enum Policy {
@@ -12,9 +15,9 @@ public:
         LAZY_LEVELED
     };
     // constructor
-    Level(long bs, int f, Policy l, int ln) :
+    Level(long bs, int f, Policy l, int ln, LSMTree* lsm_tree) :
     buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
-    is_last_level(false), kv_pairs(0), max_kv_pairs(pow(f, ln) * bs) {};
+    is_last_level(false), kv_pairs(0), max_kv_pairs(pow(f, ln) * bs), lsm_tree(lsm_tree) {};
     // Create default constructor
     Level() = default;
     // destructor
@@ -79,6 +82,7 @@ public:
           buffer_size(other.buffer_size),
           level_policy(other.level_policy),
           kv_pairs(other.kv_pairs),
+          lsm_tree(other.lsm_tree),
           runs(std::move(other.runs)) {
     }
     // copy assignment operator 
@@ -89,6 +93,7 @@ public:
         buffer_size = other.buffer_size;
         level_policy = other.level_policy;
         kv_pairs = other.kv_pairs;
+        lsm_tree = other.lsm_tree;
         runs = std::move(other.runs);
         return *this;
     }
@@ -107,6 +112,8 @@ private:
     int fanout;
     // Vector of level sizes cached
     std::map<int, long> level_sizes;
+    // Pointer to the LSMTree
+    LSMTree* lsm_tree;
 };
 
 #endif /* LEVEL_HPP */
