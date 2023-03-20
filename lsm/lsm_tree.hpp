@@ -8,7 +8,7 @@ class Run;
 
 class LSMTree {
 public:
-    LSMTree(float, int, int, int, Level::Policy);
+    LSMTree(float, int, int, Level::Policy);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
@@ -22,7 +22,6 @@ public:
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
     float getBfErrorRate() const { return bf_error_rate; }
-    int getBfBitsetSize() const { return bf_bitset_size; }
     int getBufferNumPages() { return buffer.getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return level_policy; }
@@ -32,7 +31,6 @@ public:
 private:
     Memtable buffer;
     double bf_error_rate;
-    int bf_bitset_size;
     int fanout;
     Level::Policy level_policy;
     int countLogicalPairs();

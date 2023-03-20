@@ -25,7 +25,7 @@ private:
     void printHelp();
     std::string printDSLHelp();
     void sendResponse(int client_socket, const std::string &response);
-    void printLSMTreeParameters(float bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout, Level::Policy level_policy);
+    void printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
 };
 
 #endif /* SERVER_HPP */

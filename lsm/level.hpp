@@ -31,7 +31,7 @@ public:
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
-    void compactLevel(double error_rate, int bitset_size);
+    void compactLevel(double error_rate);
     // getLevelSize returns the size of the level
     long getLevelSize(int level_num); 
     // Returns true if there is enough space in the level to add a run with max_kv_pairs

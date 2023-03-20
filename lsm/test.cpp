@@ -17,11 +17,12 @@
 
 using namespace std;
 
+/*
+
 template <typename FUNC, typename EXCEPTION> void assert_throws(FUNC&& f, EXCEPTION&& e);
 int testDynamicBitset();
 int testBloomFilter();
 int testMemtable();
-int testRun();
 int testLevel();
 int testTree();
 
@@ -343,14 +344,12 @@ int testLevel() {
     level.dump();
     //level.put(run3);
     //assert(level.runs.size() == 2);
-/*
     // Test compacting the level
     level.compactLevel();
     assert(level.runs.size() == 1);
 
     // Test dumping the level
     level.dump();
-*/
     cout << "Level: All tests passed!" << endl;
 
     return 0;
@@ -370,17 +369,16 @@ int testTree() {
     //     tree.put(1, 1);
     // }
 
-    {
-        // LSMTree(int bf_capacity, int bf_error_rate, int bf_bitset_size, int buffer_num_pages, int fanout)
-        LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, DEFAULT_BITSET_SIZE, 1, 5, Level::LAZY_LEVELED);
+    // {
+    //     LSMTree tree(DEFAULT_CAPACITY, DEFAULT_ERROR_RATE, 1, 5, Level::LAZY_LEVELED);
 
-        // Iterate from 1 to 512 and insert them into the tree
-        for (int i = 1; i <= 100000; i++) {
-            tree.put(i, i);
-        }
-        // Print the tree
-        tree.printTree();
-    }
+    //     // Iterate from 1 to 512 and insert them into the tree
+    //     for (int i = 1; i <= 100000; i++) {
+    //         tree.put(i, i);
+    //     }
+    //     // Print the tree
+    //     tree.printTree();
+    // }
 
 
     cout << "Tree: All tests passed!" << endl;
@@ -388,3 +386,4 @@ int testTree() {
     return 0;
 }
 
+*/

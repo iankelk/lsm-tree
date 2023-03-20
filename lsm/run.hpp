@@ -9,7 +9,7 @@ class LSMTree;
 
 class Run {
 public:
-    Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile, LSMTree* lsm_tree);
+    Run(long max_kv_pairs, double bf_error_rate, bool createFile, LSMTree* lsm_tree);
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
@@ -24,7 +24,6 @@ private:
     KEY_t max_key;
     long max_kv_pairs;
     double bf_error_rate;
-    int bf_bitset_size;
     BloomFilter bloom_filter;
     std::vector<KEY_t> fence_pointers;
     std::string tmp_file;

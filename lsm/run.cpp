@@ -6,10 +6,9 @@
 
 void getNumOpenFiles();
 
-Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool createFile, LSMTree* lsm_tree = nullptr) :
+Run::Run(long max_kv_pairs, double bf_error_rate, bool createFile, LSMTree* lsm_tree = nullptr) :
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
-    bf_bitset_size(bf_bitset_size),
     bloom_filter(max_kv_pairs, bf_error_rate),
     tmp_file(""),
     size(0),
@@ -221,7 +220,6 @@ json Run::serialize() const {
     nlohmann::json j;
     j["max_kv_pairs"] = max_kv_pairs;
     j["bf_error_rate"] = bf_error_rate;
-    j["bf_bitset_size"] = bf_bitset_size;
     j["bloom_filter"] = bloom_filter.serialize();
     j["fence_pointers"] = fence_pointers;
     j["tmp_file"] = tmp_file;
@@ -250,7 +248,6 @@ void getNumOpenFiles() {
 void Run::deserialize(const json& j) {
     max_kv_pairs = j["max_kv_pairs"];
     bf_error_rate = j["bf_error_rate"];
-    bf_bitset_size = j["bf_bitset_size"];
 
     bloom_filter.deserialize(j["bloom_filter"]);
     fence_pointers = j["fence_pointers"].get<std::vector<KEY_t>>();
