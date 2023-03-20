@@ -7,22 +7,19 @@ using json = nlohmann:: json;
 
 class BloomFilter {
 public:
-    BloomFilter(int capacity, double error_rate, int bitset_size);
+    BloomFilter(int capacity, double error_rate);
 
     void add(const KEY_t key);
     bool contains(const KEY_t key);
     json serialize() const;
     void deserialize(const json& j);
 
-
 private:
     int capacity;
     double error_rate;
-    int bitset_size;
-    int num_levels;
-    int bits_per_level;
+    int num_bits;
+    int num_hashes;
     DynamicBitset bits;
-    std::hash<std::string> hasher;
 };
 
 #endif /* BLOOM_FILTER_HPP */

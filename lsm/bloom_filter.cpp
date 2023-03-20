@@ -3,28 +3,21 @@
 #include "bloom_filter.hpp"
 #include "data_types.hpp"
 
-BloomFilter::BloomFilter(int capacity, double error_rate, int bitset_size) :
-    error_rate(error_rate), bitset_size(bitset_size) {
+BloomFilter::BloomFilter(int capacity, double error_rate) :
+    capacity(capacity), error_rate(error_rate) {
     if (capacity < 0) {
         throw std::invalid_argument("Capacity must be non-negative.");
     }
-    this->capacity = capacity;
-    int num_bits = std::ceil(-(capacity * std::log(error_rate)) / std::log(2) / std::log(2));
-    this->num_levels = std::max(1, static_cast<int>(std::floor(std::log2(num_bits))));
-    this->bits_per_level = std::ceil((double)num_bits / num_levels);
-    int total_bits = num_levels * bits_per_level;
-    this->bits = DynamicBitset((this->bitset_size > total_bits) ? this->bitset_size : total_bits);
-    // std::cout << "Bloom filter: " << num_bits << " bits, " << num_levels << " levels, " << bits_per_level << " bits per level" << std::endl;
-    // std::cout << "Bloom filter: " << this->bits.size() << " bits total" << std::endl;
+    this->num_bits = std::ceil(-(capacity * std::log(error_rate)) / std::log(2) / std::log(2));
+    this->num_hashes = std::ceil(std::log(2) * (num_bits / capacity));
+    this->bits = DynamicBitset(num_bits);
 }
-
 
 void BloomFilter::add(const KEY_t key) {
     std::hash<KEY_t> hasher;
     int hash_value = hasher(key);
-    for (int i = 0; i < this->num_levels; i++) {
-        int index =  std::abs((hash_value >> i) % this->bits_per_level + i * this->bits_per_level);
-        //cout << "Level " + to_string(i) + ": " + to_string(index) << endl;
+    for (int i = 0; i < this->num_hashes; i++) {
+        int index = std::abs(static_cast<int>(hash_value + i * hasher(key))) % this->num_bits;
         this->bits.set(index);
     }
 }
@@ -32,8 +25,8 @@ void BloomFilter::add(const KEY_t key) {
 bool BloomFilter::contains(const KEY_t key) {
     std::hash<KEY_t> hasher;
     int hash_value = hasher(key);
-    for (int i = 0; i < this->num_levels; i++) {
-        int index = std::abs((hash_value >> i) % this->bits_per_level + i * this->bits_per_level);
+    for (int i = 0; i < this->num_hashes; i++) {
+        int index = std::abs(static_cast<int>(hash_value + i * hasher(key))) % this->num_bits;
         if (!this->bits.test(index)) {
             return false;
         }
@@ -45,21 +38,19 @@ json BloomFilter::serialize() const {
     json j;
     j["capacity"] = capacity;
     j["error_rate"] = error_rate;
-    j["bitset_size"] = bitset_size;
-    j["num_levels"] = num_levels;
-    j["bits_per_level"] = bits_per_level;
+    j["num_bits"] = num_bits;
+    j["num_hashes"] = num_hashes;
     j["bits"] = bits.serialize();
     return j;
 }
 
 void BloomFilter::deserialize(const json& j) {
-    if (!j.contains("capacity") || !j.contains("error_rate") || !j.contains("bitset_size") ||
-        !j.contains("num_levels") || !j.contains("bits_per_level") || !j.contains("bits")) {
+    if (!j.contains("capacity") || !j.contains("error_rate") || !j.contains("num_bits") || !j.contains("num_hashes") || !j.contains("bits")) {
         throw std::runtime_error("Invalid JSON format for deserializing BloomFilter");
     }
 
-    BloomFilter(j["capacity"], j["error_rate"], j["bitset_size"]);
-    num_levels = j["num_levels"];
-    bits_per_level = j["bits_per_level"];
+    BloomFilter(j["capacity"], j["error_rate"]);
+    num_bits = j["num_bits"];
+    num_hashes = j["num_hashes"];
     bits.deserialize(j["bits"]);
 }

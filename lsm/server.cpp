@@ -255,6 +255,7 @@ void Server::printHelp()
               << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <level_policy>    Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -p <port>            Port number (default: " << SERVER_PORT << ")\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }

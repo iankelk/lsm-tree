@@ -10,7 +10,7 @@ Run::Run(long max_kv_pairs, double bf_error_rate, int bf_bitset_size, bool creat
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
     bf_bitset_size(bf_bitset_size),
-    bloom_filter(max_kv_pairs, bf_error_rate, bf_bitset_size),
+    bloom_filter(max_kv_pairs, bf_error_rate),
     tmp_file(""),
     size(0),
     max_key(0),
