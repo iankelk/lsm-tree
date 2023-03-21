@@ -287,8 +287,16 @@ void LSMTree::benchmark(const std::string& filename) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds" << std::endl;
+    long long microseconds = duration.count();
+    long long total_seconds = microseconds / 1000000;
+    long long minutes = total_seconds / 60;
+    microseconds %= 1000000;
+    double seconds = static_cast<double>(total_seconds % 60) + static_cast<double>(microseconds) / 1000000;
+    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds "
+            << "(" << minutes << " minutes, " << std::fixed << std::setprecision(2) << seconds
+            << " seconds)" << std::endl;
 }
+
 
 void LSMTree::load(const std::string& filename) {
     std::vector<kv_pair> kv_pairs;

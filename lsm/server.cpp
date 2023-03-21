@@ -6,11 +6,13 @@
 
 volatile sig_atomic_t termination_flag = 0;
 
-Server server(SERVER_PORT);
+Server *server_ptr = nullptr;
 
 void sigint_handler(int signal) {
     termination_flag = 1;
-    server.close();
+    if (server_ptr) {
+        server_ptr->close();
+    }
 }
 
 // Thread function to handle client connections
@@ -192,65 +194,21 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(int argc, char **argv) {
-    // Process command line arguments based on your LSM-Tree implementation
-    int opt, buffer_num_pages, fanout;
-    float bf_error_rate;
-    Level::Policy level_policy;
-
-    bf_error_rate = DEFAULT_ERROR_RATE;
-    buffer_num_pages = DEFAULT_NUM_PAGES;
-    fanout = DEFAULT_FANOUT;
-    level_policy = DEFAULT_LEVELING_POLICY;
-
-    while ((opt = getopt(argc, argv, "e:n:f:l:h")) != -1) {
-        switch (opt) {
-        case 'e':
-            bf_error_rate = atof(optarg);
-            break;
-        case 'n':
-            buffer_num_pages = atoi(optarg);
-            break;
-        case 'f':
-            fanout = atoi(optarg);
-            break;
-        case 'l':
-            if (strcmp(optarg, "TIERED") == 0) {
-                level_policy = Level::Policy::TIERED;
-            } else if (strcmp(optarg, "LEVELED") == 0) {
-                level_policy = Level::Policy::LEVELED;
-            }
-            else if (strcmp(optarg, "LAZY_LEVELED") == 0) {
-                level_policy = Level::Policy::LAZY_LEVELED;
-            }
-            else {
-                std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, and LAZY_LEVELED" << std::endl;
-                exit(1);
-            }
-            break;
-        case 'h':
-            printHelp();
-            exit(0);
-        default:
-            printHelp();
-            exit(1);
-        }
-    }
+void Server::createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy) {
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bf_error_rate, buffer_num_pages, fanout, level_policy);
     lsmTree->deserialize(LSM_TREE_FILE);
     printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy());
 }
 
-void Server::printHelp()
-{
+void printHelp() {
     std::cout << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
               << "  -e <error_rate>      Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
               << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <level_policy>    Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
-              << "  -p <port>            Port number (default: " << SERVER_PORT << ")\n"
+              << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
@@ -305,10 +263,64 @@ int main(int argc, char **argv) {
     sa.sa_handler = sigint_handler;
     sigaction(SIGINT, &sa, NULL);
 
-    // Create LSM-Tree
-    server.createLSMTree(argc, argv);
+    // Default values for options
+    int opt, port = DEFAULT_SERVER_PORT;
+    float bf_error_rate = DEFAULT_ERROR_RATE;
+    int buffer_num_pages = DEFAULT_NUM_PAGES;
+    int fanout = DEFAULT_FANOUT;
+    Level::Policy level_policy = DEFAULT_LEVELING_POLICY;
+
+    // Parse command line arguments
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:h")) != -1) {
+        switch (opt) {
+        case 'e':
+            bf_error_rate = atof(optarg);
+            break;
+        case 'n':
+            buffer_num_pages = atoi(optarg);
+            break;
+        case 'f':
+            fanout = atoi(optarg);
+            break;
+        case 'l':
+            if (strcmp(optarg, "TIERED") == 0) {
+                level_policy = Level::Policy::TIERED;
+            } else if (strcmp(optarg, "LEVELED") == 0) {
+                level_policy = Level::Policy::LEVELED;
+            }
+            else if (strcmp(optarg, "LAZY_LEVELED") == 0) {
+                level_policy = Level::Policy::LAZY_LEVELED;
+            }
+            else {
+                std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, and LAZY_LEVELED" << std::endl;
+                exit(1);
+            }
+            break;
+        case 'p':
+            port = atoi(optarg);
+            break;
+        case 'h':
+            printHelp();
+            exit(0);
+        default:
+            printHelp();
+            exit(1);
+        }
+    }
+
+    // Create server instance with the specified port
+    Server server(port);
+
+    // Set the global server pointer
+    server_ptr = &server;
+
+    // Create LSM-Tree with the parsed options
+    server.createLSMTree(bf_error_rate, buffer_num_pages, fanout, level_policy);
     server.run();
+
     // Clean up resources
     server.close();
     return 0;
 }
+
+

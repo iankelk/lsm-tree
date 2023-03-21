@@ -3,7 +3,20 @@
 #include <iostream>
 #include "data_types.hpp"
 
-int main() {
+int main(int argc, char *argv[]) {
+    int opt, port = DEFAULT_SERVER_PORT;
+
+    while ((opt = getopt(argc, argv, "p:")) != -1) {
+        switch (opt) {
+            case 'p':
+                port = std::stoi(optarg);
+                break;
+            default:
+                std::cerr << "Usage: " << argv[0] << " [-p port]" << std::endl;
+                return 1;
+        }
+    }
+
     // Connect to server
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket == -1) {
@@ -13,7 +26,7 @@ int main() {
 
     sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(SERVER_PORT);
+    server_address.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr);
     if (connect(client_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
         std::cerr << "Error connecting to server" << std::endl;
