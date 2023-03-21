@@ -14,6 +14,11 @@ public:
         LEVELED,
         LAZY_LEVELED
     };
+    enum State {
+        FULL,
+        TWO_RUNS,
+        UNKNOWN
+    };
     // constructor
     Level(long bs, int f, Policy l, int ln, LSMTree* lsm_tree) :
     buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
@@ -31,7 +36,7 @@ public:
     // dump prints the contents of the level
     void dump();
     // compactLevel compacts the level
-    void compactLevel(double error_rate);
+    void compactLevel(double error_rate, State state);
     // getLevelSize returns the size of the level
     long getLevelSize(int level_num); 
     // Returns true if there is enough space in the level to add a run with max_kv_pairs
@@ -50,7 +55,6 @@ public:
     void setKvPairs(long kv_pairs);
     // Get the max number of kv_pairs in the level
     long getMaxKvPairs() const;
-
 
     static std::string policyToString(Policy policy) {
         switch (policy) {

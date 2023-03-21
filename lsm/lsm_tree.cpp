@@ -43,16 +43,14 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Close the run's file
     levels.front().runs.front()->closeFile();
 
-    // If level_policy is true, then compact the first level
-    if (level_policy == Level::LEVELED) {
-        levels.front().compactLevel(bf_error_rate);
+    // If level_policy is Level::LEVELED, or if level_policy is Level::LAZY_LEVELED and there is only one level, compact the first level
+    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && isLastLevel(levels.begin()))) {
+        levels.front().compactLevel(bf_error_rate, level_policy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
     }
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
     buffer.put(key, val);
-
-    //serializeLSMTreeToFile("/tmp/LSMTree.json");
 }
 
 
@@ -89,14 +87,14 @@ void LSMTree::merge_levels(int currentLevelNum) {
     next = levels.begin() + currentLevelNum;
 
     if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-        it->compactLevel(bf_error_rate);
+        it->compactLevel(bf_error_rate, Level::FULL);
         // Move the single run pointed to by runs.begin() into the next level
         next->runs.push_back(std::move(it->runs.front()));
     } 
     if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && isLastLevel(next))) {
         // Merge the current level into the next level by moving the entire deque of runs into the next level
         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
-        next->compactLevel(bf_error_rate);
+        next->compactLevel(bf_error_rate, level_policy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
     }
 
     // Update the number of key/value pairs in the next level. 

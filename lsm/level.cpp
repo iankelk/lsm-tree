@@ -37,16 +37,28 @@ void Level::dump() {
     }
 }
 
-void Level::compactLevel(double error_rate) {
+void Level::compactLevel(double error_rate, State state) {
+    long size;
     // Nothing to compact if there is only one run
     if (runs.size() == 1) {
         return;
     }
+
+    if (state == State::FULL) {
+        size = getLevelSize(level_num);
+    }
+    else if (state == State::TWO_RUNS) {
+        size = runs[0]->getMaxKvPairs() + runs[1]->getMaxKvPairs();
+    }
+    else {
+        size = numKVPairs();
+    }
+    
     // Create a new map to hold the merged data
     std::map<KEY_t, VAL_t> merged_map;
 
     // Iterate through the runs in the level
-    for  (const auto& run : runs) {
+    for  (const auto& run : runs) {     
         // Get the map of the run
         std::map<KEY_t, VAL_t> run_map = run->getMap();
         // print the size of the run_map
@@ -71,7 +83,7 @@ void Level::compactLevel(double error_rate) {
     runs.clear();
     kv_pairs = 0;
 
-    put(std::make_unique<Run>(getLevelSize(level_num), error_rate, true, lsm_tree));
+    put(std::make_unique<Run>(size, error_rate, true, lsm_tree));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
@@ -100,7 +112,6 @@ long Level::getLevelSize(int level_num) {
 // Returns true if there is enough space in the level to flush the buffer
 bool Level::willBufferFit() {
     // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
-    //assert(numKVPairs() == kv_pairs);
     return (kv_pairs + buffer_size <= max_kv_pairs);
 }
 
