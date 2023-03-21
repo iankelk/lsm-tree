@@ -450,6 +450,31 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_ma
     }
 }
 
+float LSMTree::getBfFalsePositiveRate() {
+    int total = bfFalsePositives + bfTruePositives;
+    if (total > 0) {
+        return (float)bfFalsePositives / total;
+    } else {
+        return BLOOM_FILTER_UNUSED; // No false positives or true positives
+    }
+}
+
+// For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
+std::string LSMTree::getBloomFilterSummary() {
+    std::string output = "";
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        output += "Level " + std::to_string(it->getLevelNum()) + ":\n";
+        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
+            output += "Run " + std::to_string(std::distance(it->runs.begin(), run)) + ": ";
+            output += (*run)->getBloomFilterSummary()+ ":\n";
+        }
+    }
+    // Remove the last newline from the output string
+    output = output.substr(0, output.size() - 1);
+    return output;
+}
+
+
 json LSMTree::serialize() const {
     json j;
     j["buffer"] = buffer.serialize();

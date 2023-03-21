@@ -15,6 +15,20 @@ void sigint_handler(int signal) {
     }
 }
 
+void Server::listenToStdIn()
+{
+    std::string input;
+    while (!termination_flag)
+    {
+        std::getline(std::cin, input);
+        if (input == "bloom")
+        {
+            std::cout << lsmTree->getBloomFilterSummary() << std::endl;
+        }
+    }
+}
+
+
 // Thread function to handle client connections
 void Server::handle_client(int client_socket)
 {
@@ -141,8 +155,7 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
         sendResponse(client_socket, response);
 }
 
-void Server::run()
-{
+void Server::run() {
     // Accept incoming connections
     while (!termination_flag) {
         sockaddr_in client_address;
@@ -316,11 +329,15 @@ int main(int argc, char **argv) {
 
     // Create LSM-Tree with the parsed options
     server.createLSMTree(bf_error_rate, buffer_num_pages, fanout, level_policy);
+    // Create a thread for listening to standard input
+    std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();
 
     // Clean up resources
     server.close();
+    // Wait for the stdInThread to finish
+    if (stdInThread.joinable()) {
+        stdInThread.join();
+    }
     return 0;
 }
-
-

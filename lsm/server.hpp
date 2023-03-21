@@ -13,6 +13,7 @@ public:
     void createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
     void run();
     void close();
+    void listenToStdIn();
 private:
     std::unique_ptr<LSMTree> lsmTree;
     int port;

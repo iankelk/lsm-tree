@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
 #include "run.hpp"
 #include "lsm_tree.hpp"
 
@@ -101,11 +102,11 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     kv_pair kv;
     // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
     // TODO: This is a linear search. Could be better with a binary search?
-    // while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
     while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
             lsm_tree->incrementBfTruePositives();
+            truePositives++;
             break;
         }
         offset += sizeof(kv_pair);
@@ -113,6 +114,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
         lsm_tree->incrementBfFalsePositives();
+        falsePositives++;
     }
     closeFile();
     return val;
@@ -254,4 +256,23 @@ void Run::deserialize(const json& j) {
     tmp_file = j["tmp_file"];
     size = j["size"];
     max_key = j["max_key"];
+}
+
+float Run::getBfFalsePositiveRate() {
+    int total = truePositives + falsePositives;
+    if (total > 0) {
+        return (float)falsePositives / total;
+    } else {
+        return BLOOM_FILTER_UNUSED; // No false positives or true positives
+    }
+}
+
+// Bloom Filter Size: 0, FPR: 0.000000, TP: 0, FP: 0, Max Keys: 0, Number of Keys: 0
+std::string Run::getBloomFilterSummary() {
+    // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
+    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
+    std::stringstream ss;
+    ss << "Bloom Filter Size: " << bloom_filter.getNumBits() << ", FPR: " << bfStatus << ", TP: " << truePositives 
+       << ", FP: " << falsePositives << ", Max Keys: " << max_kv_pairs << ", Number of Keys: " << size;
+    return ss.str();
 }

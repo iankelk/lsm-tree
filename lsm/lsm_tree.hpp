@@ -27,7 +27,8 @@ public:
     Level::Policy getLevelPolicy() const { return level_policy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
-    float getBfFalsePositiveRate() { return (float)bfFalsePositives / (bfFalsePositives + bfTruePositives); }
+    float getBfFalsePositiveRate();
+    std::string getBloomFilterSummary();
 private:
     Memtable buffer;
     double bf_error_rate;

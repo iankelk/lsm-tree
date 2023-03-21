@@ -16,6 +16,7 @@ public:
     void put(KEY_t key, VAL_t val);
     std::map<KEY_t, VAL_t> getMap();
     long getMaxKvPairs();
+    std::string getBloomFilterSummary();
     void closeFile();
     json serialize() const;
     void deserialize(const json& j);
@@ -30,6 +31,9 @@ private:
     long size;
     int fd;
     LSMTree* lsm_tree;
+    float getBfFalsePositiveRate();
+    int falsePositives = 0;
+    int truePositives = 0;
 };
 
 #endif /* LSM_RUN_HPP */
