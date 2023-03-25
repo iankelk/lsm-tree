@@ -211,37 +211,29 @@ void LSMTree::del(KEY_t key) {
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
 void LSMTree::benchmark(const std::string& filename) {
     int count = 0;
-    // Create a file stream
     std::ifstream file(filename);
 
-    // Check that the file exists
     if (!file) {
         std::cerr << "Unable to open file " << filename << std::endl;
         return;
     }
 
-    // Get the size of the file
     file.seekg(0, file.end);
     int length = file.tellg();
     file.seekg(0, file.beg);
 
-    // Create a buffer to hold the key/value pairs and read the file into the buffer
-    char *buffered_file = new char[length];
-    file.read(buffered_file, length);
+    std::stringstream ss;
+    ss << file.rdbuf();
 
-    // Create an input string stream to read the file
-    std::istringstream iss(buffered_file);
-    std::string line;
-
-    // Start measuring time
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
 
-    // Read the file line by line and parse and execute the commands
-    while (std::getline(iss, line)) {
-        std::istringstream line_ss(line);
+    std::string line;
+    while (std::getline(ss, line)) {
+        std::stringstream line_ss(line);
         char command_code;
         line_ss >> command_code;
+
         switch (command_code) {
             case 'p': {
                 KEY_t key;
@@ -274,17 +266,16 @@ void LSMTree::benchmark(const std::string& filename) {
                 break;
             }
         }
+
         count++;
         if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
-            std::cout << "Benchmark: " << count << " commands executed" << std::endl;
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            std::cout << "Benchmark: " << count << " commands executed" << std::endl;
             std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
         }
     }
-    delete[] buffered_file;
-    
-    // End measuring time, calculate the duration, and print it
+
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     long long microseconds = duration.count();
@@ -296,6 +287,7 @@ void LSMTree::benchmark(const std::string& filename) {
             << "(" << minutes << " minutes, " << std::fixed << std::setprecision(2) << seconds
             << " seconds)" << std::endl;
 }
+
 
 
 void LSMTree::load(const std::string& filename) {
