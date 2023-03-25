@@ -5,14 +5,18 @@
 
 int main(int argc, char *argv[]) {
     int opt, port = DEFAULT_SERVER_PORT;
+    bool quiet = false;
 
-    while ((opt = getopt(argc, argv, "p:")) != -1) {
+    while ((opt = getopt(argc, argv, "p:q")) != -1) {
         switch (opt) {
             case 'p':
                 port = std::stoi(optarg);
                 break;
+            case 'q':
+                quiet = true;
+                break;
             default:
-                std::cerr << "Usage: " << argv[0] << " [-p port]" << std::endl;
+                std::cerr << "Usage: " << argv[0] << " [-p port] [-q <quiet mode>]" << std::endl;
                 return 1;
         }
     }
@@ -73,13 +77,16 @@ int main(int argc, char *argv[]) {
             close(client_socket);
             return 1;
         }
-        // If response is empty, print a newline
-        if (response == NO_VALUE) {
-            //std::cout << "NO VALUE" << std::endl;
-            std::cout << std::endl;
-        // If response is not empty and is not OK (which is just a silent acknowledgement), print the response
-        } else if (response.size() > 0 && response != OK) {
-            std::cout << response << std::endl;
+        // If not quiet, print the response
+        if (!quiet) {           
+            // If response is empty, print a newline
+            if (response == NO_VALUE) {
+                //std::cout << "NO VALUE" << std::endl;
+                std::cout << std::endl;
+            // If response is not empty and is not OK (which is just a silent acknowledgement), print the response
+            } else if (response.size() > 0 && response != OK) {
+                std::cout << response << std::endl;
+            }
         }
     }
 

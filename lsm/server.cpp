@@ -88,6 +88,11 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
         switch (op) {
         case 'p':
             ss >> key >> value;
+            // Break if key or value are not numbers
+            if (ss.fail()) {
+                response = printDSLHelp();
+                break;
+            }
             // Report error if key is less than VALUE_MIN or greater than VALUE_MAX
             if (value < VAL_MIN || value > VAL_MAX) {
                 response = "ERROR: Value " + std::to_string(value) + " out of range [" + std::to_string(VAL_MIN) + ", " + std::to_string(VAL_MAX) + "]\n";
@@ -99,6 +104,11 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
             break;
         case 'g':
             ss >> key;
+            // Break if key is not a number
+            if (ss.fail()) {
+                response = printDSLHelp();
+                break;
+            }
             value_ptr = lsmTree->get(key);
             if (value_ptr != nullptr) {
                 response = std::to_string(*value_ptr);
@@ -109,6 +119,11 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
             break;
         case 'r':
             ss >> start >> end;
+            // Break if start and end are not numbers
+            if (ss.fail()) {
+                response = printDSLHelp();
+                break;
+            }
             range_ptr = lsmTree->range(start, end);
             if (range_ptr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
@@ -123,6 +138,11 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
             break;
         case 'd':
             ss >> key;
+            // Break if key is not a number
+            if (ss.fail()) {
+                response = printDSLHelp();
+                break;
+            }
             lsmTree->del(key);
             response = OK;
             break;
@@ -237,7 +257,7 @@ void Server::printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, i
 
 std::string Server::printDSLHelp() {
     std::string helpText = 
-        "LSM-Tree Domain Specific Language Help:\n\n"
+        "\nLSM-Tree Domain Specific Language Help:\n\n"
         "Commands:\n"
         "1. Put (Insert/Update a key-value pair)\n"
         "   Syntax: p [INT1] [INT2]\n"
