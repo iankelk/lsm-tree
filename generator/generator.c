@@ -255,12 +255,13 @@ void generate_workload(struct settings *s) {
     ///    INITIALIZE NUMBER POOLS    ///
     /////////////////////////////////////
     // Initialize random generator
-    gsl_rng_default_seed = s->seed;
+    //gsl_rng_default_seed = s->seed; // Remove this line
     const gsl_rng_type *T;
     gsl_rng *r;
     gsl_rng_env_setup();
     T = gsl_rng_default;
     r = gsl_rng_alloc(T);
+    gsl_rng_set(r, s->seed); // Add this line to set the seed for the random generator
 
     // Buffer of previous puts (for non empty gets)
     int old_puts_pool_max_size;
