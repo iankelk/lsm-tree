@@ -25,9 +25,11 @@ fast_client:
 test:
 	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
 
+.PHONY: genm1
 genm1:
 	$(CC) generator/generator.c -I/opt/homebrew/include -L/opt/homebrew/lib -o bin/generator -lgsl -lgslcblas -lm
 
+.PHONY: generator
 generator:
 	$(CC) generator/generator.c -o bin/generator -lgsl -lgslcblas
 
