@@ -16,6 +16,7 @@ public:
     void listenToStdIn();
 private:
     std::unique_ptr<LSMTree> lsmTree;
+    std::shared_mutex shared_mtx;
     int port;
     int server_socket;
     int client_socket;

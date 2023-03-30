@@ -1,7 +1,7 @@
 #include <cstdlib>
 
 #include "data_types.hpp"
-#include "error.hpp"
+#include "utils.hpp"
 #include "unistd.h"
 
 /*
@@ -103,7 +103,7 @@ int main() {
 #include "bloom_filter.hpp"
 
 int main() {
-    BloomFilter bf(1000, 0.01, 10000);
+    BloomFilter bf(1000, 0.01);
     bf.add(12345);
     bf.add(123456);
     std::cout << bf.contains(12345) << std::endl; // prints 1

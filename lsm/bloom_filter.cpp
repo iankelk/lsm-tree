@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cmath>
 #include "bloom_filter.hpp"
-#include "data_types.hpp"
 
 BloomFilter::BloomFilter(int capacity, double error_rate) :
     capacity(capacity), error_rate(error_rate) {

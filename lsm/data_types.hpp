@@ -7,6 +7,7 @@
  */
 #ifndef DATA_TYPES_H
 #define DATA_TYPES_H
+#include <string>
 
 // KEY
 typedef int32_t KEY_t;
@@ -45,24 +46,10 @@ typedef int32_t VAL_t;
 #define NO_VALUE "<NO_VALUE>"
 #define OK "<OK>"
 
-
 // Key Value Pair
 struct kv_pair {
     KEY_t key;
     VAL_t value;
-    // Define comparison operators for kv_pair
-    bool operator==(const kv_pair& rhs) const {
-        return key == rhs.key;
-    }
-    bool operator!=(const kv_pair& rhs) const {
-        return key != rhs.key;
-    }
-    bool operator<(const kv_pair& rhs) const {
-        return key < rhs.key;
-    }
-    bool operator>(const kv_pair& rhs) const {
-        return key > rhs.key;
-    }
 };
 
-#endif
+#endif /* DATA_TYPES_H */

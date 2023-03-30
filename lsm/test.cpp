@@ -7,7 +7,7 @@
 #include "unistd.h"
 
 #include "data_types.hpp"
-#include "error.hpp"
+#include "utils.hpp"
 #include "bloom_filter.hpp"
 #include "memtable.hpp"
 #include "run.hpp"

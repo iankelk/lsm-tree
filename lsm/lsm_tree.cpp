@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "lsm_tree.hpp"
+#include "utils.hpp"
 
 LSMTree::LSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy) :
     bf_error_rate(bf_error_rate), fanout(fanout), level_policy(level_policy), bfFalsePositives(0), bfTruePositives(0),
@@ -278,14 +279,8 @@ void LSMTree::benchmark(const std::string& filename) {
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    long long microseconds = duration.count();
-    long long total_seconds = microseconds / 1000000;
-    long long minutes = total_seconds / 60;
-    microseconds %= 1000000;
-    double seconds = static_cast<double>(total_seconds % 60) + static_cast<double>(microseconds) / 1000000;
-    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds "
-            << "(" << minutes << " minutes, " << std::fixed << std::setprecision(2) << seconds
-            << " seconds)" << std::endl;
+    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
+            << formatMicroseconds(duration.count()) + ")" << std::endl;
 }
 
 

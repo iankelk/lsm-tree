@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iostream>
 #include <unistd.h>
+#include <shared_mutex>
 #include "server.hpp"
 
 volatile sig_atomic_t termination_flag = 0;
@@ -72,20 +73,32 @@ void Server::sendResponse(int client_socket, const std::string &response) {
 }
 
 void Server::handleCommand(std::stringstream& ss, int client_socket) {
-     char op;
-     ss >> op;
-     KEY_t key, start, end;
-        VAL_t value;
-        
-        // Pointers to store the results of get and range
-        std::unique_ptr<VAL_t> value_ptr;
-        std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
-        std::string file_name;
+    char op;
+    ss >> op;
+    KEY_t key, start, end;
+    VAL_t value;
+    
+    // Pointers to store the results of get and range
+    std::unique_ptr<VAL_t> value_ptr;
+    std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
+    std::string file_name;
 
-        // Response to send back to client
-        std::string response;
-        
-        switch (op) {
+    // Response to send back to client
+    std::string response;
+
+    // put, delete, load, benchmark, and quit operations are exclusive
+    if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
+        std::unique_lock<std::shared_mutex> lock(shared_mtx);   
+    // get, range, printStats, and info operations are shared  
+    } else if (op == 'g' || op == 'r' || op == 's' || op == 'i') {
+        std::shared_lock<std::shared_mutex> lock(shared_mtx);
+    } else {
+        response = printDSLHelp();
+        sendResponse(client_socket, response);
+        return;
+    }
+    switch (op) {
+        // Put, delete, load, benchmark, and quit operations are exclusive
         case 'p':
             ss >> key >> value;
             // Break if key or value are not numbers
@@ -98,10 +111,37 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
                 response = "ERROR: Value " + std::to_string(value) + " out of range [" + std::to_string(VAL_MIN) + ", " + std::to_string(VAL_MAX) + "]\n";
                 break;
             }
-
             lsmTree->put(key, value);
             response = OK;
             break;
+        case 'd':
+            ss >> key;
+            // Break if key is not a number
+            if (ss.fail()) {
+                response = printDSLHelp();
+                break;
+            }
+            lsmTree->del(key);
+            response = OK;
+            break;
+        case 'l':
+            ss >> file_name;
+            lsmTree->load(file_name);
+            response = OK;
+            break;
+        case 'b':
+            ss >> file_name;
+            lsmTree->benchmark(file_name);
+            response = OK;
+            break;
+        case 'q':
+            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
+            response = OK;
+            sendResponse(client_socket, response);
+            termination_flag = 1;
+            close();
+            break;
+        // Get, range, printStats, and info operations are shared
         case 'g':
             ss >> key;
             // Break if key is not a number
@@ -136,38 +176,11 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
                 response = NO_VALUE;
             }
             break;
-        case 'd':
-            ss >> key;
-            // Break if key is not a number
-            if (ss.fail()) {
-                response = printDSLHelp();
-                break;
-            }
-            lsmTree->del(key);
-            response = OK;
-            break;
-        case 'l':
-            ss >> file_name;
-            lsmTree->load(file_name);
-            response = OK;
-            break;
-        case 'b':
-            ss >> file_name;
-            lsmTree->benchmark(file_name);
-            response = OK;
-            break;
-        case 'i':
-            response = lsmTree->printTree();
-            break;
         case 's':            
             response = lsmTree->printStats();
             break;
-        case 'q':
-            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
-            response = OK;
-            sendResponse(client_socket, response);
-            termination_flag = 1;
-            close();
+        case 'i':
+            response = lsmTree->printTree();
             break;
         default:
             response = printDSLHelp();
@@ -274,7 +287,7 @@ std::string Server::printDSLHelp() {
         "5. Load (Insert key-value pairs from a binary file)\n"
         "   Syntax: l \"/path/to/file_name\"\n"
         "   Example: l \"~/load_file.bin\"\n\n"
-        "6. Benchmark (Run commands from a text file quietly with no output)\n"
+        "6. Benchmark (Run commands from a text file quietly with no output. NOT MULTIPLE THREAD SAFE since it bypasses the server/client blocking)\n"
         "   Syntax: b \"/path/to/file_name\"\n"
         "   Example: b \"~/workload.txt\"\n\n"
         "7. Print Stats (Display information about the current state of the tree)\n"

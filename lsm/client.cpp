@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <iostream>
 #include "data_types.hpp"
+#include "utils.hpp"
 
 int main(int argc, char *argv[]) {
     int opt, port = DEFAULT_SERVER_PORT;
@@ -93,7 +94,7 @@ int main(int argc, char *argv[]) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Processing the workload took " << duration.count() << " microseconds" << std::endl;
+    std::cout << "Processing the workload took " << duration.count() << " microseconds (" << formatMicroseconds(duration.count()) + ")" << std::endl;
 
     // Clean up resources
     close(client_socket);
