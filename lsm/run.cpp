@@ -6,8 +6,6 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
-void getNumOpenFiles();
-
 Run::Run(long max_kv_pairs, double bf_error_rate, bool createFile, LSMTree* lsm_tree = nullptr) :
     max_kv_pairs(max_kv_pairs),
     bf_error_rate(bf_error_rate),
