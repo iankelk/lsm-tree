@@ -86,12 +86,16 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
     // Response to send back to client
     std::string response;
 
+    // Locks to ensure exclusive or shared access to the LSM tree
+    std::unique_lock<std::shared_mutex> exclusive_lock;
+    std::shared_lock<std::shared_mutex> shared_lock;
+
     // put, delete, load, benchmark, and quit operations are exclusive
     if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
-        std::unique_lock<std::shared_mutex> lock(shared_mtx);   
+        exclusive_lock = std::unique_lock<std::shared_mutex>(shared_mtx);  
     // get, range, printStats, and info operations are shared  
     } else if (op == 'g' || op == 'r' || op == 's' || op == 'i') {
-        std::shared_lock<std::shared_mutex> lock(shared_mtx);
+        shared_lock = std::shared_lock<std::shared_mutex>(shared_mtx);
     } else {
         response = printDSLHelp();
         sendResponse(client_socket, response);
