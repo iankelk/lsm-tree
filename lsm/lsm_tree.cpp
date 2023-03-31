@@ -469,6 +469,8 @@ json LSMTree::serialize() const {
     j["fanout"] = fanout;
     j["level_policy"] = Level::policyToString(level_policy);
     j["levels"] = json::array();
+    j["bfFalsePositives"] = bfFalsePositives;
+    j["bfTruePositives"] = bfTruePositives;
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -501,6 +503,8 @@ void LSMTree::deserialize(const std::string& filename) {
     bf_error_rate = treeJson["bf_error_rate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
     level_policy = Level::stringToPolicy(treeJson["level_policy"].get<std::string>());
+    bfFalsePositives = treeJson["bfFalsePositives"].get<int>();
+    bfTruePositives = treeJson["bfTruePositives"].get<int>();
     buffer.deserialize(treeJson["buffer"]);
 
     levels.clear();
