@@ -14,10 +14,10 @@ BloomFilter::BloomFilter(int capacity, double error_rate) :
     }
 }
 
-void BloomFilter::add(const KEY_t& key) {
+void BloomFilter::add(const KEY_t key) {
     uint32_t hash1, hash2;
-    MurmurHash3_x86_32(reinterpret_cast<const char*>(&key), sizeof(KEY_t), 0, &hash1);
-    MurmurHash3_x86_32(reinterpret_cast<const char*>(&key), sizeof(KEY_t), hash1, &hash2);
+    MurmurHash3_x86_32(static_cast<const void*>(&key), sizeof(KEY_t), 0, &hash1);
+    MurmurHash3_x86_32(static_cast<const void*>(&key), sizeof(KEY_t), hash1, &hash2);
 
     for (int i = 0; i < this->num_hashes; i++) {
         int index = std::abs(static_cast<int>((hash1 + i * hash2) % this->num_bits));
@@ -25,10 +25,10 @@ void BloomFilter::add(const KEY_t& key) {
     }
 }
 
-bool BloomFilter::contains(const KEY_t& key) {
+bool BloomFilter::contains(const KEY_t key) {
     uint32_t hash1, hash2;
-    MurmurHash3_x86_32(reinterpret_cast<const char*>(&key), sizeof(KEY_t), 0, &hash1);
-    MurmurHash3_x86_32(reinterpret_cast<const char*>(&key), sizeof(KEY_t), hash1, &hash2);
+    MurmurHash3_x86_32(static_cast<const void*>(&key), sizeof(KEY_t), 0, &hash1);
+    MurmurHash3_x86_32(static_cast<const void*>(&key), sizeof(KEY_t), hash1, &hash2);
 
     for (int i = 0; i < this->num_hashes; i++) {
         int index = std::abs(static_cast<int>((hash1 + i * hash2) % this->num_bits));

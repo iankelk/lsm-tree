@@ -9,8 +9,8 @@ class BloomFilter {
 public:
     BloomFilter(int capacity, double error_rate);
 
-    void add(const KEY_t& key);
-    bool contains(const KEY_t& key);
+    void add(const KEY_t key);
+    bool contains(const KEY_t key);
     json serialize() const;
     void deserialize(const json& j);
     int getNumBits() { return num_bits; }
