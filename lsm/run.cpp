@@ -16,35 +16,8 @@ Run::Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree 
     size(0),
     maxKey(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED),
-    lsmTree(lsmTree) {
-
-    // if (createFile) {
-    //     char tmpFn[] = SSTABLE_FILE_TEMPLATE;
-    //     fd = mkstemp(tmpFn);
-    //     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-    //         die("Run::Constructor: Failed to create temporary file for Run");
-    //     }
-    //     tmpFile = tmpFn;
-    //     fencePointers.reserve(maxKvPairs / getpagesize());
-    // }   
-    // if (createFile) {
-    //     std::string dataDir = DATA_DIRECTORY;
-    //     std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
-
-    //     std::string sstableFileTemplate = dataDir + SSTABLE_FILE_TEMPLATE;
-    //     char tmpFn[sstableFileTemplate.size() + 1];
-    //     std::strcpy(tmpFn, sstableFileTemplate.c_str());
-        
-    //     fd = mkstemp(tmpFn);
-    //     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-    //         // print tmpFn
-    //         std::cout << "tmpFn: " << tmpFn << std::endl;
-    //         die("Run::Constructor: Failed to create temporary file for Run");
-    //     }
-    //     tmpFile = tmpFn;
-    //     fencePointers.reserve(maxKvPairs / getpagesize());
-    // } 
-
+    lsmTree(lsmTree) 
+{
     if (createFile) {
         std::string dataDir = DATA_DIRECTORY;
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
