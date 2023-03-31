@@ -27,6 +27,7 @@ public:
     Level::Policy getLevelPolicy() const { return level_policy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
+    void incrementIoCount() { ioCount++; }
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
 private:
@@ -40,6 +41,7 @@ private:
     void merge_levels(int currentLevelNum);
     int bfFalsePositives = 0;
     int bfTruePositives = 0;
+    long ioCount = 0;
 };
 
 #endif /* LSM_TREE_HPP */

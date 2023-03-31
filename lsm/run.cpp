@@ -66,6 +66,7 @@ void Run::put(KEY_t key, VAL_t val) {
     result = write(fd, &kv, sizeof(kv_pair));
     assert(result != -1);
     size++;
+    lsm_tree->incrementIoCount();
 }
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
@@ -100,6 +101,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     lseek(fd, offset, SEEK_SET);
     kv_pair kv;
+    lsm_tree->incrementIoCount();
     // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
     // TODO: This is a linear search. Could be better with a binary search?
     while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
@@ -166,6 +168,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         throw std::runtime_error("Run::range: Failed to open temporary file for Run");
     }
+    lsm_tree->incrementIoCount();
     bool stopSearch = false;
     // Search the pages for the keys in the range
     for (long page_index = searchPageStart; page_index < searchPageEnd; page_index++) {
@@ -206,6 +209,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     }
     // Read all the key-value pairs from the temporary file
+    lsm_tree->incrementIoCount();
     kv_pair kv;
     while (read(fd, &kv, sizeof(kv_pair)) > 0) {
         map[kv.key] = kv.value;

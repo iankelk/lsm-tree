@@ -402,8 +402,10 @@ std::string LSMTree::printStats() {
 // the number of runs per each level.
 std::string LSMTree::printTree() {
     std::string output = "";
+    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     output += "Number of logical key-value pairs: " + std::to_string(countLogicalPairs()) + "\n";
-    output += "Bloom filter false positive rate: " + std::to_string(getBfFalsePositiveRate()) + "\n";
+    output += "Bloom filter false positive rate: " + bfStatus + "\n";
+    output += "Number of I/O operations: " + std::to_string(ioCount) + "\n";
     output += "Number of entries in the buffer: " + std::to_string(buffer.size()) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + std::to_string(buffer.getMaxKvPairs()) + "\n";
     output += "Maximum size in bytes of the buffer: " + std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair)) + "\n";
