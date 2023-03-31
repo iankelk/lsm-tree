@@ -9,3 +9,4 @@ generator/generator
 out.txt
 mil1
 mil2
+bin/client
