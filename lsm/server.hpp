@@ -10,22 +10,22 @@ class Server
 {
 public:
     explicit Server(int port, bool verbose);
-    void createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
+    void createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy);
     void run();
     void close();
     void listenToStdIn();
 private:
     std::unique_ptr<LSMTree> lsmTree;
-    std::shared_mutex shared_mtx;
+    std::shared_mutex sharedMtx;
     int port;
-    int server_socket;
-    struct sockaddr_in server_address;
-    void handle_client(int client_socket);
-    void handleCommand(std::stringstream& ss, int client_socket);
+    int serverSocket;
+    struct sockaddr_in serverAddress;
+    void handleClient(int clientSocket);
+    void handleCommand(std::stringstream& ss, int clientSocket);
     std::string printDSLHelp();
     bool verbose;
-    void sendResponse(int client_socket, const std::string &response);
-    void printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
+    void sendResponse(int clientSocket, const std::string &response);
+    void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy);
 };
 
 #endif /* SERVER_HPP */

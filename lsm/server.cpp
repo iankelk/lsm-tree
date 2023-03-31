@@ -9,7 +9,7 @@ volatile sig_atomic_t termination_flag = 0;
 
 Server *server_ptr = nullptr;
 
-void sigint_handler(int signal) {
+void sigintHandler(int signal) {
     termination_flag = 1;
     if (server_ptr) {
         server_ptr->close();
@@ -31,7 +31,7 @@ void Server::listenToStdIn()
 
 
 // Thread function to handle client connections
-void Server::handle_client(int client_socket)
+void Server::handleClient(int client_socket)
 {
     std::cout << "New client connected" << std::endl;
 
@@ -92,10 +92,10 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
 
     // put, delete, load, benchmark, and quit operations are exclusive
     if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
-        exclusive_lock = std::unique_lock<std::shared_mutex>(shared_mtx);  
+        exclusive_lock = std::unique_lock<std::shared_mutex>(sharedMtx);  
     // get, range, printStats, and info operations are shared  
     } else if (op == 'g' || op == 'r' || op == 's' || op == 'i') {
-        shared_lock = std::shared_lock<std::shared_mutex>(shared_mtx);
+        shared_lock = std::shared_lock<std::shared_mutex>(sharedMtx);
     } else {
         response = printDSLHelp();
         sendResponse(client_socket, response);
@@ -197,38 +197,38 @@ void Server::run() {
     while (!termination_flag) {
         sockaddr_in client_address;
         socklen_t client_address_size = sizeof(client_address);
-        int client_socket = accept(server_socket, (sockaddr *)&client_address, &client_address_size);
+        int client_socket = accept(serverSocket, (sockaddr *)&client_address, &client_address_size);
         if (client_socket == -1) {
             std::cerr << "Error accepting incoming connection" << std::endl;
             continue;
         }
 
         // Spawn thread to handle client connection
-        std::thread client_thread(&Server::handle_client, this, client_socket);
+        std::thread client_thread(&Server::handleClient, this, client_socket);
         client_thread.detach();
     }
 }
 
 Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
     // Create server socket
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket == -1) {
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == -1) {
         std::cerr << "Error creating server socket" << std::endl;
         exit(1);
     }
 
     // Bind socket to port
-    server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = INADDR_ANY;
-    server_address.sin_port = htons(port);
-    if (bind(server_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    serverAddress.sin_port = htons(port);
+    if (bind(serverSocket, (sockaddr *)&serverAddress, sizeof(serverAddress)) == -1) {
         std::cerr << "Error binding server socket" << std::endl;
         close();
         exit(1);
     }
 
     // Listen for incoming connections
-    if (listen(server_socket, SOMAXCONN) == -1) {
+    if (listen(serverSocket, SOMAXCONN) == -1) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         close();
         exit(1);
@@ -238,15 +238,15 @@ Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
 
 void Server::close() {
     termination_flag = true;
-    if (server_socket != -1) {
-        shutdown(server_socket, SHUT_RDWR);
-        ::close(server_socket);
+    if (serverSocket != -1) {
+        shutdown(serverSocket, SHUT_RDWR);
+        ::close(serverSocket);
     }
 }
 
-void Server::createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy) {
+void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy) {
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bf_error_rate, buffer_num_pages, fanout, level_policy);
+    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy);
     lsmTree->deserialize(LSM_TREE_FILE);
     printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy());
 }
@@ -254,22 +254,22 @@ void Server::createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout
 void printHelp() {
     std::cout << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
-              << "  -e <error_rate>      Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
-              << "  -n <num_pages>       Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
-              << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <level_policy>    Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -e <errorRate>       Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -n <numPages>        Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
+              << "  -f <fanout>          LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -l <levelPolicy>     Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
               << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
 
-void Server::printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy) {
+void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy) {
     std::cout << "LSMTree parameters:" << std::endl;
-    std::cout << "  Bloom filter error rate: " << bf_error_rate << std::endl;
-    std::cout << "  Number of buffer pages: " << buffer_num_pages << std::endl;
+    std::cout << "  Bloom filter error rate: " << bfErrorRate << std::endl;
+    std::cout << "  Number of buffer pages: " << bufferNumPages << std::endl;
     std::cout << "  LSM-tree fanout: " << fanout << std::endl;
-    std::cout << "  Level policy: " << Level::policyToString(level_policy) << std::endl;
+    std::cout << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     std::cout << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
     std::cout << "\nLSM Tree ready and waiting for input" << std::endl;
 }
@@ -329,37 +329,37 @@ int main(int argc, char **argv) {
     // Set signal handler for SIGINT
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = sigint_handler;
+    sa.sa_handler = sigintHandler;
     sigaction(SIGINT, &sa, NULL);
 
     // Default values for options
     int opt, port = DEFAULT_SERVER_PORT;
-    float bf_error_rate = DEFAULT_ERROR_RATE;
-    int buffer_num_pages = DEFAULT_NUM_PAGES;
+    float bfErrorRate = DEFAULT_ERROR_RATE;
+    int bufferNumPages = DEFAULT_NUM_PAGES;
     int fanout = DEFAULT_FANOUT;
-    Level::Policy level_policy = DEFAULT_LEVELING_POLICY;
+    Level::Policy levelPolicy = DEFAULT_LEVELING_POLICY;
     bool verbose = DEFAULT_VERBOSE_LEVEL;
 
     // Parse command line arguments
     while ((opt = getopt(argc, argv, "e:n:f:l:p:hv")) != -1) {
         switch (opt) {
         case 'e':
-            bf_error_rate = atof(optarg);
+            bfErrorRate = atof(optarg);
             break;
         case 'n':
-            buffer_num_pages = atoi(optarg);
+            bufferNumPages = atoi(optarg);
             break;
         case 'f':
             fanout = atoi(optarg);
             break;
         case 'l':
             if (strcmp(optarg, "TIERED") == 0) {
-                level_policy = Level::Policy::TIERED;
+                levelPolicy = Level::Policy::TIERED;
             } else if (strcmp(optarg, "LEVELED") == 0) {
-                level_policy = Level::Policy::LEVELED;
+                levelPolicy = Level::Policy::LEVELED;
             }
             else if (strcmp(optarg, "LAZY_LEVELED") == 0) {
-                level_policy = Level::Policy::LAZY_LEVELED;
+                levelPolicy = Level::Policy::LAZY_LEVELED;
             }
             else {
                 std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, and LAZY_LEVELED" << std::endl;
@@ -388,7 +388,7 @@ int main(int argc, char **argv) {
     server_ptr = &server;
 
     // Create LSM-Tree with the parsed options
-    server.createLSMTree(bf_error_rate, buffer_num_pages, fanout, level_policy);
+    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy);
     // Create a thread for listening to standard input
     std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();

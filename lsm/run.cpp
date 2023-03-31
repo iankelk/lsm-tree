@@ -6,25 +6,25 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
-Run::Run(long max_kv_pairs, double bf_error_rate, bool createFile, LSMTree* lsm_tree = nullptr) :
-    max_kv_pairs(max_kv_pairs),
-    bf_error_rate(bf_error_rate),
-    bloom_filter(max_kv_pairs, bf_error_rate),
-    tmp_file(""),
+Run::Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree = nullptr) :
+    maxKvPairs(maxKvPairs),
+    bfErrorRate(bfErrorRate),
+    bloomFilter(maxKvPairs, bfErrorRate),
+    tmpFile(""),
     size(0),
-    max_key(0),
+    maxKey(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED),
-    lsm_tree(lsm_tree)
+    lsmTree(lsmTree)
 
 {
     if (createFile) {
-        char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
-        fd = mkstemp(tmp_fn);
+        char tmpFn[] = SSTABLE_FILE_TEMPLATE;
+        fd = mkstemp(tmpFn);
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die("Run::Constructor: Failed to create temporary file for Run");
         }
-        tmp_file = tmp_fn;
-        fence_pointers.reserve(max_kv_pairs / getpagesize());
+        tmpFile = tmpFn;
+        fencePointers.reserve(maxKvPairs / getpagesize());
     }    
 }
 
@@ -34,7 +34,7 @@ Run::~Run() {
 
 void Run::deleteFile() {
     closeFile();
-    remove(tmp_file.c_str());
+    remove(tmpFile.c_str());
 }
 
 // Close the file descriptor for the temporary file for when we are performing point or range queries
@@ -45,27 +45,27 @@ void Run::closeFile() {
 
 void Run::put(KEY_t key, VAL_t val) {
     int result;
-    if (size >= max_kv_pairs) {
+    if (size >= maxKvPairs) {
         die("Run::put: Attempting to add to full Run");
     }
 
-    kv_pair kv = {key, val};
-    bloom_filter.add(key);
+    kvPair kv = {key, val};
+    bloomFilter.add(key);
     // Add the key to the fence pointers vector if it is a multiple of the page size. 
     // We can assume it is sorted because the buffer is sorted
     if (size % getpagesize() == 0) {
-        fence_pointers.push_back(key);
+        fencePointers.push_back(key);
     }
     // If the key is greater than the max key, update the max key
-    if (key > max_key) {
-        max_key = key;
+    if (key > maxKey) {
+        maxKey = key;
     }
 
     // Write the key-value pair to the temporary file
-    result = write(fd, &kv, sizeof(kv_pair));
+    result = write(fd, &kv, sizeof(kvPair));
     assert(result != -1);
     size++;
-    lsm_tree->incrementIoCount();
+    lsmTree->incrementIoCount();
 }
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
@@ -77,44 +77,44 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     // Check if the key is in the bloom filter and if it is in the range of the fence pointers
-    if (key < fence_pointers.front() || key > max_key || !bloom_filter.contains(key)) {
+    if (key < fencePointers.front() || key > maxKey || !bloomFilter.contains(key)) {
         return nullptr;
     }
     // Binary search for the page containing the key in the fence pointers vector
-    auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), key);
-    auto page_index = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
+    auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), key);
+    auto pageIndex = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter)) - 1;
 
-    if (page_index < 0) {
+    if (pageIndex < 0) {
         die("Run::get: Negative index from fence pointer");
     }
 
     // Open the file descriptor for the temporary file
-    fd = open(tmp_file.c_str(), O_RDONLY);
+    fd = open(tmpFile.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         die("Run::get: Failed to open temporary file for Run");
     }
 
     // Search the page for the key
-    long offset = page_index * getpagesize() * sizeof(kv_pair);
-    long end = offset + getpagesize() * sizeof(kv_pair);
+    long offset = pageIndex * getpagesize() * sizeof(kvPair);
+    long end = offset + getpagesize() * sizeof(kvPair);
 
     lseek(fd, offset, SEEK_SET);
-    kv_pair kv;
-    lsm_tree->incrementIoCount();
+    kvPair kv;
+    lsmTree->incrementIoCount();
     // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
     // TODO: This is a linear search. Could be better with a binary search?
-    while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < end) {
+    while (read(fd, &kv, sizeof(kvPair)) > 0 && offset < end) {
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
-            lsm_tree->incrementBfTruePositives();
+            lsmTree->incrementBfTruePositives();
             truePositives++;
             break;
         }
-        offset += sizeof(kv_pair);
+        offset += sizeof(kvPair);
     }
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
-        lsm_tree->incrementBfFalsePositives();
+        lsmTree->incrementBfFalsePositives();
         falsePositives++;
     }
     closeFile();
@@ -126,32 +126,32 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     long searchPageStart, searchPageEnd;
 
     // Initialize an empty map
-    std::map<KEY_t, VAL_t> range_map;
+    std::map<KEY_t, VAL_t> rangeMap;
 
     // Check if the run is empty
     if (size == 0) {
-        return range_map;
+        return rangeMap;
     }
 
     // Check if the range is in the range of the fence pointers
-    if (end < fence_pointers.front() || start > max_key) {
-        return range_map;
+    if (end < fencePointers.front() || start > maxKey) {
+        return rangeMap;
     }
     // Check if the start of the range is less than the first fence pointer
-    if (start < fence_pointers.front()) {
+    if (start < fencePointers.front()) {
         searchPageStart = 0;
     } else {
         // Binary search for the page containing the start key in the fence pointers vector
-        auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), start);
-        searchPageStart = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
+        auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), start);
+        searchPageStart = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter)) - 1;
     }
     // Check if the end of the range is greater than the max key
-    if (end > max_key) {
-        searchPageEnd = fence_pointers.size();
+    if (end > maxKey) {
+        searchPageEnd = fencePointers.size();
     } else {
         // Binary search for the page containing the end key in the fence pointers vector
-        auto fence_pointers_iter = std::upper_bound(fence_pointers.begin(),  fence_pointers.end(), end);
-        searchPageEnd = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter));
+        auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), end);
+        searchPageEnd = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter));
     }
 
     // Check that the start and end page indices are valid
@@ -163,27 +163,27 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         die("Run::range: Start page index is greater than or equal to end page index");
     }
     // Open the file descriptor for the temporary file
-    fd = open(tmp_file.c_str(), O_RDONLY);
+    fd = open(tmpFile.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         die("Run::range: Failed to open temporary file for Run");
     }
-    lsm_tree->incrementIoCount();
+    lsmTree->incrementIoCount();
     bool stopSearch = false;
     // Search the pages for the keys in the range
-    for (long page_index = searchPageStart; page_index < searchPageEnd; page_index++) {
-        long offset = page_index * getpagesize() * sizeof(kv_pair);
-        long offset_end = searchPageEnd * getpagesize() * sizeof(kv_pair);
+    for (long pageIndex = searchPageStart; pageIndex < searchPageEnd; pageIndex++) {
+        long offset = pageIndex * getpagesize() * sizeof(kvPair);
+        long offset_end = searchPageEnd * getpagesize() * sizeof(kvPair);
         lseek(fd, offset, SEEK_SET);
-        kv_pair kv;
+        kvPair kv;
         // Search the page and keep the most recently added value'
-        while (read(fd, &kv, sizeof(kv_pair)) > 0 && offset < offset_end) {
+        while (read(fd, &kv, sizeof(kvPair)) > 0 && offset < offset_end) {
             if (kv.key >= start && kv.key <= end) {
-                range_map[kv.key] = kv.value;
+                rangeMap[kv.key] = kv.value;
             } else if (kv.key > end) {
                 stopSearch = true;
                 break;
             }
-            offset += sizeof(kv_pair);
+            offset += sizeof(kvPair);
         }
         if (stopSearch) {
             break;
@@ -192,27 +192,27 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     closeFile();
 
     // If the last key in the range is the end key, remove it since end is not inclusive
-    if (range_map.size() > 0 && range_map.rbegin()->first == end) {
-        range_map.erase(range_map.rbegin()->first);
+    if (rangeMap.size() > 0 && rangeMap.rbegin()->first == end) {
+        rangeMap.erase(rangeMap.rbegin()->first);
     }
-    return range_map;
+    return rangeMap;
 }
 
  std::map<KEY_t, VAL_t> Run::getMap() {
     std::map<KEY_t, VAL_t> map;
 
-    if (lsm_tree == nullptr) {
+    if (lsmTree == nullptr) {
         die("Run::getMap: LSM tree is null");
     }
     // Open the file descriptor for the temporary file
-    fd = open(tmp_file.c_str(), O_RDONLY);
+    fd = open(tmpFile.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
         die("Run::getMap: Failed to open temporary file for Run");
     }
     // Read all the key-value pairs from the temporary file
-    lsm_tree->incrementIoCount();
-    kv_pair kv;
-    while (read(fd, &kv, sizeof(kv_pair)) > 0) {
+    lsmTree->incrementIoCount();
+    kvPair kv;
+    while (read(fd, &kv, sizeof(kvPair)) > 0) {
         map[kv.key] = kv.value;
     }
     closeFile();
@@ -220,34 +220,34 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
  }
 
 long Run::getMaxKvPairs() {
-    return max_kv_pairs;
+    return maxKvPairs;
 }
 
 json Run::serialize() const {
     nlohmann::json j;
-    j["max_kv_pairs"] = max_kv_pairs;
-    j["bf_error_rate"] = bf_error_rate;
-    j["bloom_filter"] = bloom_filter.serialize();
-    j["fence_pointers"] = fence_pointers;
-    j["tmp_file"] = tmp_file;
+    j["maxKvPairs"] = maxKvPairs;
+    j["bfErrorRate"] = bfErrorRate;
+    j["bloomFilter"] = bloomFilter.serialize();
+    j["fencePointers"] = fencePointers;
+    j["tmpFile"] = tmpFile;
     j["size"] = size;
-    j["max_key"] = max_key;
-    j["true_positives"] = truePositives;
-    j["false_positives"] = falsePositives;
+    j["maxKey"] = maxKey;
+    j["truePositives"] = truePositives;
+    j["falsePositives"] = falsePositives;
     return j;
 }
 
 void Run::deserialize(const json& j) {
-    max_kv_pairs = j["max_kv_pairs"];
-    bf_error_rate = j["bf_error_rate"];
+    maxKvPairs = j["maxKvPairs"];
+    bfErrorRate = j["bfErrorRate"];
 
-    bloom_filter.deserialize(j["bloom_filter"]);
-    fence_pointers = j["fence_pointers"].get<std::vector<KEY_t>>();
-    tmp_file = j["tmp_file"];
+    bloomFilter.deserialize(j["bloomFilter"]);
+    fencePointers = j["fencePointers"].get<std::vector<KEY_t>>();
+    tmpFile = j["tmpFile"];
     size = j["size"];
-    max_key = j["max_key"];
-    truePositives = j["true_positives"];
-    falsePositives = j["false_positives"];
+    maxKey = j["maxKey"];
+    truePositives = j["truePositives"];
+    falsePositives = j["falsePositives"];
 }
 
 float Run::getBfFalsePositiveRate() {
@@ -259,8 +259,8 @@ float Run::getBfFalsePositiveRate() {
     }
 }
 
-void Run::setLSMTree(LSMTree* lsm_tree) {
-    this->lsm_tree = lsm_tree;
+void Run::setLSMTree(LSMTree* lsmTree) {
+    this->lsmTree = lsmTree;
 }
 
 // Example:
@@ -269,8 +269,8 @@ std::string Run::getBloomFilterSummary() {
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     std::stringstream ss;
-    ss << "Bloom Filter Size: " << addCommas(std::to_string(bloom_filter.getNumBits())) << ", Num Hash Functions: " << bloom_filter.getNumHashes() << 
+    ss << "Bloom Filter Size: " << addCommas(std::to_string(bloomFilter.getNumBits())) << ", Num Hash Functions: " << bloomFilter.getNumHashes() << 
     ", FPR: " << bfStatus << ", TP: " << addCommas(std::to_string(truePositives)) << ", FP: " << addCommas(std::to_string(falsePositives))
-    << ", Max Keys: " << addCommas(std::to_string(max_kv_pairs)) <<  ", Number of Keys: " << addCommas(std::to_string(size));
+    << ", Max Keys: " << addCommas(std::to_string(maxKvPairs)) <<  ", Number of Keys: " << addCommas(std::to_string(size));
     return ss.str();
 }

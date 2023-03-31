@@ -13,13 +13,13 @@ public:
     bool contains(const KEY_t key);
     json serialize() const;
     void deserialize(const json& j);
-    int getNumBits() { return num_bits; }
-    int getNumHashes() { return num_hashes; }
+    int getNumBits() { return numBits; }
+    int getNumHashes() { return numHashes; }
 private:
     int capacity;
-    double error_rate;
-    int num_bits;
-    int num_hashes;
+    double errorRate;
+    int numBits;
+    int numHashes;
     boost::dynamic_bitset<> bits;
 };
 

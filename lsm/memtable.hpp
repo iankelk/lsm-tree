@@ -7,7 +7,7 @@ using json = nlohmann:: json;
 
 class Memtable {
 public:
-    explicit Memtable(int max_kv_pairs) : max_kv_pairs(max_kv_pairs) {}
+    explicit Memtable(int maxKvPairs) : maxKvPairs(maxKvPairs) {}
     ~Memtable() {};
 
     bool put(KEY_t key, VAL_t value);
@@ -20,7 +20,7 @@ public:
     json serialize() const;
     void deserialize(const json& j);
 private:
-    long max_kv_pairs;
+    long maxKvPairs;
     std::map<KEY_t, VAL_t> table_;  
 };
 

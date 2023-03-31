@@ -48,7 +48,7 @@ typedef int32_t VAL_t;
 #define OK "<OK>"
 
 // Key Value Pair
-struct kv_pair {
+struct kvPair {
     KEY_t key;
     VAL_t value;
 };

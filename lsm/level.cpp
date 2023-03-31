@@ -7,31 +7,31 @@
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> run_ptr) {
     // Check if there is enough space in the level to add the run
-    if (kv_pairs + run_ptr->getMaxKvPairs() > max_kv_pairs) {
+    if (kvPairs + run_ptr->getMaxKvPairs() > maxKvPairs) {
         die("Level::put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
-    // Increment the kv_pairs in the level
-    kv_pairs += runs.front()->getMaxKvPairs(); 
+    // Increment the kvPairs in the level
+    kvPairs += runs.front()->getMaxKvPairs(); 
 }
 
 // Dump the contents of the level
 void Level::dump() {
     std::cout << "Level: " << std::endl;
     std::cout << "  number of runs: " << runs.size() << std::endl;
-    std::cout << "  kv_pairs: " << kv_pairs << std::endl;
-    std::cout << "  max_kv_pairs: " << max_kv_pairs << std::endl;
-    std::cout << "  buffer_size: " << buffer_size << std::endl;
+    std::cout << "  kvPairs: " << kvPairs << std::endl;
+    std::cout << "  maxKvPairs: " << maxKvPairs << std::endl;
+    std::cout << "  bufferSize: " << bufferSize << std::endl;
     std::cout << "  fanout: " << fanout << std::endl;
-    std::cout << "  level_num: " << level_num <<std:: endl;
-    std::cout << "  is_last_level: " << is_last_level << std::endl;
-    std::cout << "  level_policy: " << level_policy << std::endl;
+    std::cout << "  levelNum: " << levelNum <<std:: endl;
+    std::cout << "  isLastLevel: " << isLastLevel << std::endl;
+    std::cout << "  levelPolicy: " << levelPolicy << std::endl;
     std::cout << "  runs: " << std::endl;
     // Iterate through the runs in the level
     for (auto &run : runs) {
         // Print out the map of the run returned by getMap()
         for (auto kv : run->getMap()) {
-            std::cout << "    " << kv.first << " : " << kv.second << " : L" << level_num << std::endl;
+            std::cout << "    " << kv.first << " : " << kv.second << " : L" << levelNum << std::endl;
         }
     }
 }
@@ -44,7 +44,7 @@ void Level::compactLevel(double error_rate, State state) {
     }
 
     if (state == State::FULL) {
-        size = getLevelSize(level_num);
+        size = getLevelSize(levelNum);
     }
     else if (state == State::TWO_RUNS) {
         size = runs[0]->getMaxKvPairs() + runs[1]->getMaxKvPairs();
@@ -78,16 +78,16 @@ void Level::compactLevel(double error_rate, State state) {
         run->deleteFile();
     }
 
-    // Clear the runs queue and reset the kv_pairs
+    // Clear the runs queue and reset the kvPairs
     runs.clear();
-    kv_pairs = 0;
+    kvPairs = 0;
 
-    put(std::make_unique<Run>(size, error_rate, true, lsm_tree));
+    put(std::make_unique<Run>(size, error_rate, true, lsmTree));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
         // Check if the key-value pair is a tombstone and if the level is the last level
-        if (!(is_last_level && kv.second == TOMBSTONE)) {
+        if (!(isLastLevel && kv.second == TOMBSTONE)) {
             runs.front()->put(kv.first, kv.second);
         }
     }
@@ -95,69 +95,69 @@ void Level::compactLevel(double error_rate, State state) {
 }
 
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
-long Level::getLevelSize(int level_num) {
-    // Check if the level_num - 1 is in the level_sizes map. 
+long Level::getLevelSize(int levelNum) {
+    // Check if the levelNum - 1 is in the levelSizes map. 
     // If it is, get the level size from the map. If not, calculate it and cache it
-    if (level_sizes.find(level_num) != level_sizes.end()) {
-        return level_sizes[level_num];
+    if (levelSizes.find(levelNum) != levelSizes.end()) {
+        return levelSizes[levelNum];
     } else {
-        long level_size = pow(fanout, level_num) * buffer_size;
-        level_sizes[level_num] = level_size;
+        long level_size = pow(fanout, levelNum) * bufferSize;
+        levelSizes[levelNum] = level_size;
         return level_size;
     }
 }
 
 // Returns true if there is enough space in the level to flush the buffer
 bool Level::willBufferFit() {
-    // Check if the sum of the current level's runs' kv_pairs and the buffer size is less than or equal to this level's max_kv_pairs
-    return (kv_pairs + buffer_size <= max_kv_pairs);
+    // Check if the sum of the current level's runs' kvPairs and the buffer size is less than or equal to this level's maxKvPairs
+    return (kvPairs + bufferSize <= maxKvPairs);
 }
 
-// Returns true if there is enough space in the level to add a run with max_kv_pairs
+// Returns true if there is enough space in the level to add a run with maxKvPairs
 bool Level::willLowerLevelFit() {
     // Get the previous level number, or 1 if this is the first level
-    int prevLevel = (level_num - 2) > 0 ? (level_num - 2) : 1;
+    int prevLevel = (levelNum - 2) > 0 ? (levelNum - 2) : 1;
     // Get the size of the previous level
     long prevLevelSize = getLevelSize(prevLevel);
-    return (kv_pairs + prevLevelSize <= max_kv_pairs);
+    return (kvPairs + prevLevelSize <= maxKvPairs);
 }
 
-// Count the number of kv_pairs in a level by accumulating the runs queue
+// Count the number of kvPairs in a level by accumulating the runs queue
 int Level::addUpKVPairsInLevel() {
     return std::accumulate(runs.begin(), runs.end(), 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 }
 
 // Returns the level number
 int Level::getLevelNum() const {
-    return level_num;
+    return levelNum;
 }
 
 Level::Policy Level::getLevelPolicy() const {
-    return level_policy;
+    return levelPolicy;
 }
-// Get the number of kv_pairs in the level
+// Get the number of kvPairs in the level
 long Level::getKvPairs() const {
-    return kv_pairs;
+    return kvPairs;
 }
-// Set the number of kv_pairs in the level
-void Level::setKvPairs(long kv_pairs) {
-    this->kv_pairs = kv_pairs;
+// Set the number of kvPairs in the level
+void Level::setKvPairs(long kvPairs) {
+    this->kvPairs = kvPairs;
 }
 
 // Return the maximum number of key-value pairs allowed in the memtable
 long Level::getMaxKvPairs() const {
-    return max_kv_pairs;
+    return maxKvPairs;
 }
 
 json Level::serialize() const {
     json j;
-    j["max_kv_pairs"] = max_kv_pairs;
-    j["buffer_size"] = buffer_size;
+    j["maxKvPairs"] = maxKvPairs;
+    j["bufferSize"] = bufferSize;
     j["fanout"] = fanout;
-    j["level_num"] = level_num;
-    j["is_last_level"] = is_last_level;
-    j["level_policy"] = policyToString(level_policy);
-    j["kv_pairs"] = kv_pairs;
+    j["levelNum"] = levelNum;
+    j["isLastLevel"] = isLastLevel;
+    j["levelPolicy"] = policyToString(levelPolicy);
+    j["kvPairs"] = kvPairs;
     j["runs"] = json::array();
     for (const auto& run : runs) {
         j["runs"].push_back(run->serialize());
@@ -166,19 +166,19 @@ json Level::serialize() const {
 }
 
 void Level::deserialize(const json& j) {
-    buffer_size = j["buffer_size"];
+    bufferSize = j["bufferSize"];
     fanout = j["fanout"];
-    level_num = j["level_num"];
-    is_last_level = j["is_last_level"];
-    max_kv_pairs = j["max_kv_pairs"];
-    kv_pairs = j["kv_pairs"];
+    levelNum = j["levelNum"];
+    isLastLevel = j["isLastLevel"];
+    maxKvPairs = j["maxKvPairs"];
+    kvPairs = j["kvPairs"];
 
-    std::string policy_str = j["level_policy"];
-    level_policy = stringToPolicy(policy_str);
+    std::string policy_str = j["levelPolicy"];
+    levelPolicy = stringToPolicy(policy_str);
 
-    for (const auto& run_json : j["runs"]) {
-        std::unique_ptr<Run> run = std::make_unique<Run>(max_kv_pairs, DEFAULT_ERROR_RATE, false, lsm_tree);
-        run->deserialize(run_json);
+    for (const auto& runJson : j["runs"]) {
+        std::unique_ptr<Run> run = std::make_unique<Run>(maxKvPairs, DEFAULT_ERROR_RATE, false, lsmTree);
+        run->deserialize(runJson);
         runs.emplace_back(std::move(run));
     }
 }

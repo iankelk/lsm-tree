@@ -21,10 +21,10 @@ public:
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
-    float getBfErrorRate() const { return bf_error_rate; }
+    float getBfErrorRate() const { return bfErrorRate; }
     int getBufferNumPages() { return buffer.getMaxKvPairs(); }
     int getFanout() const { return fanout; }
-    Level::Policy getLevelPolicy() const { return level_policy; }
+    Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
     void incrementIoCount() { ioCount++; }
@@ -33,13 +33,13 @@ public:
     std::string getBloomFilterSummary();
 private:
     Memtable buffer;
-    double bf_error_rate;
+    double bfErrorRate;
     int fanout;
-    Level::Policy level_policy;
+    Level::Policy levelPolicy;
     int countLogicalPairs();
-    void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
+    void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
-    void merge_levels(int currentLevelNum);
+    void mergeLevels(int currentLevelNum);
     long long bfFalsePositives = 0;
     long long bfTruePositives = 0;
     long long ioCount = 0;

@@ -20,25 +20,25 @@ public:
         UNKNOWN
     };
     // constructor
-    Level(long bs, int f, Policy l, int ln, LSMTree* lsm_tree) :
-    buffer_size(bs), fanout(f), level_policy(l), level_num(ln),
-    is_last_level(false), kv_pairs(0), max_kv_pairs(pow(f, ln) * bs), lsm_tree(lsm_tree) {};
-    
+    Level(long bs, int f, Policy l, int ln, LSMTree* lsmTree) :
+    bufferSize(bs), fanout(f), levelPolicy(l), levelNum(ln),
+    isLastLevel(false), kvPairs(0), maxKvPairs(pow(f, ln) * bs), lsmTree(lsmTree) {};
+
     Level() = default; // default constructor
     ~Level() {}; // destructor
     std::deque<std::unique_ptr<Run>> runs; // std::deque of std::unique_ptr pointing to runs in the level
-    void put(std::unique_ptr<Run> run_ptr); // adds a std::unique_ptr to the runs queue
+    void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
     void dump(); // dump prints the contents of the level. TODO: remove this function
-    void compactLevel(double error_rate, State state);
-    long getLevelSize(int level_num); 
-    bool willLowerLevelFit(); // true if there is enough space in the level to add a run with max_kv_pairs
+    void compactLevel(double errorRate, State state);
+    long getLevelSize(int levelNum); 
+    bool willLowerLevelFit(); // true if there is enough space in the level to add a run with maxKvPairs
     bool willBufferFit(); // true if there is enough space in the level to flush the memtable
-    int addUpKVPairsInLevel(); // Iterates over the runs to calculate the total number of kv_pairs in the level
+    int addUpKVPairsInLevel(); // Iterates over the runs to calculate the total number of kvPairs in the level
     int getLevelNum() const;
     Policy getLevelPolicy() const;
-    long getKvPairs() const;  // Get the number of kv_pairs in the level
-    void setKvPairs(long kv_pairs); // Set the number of kv_pairs in the level
-    long getMaxKvPairs() const; // Get the max number of kv_pairs in the level
+    long getKvPairs() const;  // Get the number of kvPairs in the level
+    void setKvPairs(long kvPairs); // Set the number of kvPairs in the level
+    long getMaxKvPairs() const; // Get the max number of kvPairs in the level
     static std::string policyToString(Policy policy) {
         switch (policy) {
             case Policy::TIERED: return "TIERED";
@@ -62,37 +62,37 @@ public:
 
     // copy constructor
     Level(Level&& other) noexcept
-        : level_num(other.level_num),
+        : levelNum(other.levelNum),
           fanout(other.fanout),
-          max_kv_pairs(other.max_kv_pairs),
-          buffer_size(other.buffer_size),
-          level_policy(other.level_policy),
-          kv_pairs(other.kv_pairs),
-          lsm_tree(other.lsm_tree),
+          maxKvPairs(other.maxKvPairs),
+          bufferSize(other.bufferSize),
+          levelPolicy(other.levelPolicy),
+          kvPairs(other.kvPairs),
+          lsmTree(other.lsmTree),
           runs(std::move(other.runs)) {
     }
     // copy assignment operator 
     Level& operator=(Level&& other) noexcept {
-        level_num = other.level_num;
+        levelNum = other.levelNum;
         fanout = other.fanout;
-        max_kv_pairs = other.max_kv_pairs;
-        buffer_size = other.buffer_size;
-        level_policy = other.level_policy;
-        kv_pairs = other.kv_pairs;
-        lsm_tree = other.lsm_tree;
+        maxKvPairs = other.maxKvPairs;
+        bufferSize = other.bufferSize;
+        levelPolicy = other.levelPolicy;
+        kvPairs = other.kvPairs;
+        lsmTree = other.lsmTree;
         runs = std::move(other.runs);
         return *this;
     }
 private:
-    int level_num;
-    bool is_last_level;
-    long kv_pairs; // the number of key-value pairs in the level    
-    Policy level_policy; // can be TIERED, LEVELED, or LAZY_LEVELED
-    long max_kv_pairs; // the maximum number of key-value pairs that can be in the level
-    long buffer_size; // Memtable size
+    int levelNum;
+    bool isLastLevel;
+    long kvPairs; // the number of key-value pairs in the level    
+    Policy levelPolicy; // can be TIERED, LEVELED, or LAZY_LEVELED
+    long maxKvPairs; // the maximum number of key-value pairs that can be in the level
+    long bufferSize; // Memtable size
     int fanout;
-    std::map<int, long> level_sizes; // Vector of level sizes cached for faster lookup
-    LSMTree* lsm_tree;
+    std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup
+    LSMTree* lsmTree;
 };
 
 #endif /* LEVEL_HPP */

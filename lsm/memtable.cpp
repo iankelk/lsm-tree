@@ -1,7 +1,7 @@
 #include "memtable.hpp"
 
 // Insert a key-value pair into the memtable. If the key already exists, update its value to the new value. 
-// If the key does not exist and inserting it would cause the size of table_ to exceed max_kv_pairs, return false
+// If the key does not exist and inserting it would cause the size of table_ to exceed maxKvPairs, return false
 bool Memtable::put(KEY_t key, VAL_t value) {
     // Check if key already exists so we can update its value and not worry about the memtable growing
     auto it = table_.find(key);
@@ -10,7 +10,7 @@ bool Memtable::put(KEY_t key, VAL_t value) {
         return true;
     }
     // Check if inserting the new key-value pair would cause the memtable to grow too large
-    if (table_.size() >= max_kv_pairs) {
+    if (table_.size() >= maxKvPairs) {
         return false;
     }
     // Insert the new key-value pair
@@ -59,20 +59,20 @@ std::map<KEY_t, VAL_t> Memtable::getMap() const {
 }
 // Return the maximum number of key-value pairs allowed in the memtable
 long Memtable::getMaxKvPairs() const {
-    return max_kv_pairs;
+    return maxKvPairs;
 }
 
 // Serialize the memtable to a JSON object
 json Memtable::serialize() const {
     json j;
-    j["max_kv_pairs"] = max_kv_pairs;
+    j["maxKvPairs"] = maxKvPairs;
     j["table"] = table_;
     return j;
 }
 
 // Deserialize the memtable from a JSON object
 void Memtable::deserialize(const json& j) {
-    max_kv_pairs = j["max_kv_pairs"].get<long>();
+    maxKvPairs = j["maxKvPairs"].get<long>();
     std::map<KEY_t, VAL_t> table = j["table"].get<std::map<KEY_t, VAL_t>>();
     for (const auto& kv : table) {
         put(kv.first, kv.second);

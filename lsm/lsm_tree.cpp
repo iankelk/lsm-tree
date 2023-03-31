@@ -7,12 +7,12 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
-LSMTree::LSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy) :
-    bf_error_rate(bf_error_rate), fanout(fanout), level_policy(level_policy), bfFalsePositives(0), bfTruePositives(0),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kv_pair))
+LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy) :
+    bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair))
 {
     // Create the first level
-    levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM, this);
+    levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
 }
 
 // Calculate whether an std::vector<Level>::iterator is pointing to the last level
@@ -29,11 +29,11 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
-        merge_levels(FIRST_LEVEL_NUM);
+        mergeLevels(FIRST_LEVEL_NUM);
     }
     
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bf_error_rate, true, this));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, this));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -44,9 +44,9 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Close the run's file
     levels.front().runs.front()->closeFile();
 
-    // If level_policy is Level::LEVELED, or if level_policy is Level::LAZY_LEVELED and there is only one level, compact the first level
-    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && isLastLevel(levels.begin()))) {
-        levels.front().compactLevel(bf_error_rate, level_policy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
+    // If levelPolicy is Level::LEVELED, or if levelPolicy is Level::LAZY_LEVELED and there is only one level, compact the first level
+    if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(levels.begin()))) {
+        levels.front().compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
     }
 
     // Clear the buffer and add the key-value pair to it
@@ -58,7 +58,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 // Given an iterator for the levels vector, check to see if there is space to insert another run
 // If the next level does not have space for the current level, recursively merge the next level downwards
 // until a level has space for a new run in it.
-void LSMTree::merge_levels(int currentLevelNum) {
+void LSMTree::mergeLevels(int currentLevelNum) {
     std::vector<Level>::iterator it;
     std::vector<Level>::iterator next;
 
@@ -71,7 +71,7 @@ void LSMTree::merge_levels(int currentLevelNum) {
     } else {
         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
         if (it + 1 == levels.end()) {
-            levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, currentLevelNum + 1, this);
+            levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
             // Get the iterators "it" and "next" which are lost when the vector is resized
             it = levels.end() - 2;
             next = levels.end() - 1;
@@ -79,7 +79,7 @@ void LSMTree::merge_levels(int currentLevelNum) {
         } else {
             next = it + 1;
             if (!next->willLowerLevelFit()) {
-                merge_levels(currentLevelNum + 1);
+                mergeLevels(currentLevelNum + 1);
                 // These iterators need to be reset when returning from the recursion in case the levels vector is resized
                 it = levels.begin() + currentLevelNum - 1;
                 next = levels.begin() + currentLevelNum;
@@ -87,15 +87,15 @@ void LSMTree::merge_levels(int currentLevelNum) {
         }
     }
 
-    if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-        it->compactLevel(bf_error_rate, Level::FULL);
+    if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
+        it->compactLevel(bfErrorRate, Level::FULL);
         // Move the single run pointed to by runs.begin() into the next level
         next->runs.push_back(std::move(it->runs.front()));
     } 
-    if (level_policy == Level::LEVELED || (level_policy == Level::LAZY_LEVELED && isLastLevel(next))) {
+    if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
         // Merge the current level into the next level by moving the entire deque of runs into the next level
         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
-        next->compactLevel(bf_error_rate, level_policy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
+        next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
     }
 
     // Update the number of key/value pairs in the next level. 
@@ -170,13 +170,13 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     int allPossibleKeys = end - start;
 
     // Search the buffer for the key range and return the range map as a unique_ptr
-    std::unique_ptr<std::map<KEY_t, VAL_t>> range_map = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
 
     // If the range has the size of the entire range, return the range
-    if (range_map->size() == allPossibleKeys) {
+    if (rangeMap->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
-        removeTombstones(range_map);
-        return range_map;
+        removeTombstones(rangeMap);
+        return rangeMap;
     }
 
     // If all of the keys are not found in the buffer, search the levels
@@ -188,19 +188,19 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
             if (temp_map.size() != 0) {
                 for (const auto &kv : temp_map) {
                     // Only add the key/value pair if the key is not already in the range map
-                    range_map->try_emplace(kv.first, kv.second);
+                    rangeMap->try_emplace(kv.first, kv.second);
                 }
             } 
             // If the range map has the size of the entire range, return the range
-            if (range_map->size() == allPossibleKeys) {
-                removeTombstones(range_map);
-                return range_map;
+            if (rangeMap->size() == allPossibleKeys) {
+                removeTombstones(rangeMap);
+                return rangeMap;
             }
         }
     }
     // Remove all the TOMBSTONES from the range map
-    removeTombstones(range_map);
-    return range_map;
+    removeTombstones(rangeMap);
+    return rangeMap;
 }
 
 // Given a key, delete the key-value pair from the tree.
@@ -281,8 +281,8 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
 }
 
 void LSMTree::load(const std::string& filename) {
-    std::vector<kv_pair> kv_pairs;
-    kv_pair kv;
+    std::vector<kvPair> kvPairs;
+    kvPair kv;
     // Create a file stream
     std::ifstream file(filename, std::ios::binary);
 
@@ -291,15 +291,15 @@ void LSMTree::load(const std::string& filename) {
         std::cerr << "Unable to open file " << filename << std::endl;
         return;
     }
-    // Read the file into the vector of kv_pair structs.
-    while (file.read((char*)&kv, sizeof(kv_pair))) {
-        kv_pairs.push_back(kv);
+    // Read the file into the vector of kvPair structs.
+    while (file.read((char*)&kv, sizeof(kvPair))) {
+        kvPairs.push_back(kv);
     }
     std::cout << "Loaded: " << filename << std::endl;
     // Start measuring time. This way we only measure the time it takes put() to insert the key/value pairs
     auto start_time = std::chrono::high_resolution_clock::now();
     // Iterate through the vector and call put() on each key/value pair
-    for (auto it = kv_pairs.begin(); it != kv_pairs.end(); it++) {
+    for (auto it = kvPairs.begin(); it != kvPairs.end(); it++) {
         put(it->key, it->value);
     }
     // End measuring time, calculate the duration, and print it
@@ -400,7 +400,7 @@ std::string LSMTree::printTree() {
     output += "Number of I/O operations: " + addCommas(std::to_string(ioCount)) + "\n";
     output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
-    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair))) + "\n";
+    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + "\n";
     output += "Number of levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";
@@ -416,14 +416,14 @@ std::string LSMTree::printTree() {
     return output;
 }
 
-// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> range_map
-void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map) {
+// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
+void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
     // Create an iterator to iterate through the map
-    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
+    std::map<KEY_t, VAL_t>::iterator it = rangeMap->begin();
     // Iterate through the map and remove all TOMBSTONES
-    while (it != range_map->end()) {
+    while (it != rangeMap->end()) {
         if (it->second == TOMBSTONE) {
-            it = range_map->erase(it);
+            it = rangeMap->erase(it);
         } else {
             ++it;
         }
@@ -458,9 +458,9 @@ std::string LSMTree::getBloomFilterSummary() {
 json LSMTree::serialize() const {
     json j;
     j["buffer"] = buffer.serialize();
-    j["bf_error_rate"] = bf_error_rate;
+    j["bfErrorRate"] = bfErrorRate;
     j["fanout"] = fanout;
-    j["level_policy"] = Level::policyToString(level_policy);
+    j["levelPolicy"] = Level::policyToString(levelPolicy);
     j["levels"] = json::array();
     j["bfFalsePositives"] = bfFalsePositives;
     j["bfTruePositives"] = bfTruePositives;
@@ -494,9 +494,9 @@ void LSMTree::deserialize(const std::string& filename) {
     json treeJson;
     infile >> treeJson;
 
-    bf_error_rate = treeJson["bf_error_rate"].get<float>();
+    bfErrorRate = treeJson["bfErrorRate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
-    level_policy = Level::stringToPolicy(treeJson["level_policy"].get<std::string>());
+    levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
     bfFalsePositives = treeJson["bfFalsePositives"].get<long long>();
     bfTruePositives = treeJson["bfTruePositives"].get<long long>();
     ioCount = treeJson["ioCount"].get<long long>();
