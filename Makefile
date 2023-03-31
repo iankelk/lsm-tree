@@ -1,4 +1,4 @@
-SRCS = lsm/dynamic_bitset.cpp lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level.cpp lsm/lsm_tree.cpp
+SRCS = lsm/dynamic_bitset.cpp lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level.cpp lsm/lsm_tree.cpp lib/MurmurHash3.cpp
 
 # Ensure bin directory exists
 $(shell mkdir -p bin)

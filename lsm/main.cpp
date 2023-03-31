@@ -99,14 +99,27 @@ int main() {
 }
 */
 
+// #include <iostream>
+// #include "bloom_filter.hpp"
+
+// int main() {
+//     BloomFilter bf(1000, 0.01);
+//     bf.add(12345);
+//     bf.add(123456);
+//     std::cout << bf.contains(12345) << std::endl; // prints 1
+//     std::cout << bf.contains(54321) << std::endl; // prints 0
+//     return 0;
+// }
+
 #include <iostream>
-#include "bloom_filter.hpp"
+#include <vector>
 
 int main() {
-    BloomFilter bf(1000, 0.01);
-    bf.add(12345);
-    bf.add(123456);
-    std::cout << bf.contains(12345) << std::endl; // prints 1
-    std::cout << bf.contains(54321) << std::endl; // prints 0
+    std::vector<bool> test_vec(100000000); // 100 million bools
+
+    // Measure memory usage in bytes
+    size_t memory_usage = sizeof(test_vec) + sizeof(bool) * test_vec.capacity();
+    std::cout << "Memory usage: " << memory_usage << " bytes" << std::endl;
+
     return 0;
 }

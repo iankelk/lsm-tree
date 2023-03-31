@@ -272,7 +272,8 @@ std::string Run::getBloomFilterSummary() {
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     std::stringstream ss;
-    ss << "Bloom Filter Size: " << bloom_filter.getNumBits() << ", FPR: " << bfStatus << ", TP: " << truePositives 
-       << ", FP: " << falsePositives << ", Max Keys: " << max_kv_pairs << ", Number of Keys: " << size;
+    ss << "Bloom Filter Size: " << bloom_filter.getNumBits() << ", Num Hash Functions: " << bloom_filter.getNumHashes() << 
+    ", FPR: " << bfStatus << ", TP: " << truePositives << ", FP: " << falsePositives << ", Max Keys: " << max_kv_pairs << 
+    ", Number of Keys: " << size;
     return ss.str();
 }
