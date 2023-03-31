@@ -4,6 +4,7 @@
 #include <sstream>
 #include "run.hpp"
 #include "lsm_tree.hpp"
+#include "utils.hpp"
 
 void getNumOpenFiles();
 
@@ -234,23 +235,6 @@ json Run::serialize() const {
     return j;
 }
 
-
-// Get number of open files function
-void getNumOpenFiles() {
-    struct rlimit rlim;
-    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
-        int fd_count = 0;
-        for (int fd = 0; fd < rlim.rlim_cur; fd++) {
-            if (fcntl(fd, F_GETFD) != -1) {
-                fd_count++;
-            }
-        }
-        std::cout << "Number of open file descriptors: " << fd_count << std::endl;
-    } else {
-        std::cerr << "Error getting RLIMIT_NOFILE: " << strerror(errno) << std::endl;
-    }
-}
-
 void Run::deserialize(const json& j) {
     max_kv_pairs = j["max_kv_pairs"];
     bf_error_rate = j["bf_error_rate"];
@@ -276,8 +260,8 @@ std::string Run::getBloomFilterSummary() {
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     std::stringstream ss;
-    ss << "Bloom Filter Size: " << bloom_filter.getNumBits() << ", Num Hash Functions: " << bloom_filter.getNumHashes() << 
-    ", FPR: " << bfStatus << ", TP: " << truePositives << ", FP: " << falsePositives << ", Max Keys: " << max_kv_pairs << 
-    ", Number of Keys: " << size;
+    ss << "Bloom Filter Size: " << addCommas(std::to_string(bloom_filter.getNumBits())) << ", Num Hash Functions: " << bloom_filter.getNumHashes() << 
+    ", FPR: " << bfStatus << ", TP: " << addCommas(std::to_string(truePositives)) << ", FP: " << addCommas(std::to_string(falsePositives))
+    << ", Max Keys: " << addCommas(std::to_string(max_kv_pairs)) <<  ", Number of Keys: " << addCommas(std::to_string(size));
     return ss.str();
 }

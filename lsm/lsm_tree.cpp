@@ -80,12 +80,12 @@ void LSMTree::merge_levels(int currentLevelNum) {
             next = it + 1;
             if (!next->willLowerLevelFit()) {
                 merge_levels(currentLevelNum + 1);
-             }
+                // These iterators need to be reset when returning from the recursion in case the levels vector is resized
+                it = levels.begin() + currentLevelNum - 1;
+                next = levels.begin() + currentLevelNum;
+            }
         }
     }
-
-    it = levels.begin() + currentLevelNum - 1;
-    next = levels.begin() + currentLevelNum;
 
     if (level_policy == Level::TIERED || (level_policy == Level::LAZY_LEVELED && !isLastLevel(next))) {
         it->compactLevel(bf_error_rate, Level::FULL);
@@ -170,9 +170,6 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // Search the buffer for the key range and return the range map as a unique_ptr
     std::unique_ptr<std::map<KEY_t, VAL_t>> range_map = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
 
-    // Create an iterator to iterate through the map
-    std::map<KEY_t, VAL_t>::iterator it = range_map->begin();
-
     // If the range has the size of the entire range, return the range
     if (range_map->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
@@ -218,10 +215,6 @@ void LSMTree::benchmark(const std::string& filename) {
         std::cerr << "Unable to open file " << filename << std::endl;
         return;
     }
-
-    file.seekg(0, file.end);
-    int length = file.tellg();
-    file.seekg(0, file.beg);
 
     std::stringstream ss;
     ss << file.rdbuf();
@@ -356,7 +349,7 @@ int LSMTree::countLogicalPairs() {
 std::string LSMTree::printStats() {
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
-    std::string logicalPairs = "Logical Pairs: " + std::to_string(countLogicalPairs()) + "\n";
+    std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     // Create a string to hold the number of keys in each level of the tree
     std::string levelKeys = "";
     // Create a string to hold the dump of the tree
@@ -367,7 +360,8 @@ std::string LSMTree::printStats() {
         levelKeys += "LVL" + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getKvPairs()) + ", ";
     }
     // Remove the last comma and space from the levelKeys string
-    levelKeys = levelKeys.substr(0, levelKeys.size() - 2) + "\n";
+    levelKeys.resize(levelKeys.size() - 2);
+    levelKeys += "\n";
     // Iterate through the buffer and add the key/value pairs to the treeDump string
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
@@ -392,7 +386,7 @@ std::string LSMTree::printStats() {
         }
     }
     // Remove the last space from the treeDump string
-    treeDump = treeDump.substr(0, treeDump.size() - 1);
+    treeDump.pop_back();
     // Add the logicalPairs, levelKeys, and treeDump strings to the output string
     output += logicalPairs + levelKeys + treeDump;
     return output;
@@ -403,25 +397,25 @@ std::string LSMTree::printStats() {
 std::string LSMTree::printTree() {
     std::string output = "";
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    output += "Number of logical key-value pairs: " + std::to_string(countLogicalPairs()) + "\n";
+    output += "Number of logical key-value pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     output += "Bloom filter false positive rate: " + bfStatus + "\n";
-    output += "Number of I/O operations: " + std::to_string(ioCount) + "\n";
-    output += "Number of entries in the buffer: " + std::to_string(buffer.size()) + "\n";
-    output += "Maximum number of key-value pairs in the buffer: " + std::to_string(buffer.getMaxKvPairs()) + "\n";
-    output += "Maximum size in bytes of the buffer: " + std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair)) + "\n";
+    output += "Number of I/O operations: " + addCommas(std::to_string(ioCount)) + "\n";
+    output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
+    output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
+    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kv_pair))) + "\n";
     output += "Number of levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";
         //assert(it->numKVPairs() == it->kv_pairs);
-        output += "Number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getKvPairs()) + "\n";
-        output += "Max number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getMaxKvPairs()) + "\n";
+        output += "Number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getKvPairs())) + "\n";
+        output += "Max number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getMaxKvPairs())) + "\n";
     }
     // For each level, print if it is the last level
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Is level " + std::to_string(it->getLevelNum()) + " the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
     }
     // Remove the last newline from the output string
-    output = output.substr(0, output.size() - 1);
+    output.pop_back();
     return output;
 }
 
@@ -434,7 +428,7 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_ma
         if (it->second == TOMBSTONE) {
             it = range_map->erase(it);
         } else {
-            it++;
+            ++it;
         }
     }
 }
@@ -459,7 +453,7 @@ std::string LSMTree::getBloomFilterSummary() {
         }
     }
     // Remove the last newline from the output string
-    output = output.substr(0, output.size() - 1);
+    output.pop_back();
     return output;
 }
 

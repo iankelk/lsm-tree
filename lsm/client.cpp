@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
             response.append(buffer, n_read);
             if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
                 // Remove END_OF_MESSAGE from the response
-                response = response.substr(0, response.size() - std::strlen(END_OF_MESSAGE));
+                response.resize(response.size() - std::strlen(END_OF_MESSAGE));
                 break;
             }
         }

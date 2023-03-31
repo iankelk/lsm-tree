@@ -124,13 +124,19 @@ bool Level::willLowerLevelFit() {
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }
 
-// Count the number of kv_pairs in a level by iterating through the runs queue
+// TODO: Remove this function
+// // Count the number of kv_pairs in a level by iterating through the runs queue
+// int Level::numKVPairs() {
+//     int num_kv_pairs = 0;
+//     for (const auto& run : runs) {
+//         num_kv_pairs += run->getMaxKvPairs();
+//     }
+//     return num_kv_pairs;
+// }
+
+// Count the number of kv_pairs in a level by accumulating the runs queue
 int Level::numKVPairs() {
-    int num_kv_pairs = 0;
-    for (const auto& run : runs) {
-        num_kv_pairs += run->getMaxKvPairs();
-    }
-    return num_kv_pairs;
+    return std::accumulate(runs.begin(), runs.end(), 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 }
 
 // Returns the level number
@@ -182,7 +188,7 @@ void Level::deserialize(const json& j) {
     std::string policy_str = j["level_policy"];
     level_policy = stringToPolicy(policy_str);
 
-    for (auto& run_json : j["runs"]) {
+    for (const auto& run_json : j["runs"]) {
         std::unique_ptr<Run> run = std::make_unique<Run>(max_kv_pairs, DEFAULT_ERROR_RATE, false, lsm_tree);
         run->deserialize(run_json);
         runs.emplace_back(std::move(run));
