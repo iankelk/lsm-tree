@@ -57,7 +57,7 @@ void Server::handle_client(int client_socket)
         handleCommand(ss, client_socket);
     }
     // Clean up resources
-    close();
+    ::close(client_socket);
     std::cout << "Client disconnected" << std::endl;
 }
 

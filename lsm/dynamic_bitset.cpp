@@ -5,7 +5,7 @@ void DynamicBitset::resize(size_t size) {
     m_bits.resize(size);
 }
 
-size_t DynamicBitset::size() {
+size_t DynamicBitset::size() const {
     return m_bits.size();
 }
 

@@ -47,8 +47,8 @@ void BloomFilter::deserialize(const json& j) {
     if (!j.contains("capacity") || !j.contains("error_rate") || !j.contains("num_bits") || !j.contains("num_hashes") || !j.contains("bits")) {
         throw std::runtime_error("Invalid JSON format for deserializing BloomFilter");
     }
-
-    BloomFilter(j["capacity"], j["error_rate"]);
+    capacity = j["capacity"];
+    error_rate = j["error_rate"];
     num_bits = j["num_bits"];
     num_hashes = j["num_hashes"];
     bits.deserialize(j["bits"]);
