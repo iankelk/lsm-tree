@@ -21,6 +21,7 @@ public:
     json serialize() const;
     void deserialize(const json& j);
     void deleteFile();
+    void setLSMTree(LSMTree* lsm_tree);
 private:
     KEY_t max_key;
     long max_kv_pairs;
@@ -32,8 +33,8 @@ private:
     int fd;
     LSMTree* lsm_tree;
     float getBfFalsePositiveRate();
-    int falsePositives = 0;
-    int truePositives = 0;
+    long long falsePositives = 0;
+    long long truePositives = 0;
 };
 
 #endif /* LSM_RUN_HPP */

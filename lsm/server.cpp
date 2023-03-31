@@ -135,7 +135,7 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
             break;
         case 'b':
             ss >> file_name;
-            lsmTree->benchmark(file_name);
+            lsmTree->benchmark(file_name, verbose);
             response = OK;
             break;
         case 'q':
@@ -209,7 +209,7 @@ void Server::run() {
     }
 }
 
-Server::Server(int port) : port(port) {
+Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
     // Create server socket
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket == -1) {
@@ -259,6 +259,7 @@ void printHelp() {
               << "  -f <fanout>          LSM-tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <level_policy>    Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
+              << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
@@ -269,6 +270,7 @@ void Server::printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, i
     std::cout << "  Number of buffer pages: " << buffer_num_pages << std::endl;
     std::cout << "  LSM-tree fanout: " << fanout << std::endl;
     std::cout << "  Level policy: " << Level::policyToString(level_policy) << std::endl;
+    std::cout << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
     std::cout << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
@@ -291,7 +293,8 @@ std::string Server::printDSLHelp() {
         "5. Load (Insert key-value pairs from a binary file)\n"
         "   Syntax: l \"/path/to/file_name\"\n"
         "   Example: l \"~/load_file.bin\"\n\n"
-        "6. Benchmark (Run commands from a text file quietly with no output. NOT MULTIPLE THREAD SAFE since it bypasses the server/client blocking)\n"
+        "6. Benchmark (Run commands from a text file quietly with no output.)\n"
+        "   NOT MULTIPLE THREAD SAFE since it bypasses the server/client blocking)\n"
         "   Syntax: b \"/path/to/file_name\"\n"
         "   Example: b \"~/workload.txt\"\n\n"
         "7. Print Stats (Display information about the current state of the tree)\n"
@@ -301,6 +304,22 @@ std::string Server::printDSLHelp() {
         "     LVL1: 3, LVL3: 9\n"
         "     45:56:L1 56:84:L1 91:45:L1\n"
         "     7:32:L3 19:73:L3 32:91:L3 45:64:L3 58:3:L3 85:15:L3 91:71:L3 95:87:L3 97:76:L3\n\n"
+        "8. Summarized Tree Info\n"
+        "   Syntax: i\n"
+        "   Example: \n"
+        "     Number of logical key-value pairs: 4,997,014\n"
+        "     Bloom filter false positive rate: 0.042312\n"
+        "     Number of I/O operations: 4,195,277\n"
+        "     Number of entries in the buffer: 805,079\n"
+        "     Maximum number of key-value pairs in the buffer: 1,048,576\n"
+        "     Maximum size in bytes of the buffer: 8,388,608\n"
+        "     Number of levels: 1\n"
+        "     Number of SSTables in level 1: 4\n"
+        "     Number of key-value pairs in level 1: 4,194,304\n"
+        "     Max number of key-value pairs in level 1: 10,485,760\n"
+        "     Is level 1 the last level? Yes\n"
+        "9. Shutdown server and save the database state to disk\n"
+        "   Syntax: q\n"
         "Refer to the documentation for detailed examples and explanations of each command.\n";
 
     return helpText;
@@ -319,9 +338,10 @@ int main(int argc, char **argv) {
     int buffer_num_pages = DEFAULT_NUM_PAGES;
     int fanout = DEFAULT_FANOUT;
     Level::Policy level_policy = DEFAULT_LEVELING_POLICY;
+    bool verbose = DEFAULT_VERBOSE_LEVEL;
 
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "e:n:f:l:p:h")) != -1) {
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:hv")) != -1) {
         switch (opt) {
         case 'e':
             bf_error_rate = atof(optarg);
@@ -349,6 +369,9 @@ int main(int argc, char **argv) {
         case 'p':
             port = atoi(optarg);
             break;
+        case 'v':
+            verbose = true;
+            break;
         case 'h':
             printHelp();
             exit(0);
@@ -359,7 +382,7 @@ int main(int argc, char **argv) {
     }
 
     // Create server instance with the specified port
-    Server server(port);
+    Server server(port, verbose);
 
     // Set the global server pointer
     server_ptr = &server;

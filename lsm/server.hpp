@@ -9,7 +9,7 @@ void printHelp();
 class Server
 {
 public:
-    explicit Server(int port);
+    explicit Server(int port, bool verbose);
     void createLSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
     void run();
     void close();
@@ -23,6 +23,7 @@ private:
     void handle_client(int client_socket);
     void handleCommand(std::stringstream& ss, int client_socket);
     std::string printDSLHelp();
+    bool verbose;
     void sendResponse(int client_socket, const std::string &response);
     void printLSMTreeParameters(float bf_error_rate, int buffer_num_pages, int fanout, Level::Policy level_policy);
 };

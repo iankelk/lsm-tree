@@ -1,15 +1,14 @@
+#include <iostream>
 #include "level.hpp"
 #include "run.hpp"
 #include "lsm_tree.hpp"
-#include <iostream>
+#include "utils.hpp"
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> run_ptr) {
-    //assert(kv_pairs == numKVPairs());
-
     // Check if there is enough space in the level to add the run
     if (kv_pairs + run_ptr->getMaxKvPairs() > max_kv_pairs) {
-        throw std::out_of_range("put: Attempted to add run to level with insufficient space");
+        die("Level::put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(move(run_ptr));
     // Increment the kv_pairs in the level
@@ -51,7 +50,7 @@ void Level::compactLevel(double error_rate, State state) {
         size = runs[0]->getMaxKvPairs() + runs[1]->getMaxKvPairs();
     }
     else {
-        size = numKVPairs();
+        size = addUpKVPairsInLevel();
     }
     
     // Create a new map to hold the merged data
@@ -92,7 +91,6 @@ void Level::compactLevel(double error_rate, State state) {
             runs.front()->put(kv.first, kv.second);
         }
     }
-    //assert(kv_pairs == numKVPairs());
     runs.front()->closeFile();
 }
 
@@ -124,18 +122,8 @@ bool Level::willLowerLevelFit() {
     return (kv_pairs + prevLevelSize <= max_kv_pairs);
 }
 
-// TODO: Remove this function
-// // Count the number of kv_pairs in a level by iterating through the runs queue
-// int Level::numKVPairs() {
-//     int num_kv_pairs = 0;
-//     for (const auto& run : runs) {
-//         num_kv_pairs += run->getMaxKvPairs();
-//     }
-//     return num_kv_pairs;
-// }
-
 // Count the number of kv_pairs in a level by accumulating the runs queue
-int Level::numKVPairs() {
+int Level::addUpKVPairsInLevel() {
     return std::accumulate(runs.begin(), runs.end(), 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 }
 

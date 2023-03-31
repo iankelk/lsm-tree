@@ -2,8 +2,10 @@
 #include <iomanip>
 #include <sstream>
 
+// Given a message, print it to stderr and exit with an error code. This is used for unrecoverable errors.
 void die(const std::string& message) {
-    std::cerr << "\nUsage:\n" << message << std::endl;
+    std::cerr << "Error: " << message << std::endl;
+    std::cerr << "Exiting..." << std::endl;
     std::exit(EXIT_FAILURE);
 };
 

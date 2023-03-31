@@ -3,6 +3,7 @@
 #include <sstream>
 #include "../lib/xxhash.h"
 #include "bloom_filter.hpp"
+#include "utils.hpp"
 
 BloomFilter::BloomFilter(int capacity, double error_rate) :
     capacity(capacity), error_rate(error_rate),
@@ -10,7 +11,7 @@ BloomFilter::BloomFilter(int capacity, double error_rate) :
     num_hashes(std::ceil(std::log(2) * (num_bits / capacity))),
     bits(num_bits) {
         if (capacity < 0) {
-            throw std::invalid_argument("Capacity must be non-negative.");
+            die("BloomFilter::Constructor: Capacity must be non-negative.");
     }
 }
 
@@ -55,7 +56,8 @@ json BloomFilter::serialize() const {
 
 void BloomFilter::deserialize(const json& j) {
     if (!j.contains("capacity") || !j.contains("error_rate") || !j.contains("num_bits") || !j.contains("num_hashes") || !j.contains("bits")) {
-        throw std::runtime_error("Invalid JSON format for deserializing BloomFilter");
+        std::cerr << "BloomFilter::deserialize: Invalid JSON format for deserializing BloomFilter. Skipping..." << std::endl;
+        return;
     }
     capacity = j["capacity"];
     error_rate = j["error_rate"];

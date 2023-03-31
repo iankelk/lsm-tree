@@ -15,7 +15,7 @@ LSMTree::LSMTree(float bf_error_rate, int buffer_num_pages, int fanout, Level::P
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, level_policy, FIRST_LEVEL_NUM, this);
 }
 
-// Calulate whether an std::vector<Level>::iterator is pointing to the last level
+// Calculate whether an std::vector<Level>::iterator is pointing to the last level
 bool LSMTree::isLastLevel(std::vector<Level>::iterator it) {
     return (it + 1 == levels.end());
 }
@@ -99,7 +99,7 @@ void LSMTree::merge_levels(int currentLevelNum) {
     }
 
     // Update the number of key/value pairs in the next level. 
-    next->setKvPairs(next->numKVPairs());
+    next->setKvPairs(next->addUpKVPairsInLevel());
     // Clear the current level and reset the number of key/value pairs to 0
     it->runs.clear();
     it->setKvPairs(0);
@@ -109,9 +109,10 @@ void LSMTree::merge_levels(int currentLevelNum) {
 // If the key is not found, return an empty string.
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
-    // if key is not within the range of the available keys, throw an exception
+    // if key is not within the range of the available keys, print to the server stderr and skip it
     if (key < KEY_MIN || key > KEY_MAX) {
-        throw std::out_of_range("Key is out of range");
+        std::cerr << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
+        return nullptr;
     }
     
     // Search the buffer for the key
@@ -140,21 +141,22 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             }
         }
     }
-    // If the key is not found in the buffer or the levels, return nullptr
-    return nullptr;
+    return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
 
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
 // If the range is not empty, return a map of all the found pairs.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
-    // if either start or end is not within the range of the available keys, throw an exception
+    
+    // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
-        throw std::out_of_range("LSMTree::range: Key is out of range");
+        std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
+        return nullptr;
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
-        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them." << std::endl;    
+        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
         KEY_t temp = start;
         start = end;
         end = temp;
@@ -207,7 +209,7 @@ void LSMTree::del(KEY_t key) {
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
-void LSMTree::benchmark(const std::string& filename) {
+void LSMTree::benchmark(const std::string& filename, bool verbose) {
     int count = 0;
     std::ifstream file(filename);
 
@@ -262,21 +264,21 @@ void LSMTree::benchmark(const std::string& filename) {
         }
 
         count++;
-        if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
-            auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-            std::cout << "Benchmark: " << count << " commands executed" << std::endl;
-            std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
+        if (verbose) {
+            if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                std::cout << "Benchmark: " << count << " commands executed" << std::endl;
+                std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
+            }
         }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
-            << formatMicroseconds(duration.count()) + ")" << std::endl;
+            << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
-
-
 
 void LSMTree::load(const std::string& filename) {
     std::vector<kv_pair> kv_pairs;
@@ -350,10 +352,8 @@ std::string LSMTree::printStats() {
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
-    // Create a string to hold the number of keys in each level of the tree
-    std::string levelKeys = "";
-    // Create a string to hold the dump of the tree
-    std::string treeDump = "";
+    std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
+    std::string treeDump = ""; // Create a string to hold the dump of the tree
 
     // Iterate through the levels and add the number of keys in each level to the levelKeys string
     for (auto it = levels.begin(); it != levels.end(); it++) {
@@ -385,9 +385,7 @@ std::string LSMTree::printStats() {
             }
         }
     }
-    // Remove the last space from the treeDump string
-    treeDump.pop_back();
-    // Add the logicalPairs, levelKeys, and treeDump strings to the output string
+    treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
     return output;
 }
@@ -406,7 +404,6 @@ std::string LSMTree::printTree() {
     output += "Number of levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";
-        //assert(it->numKVPairs() == it->kv_pairs);
         output += "Number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getKvPairs())) + "\n";
         output += "Max number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getMaxKvPairs())) + "\n";
     }
@@ -449,7 +446,7 @@ std::string LSMTree::getBloomFilterSummary() {
         output += "Level " + std::to_string(it->getLevelNum()) + ":\n";
         for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
             output += "Run " + std::to_string(std::distance(it->runs.begin(), run)) + ": ";
-            output += (*run)->getBloomFilterSummary()+ ":\n";
+            output += (*run)->getBloomFilterSummary()+ "\n";
         }
     }
     // Remove the last newline from the output string
@@ -467,6 +464,7 @@ json LSMTree::serialize() const {
     j["levels"] = json::array();
     j["bfFalsePositives"] = bfFalsePositives;
     j["bfTruePositives"] = bfTruePositives;
+    j["ioCount"] = ioCount;
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -499,8 +497,10 @@ void LSMTree::deserialize(const std::string& filename) {
     bf_error_rate = treeJson["bf_error_rate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
     level_policy = Level::stringToPolicy(treeJson["level_policy"].get<std::string>());
-    bfFalsePositives = treeJson["bfFalsePositives"].get<int>();
-    bfTruePositives = treeJson["bfTruePositives"].get<int>();
+    bfFalsePositives = treeJson["bfFalsePositives"].get<long long>();
+    bfTruePositives = treeJson["bfTruePositives"].get<long long>();
+    ioCount = treeJson["ioCount"].get<long long>();
+
     buffer.deserialize(treeJson["buffer"]);
 
     levels.clear();
@@ -509,6 +509,13 @@ void LSMTree::deserialize(const std::string& filename) {
         levels.back().deserialize(levelJson);
     }
     infile.close();
+
+    // Restore lsm_tree pointers in all Runs
+    for (auto& level : levels) {
+        for (auto& run : level.runs) {
+            run->setLSMTree(this);
+        }
+    }
     std::cout << "Finished!\n" << std::endl;
     std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }

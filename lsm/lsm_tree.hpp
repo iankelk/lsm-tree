@@ -13,7 +13,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
-    void benchmark(const std::string& filename);
+    void benchmark(const std::string& filename, bool verbose);
     void load(const std::string& filename);
     bool isLastLevel(std::vector<Level>::iterator it);
     std::string printStats();
@@ -28,6 +28,7 @@ public:
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
     void incrementIoCount() { ioCount++; }
+    long getIoCount() { return ioCount; }
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
 private:
@@ -39,9 +40,9 @@ private:
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &range_map);
     std::vector<Level> levels;
     void merge_levels(int currentLevelNum);
-    int bfFalsePositives = 0;
-    int bfTruePositives = 0;
-    long ioCount = 0;
+    long long bfFalsePositives = 0;
+    long long bfTruePositives = 0;
+    long long ioCount = 0;
 };
 
 #endif /* LSM_TREE_HPP */

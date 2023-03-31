@@ -23,7 +23,7 @@ Run::Run(long max_kv_pairs, double bf_error_rate, bool createFile, LSMTree* lsm_
         char tmp_fn[] = SSTABLE_FILE_TEMPLATE;
         fd = mkstemp(tmp_fn);
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-            throw std::runtime_error("Failed to create temporary file for Run");
+            die("Run::Constructor: Failed to create temporary file for Run");
         }
         tmp_file = tmp_fn;
         fence_pointers.reserve(max_kv_pairs / getpagesize());
@@ -48,7 +48,7 @@ void Run::closeFile() {
 void Run::put(KEY_t key, VAL_t val) {
     int result;
     if (size >= max_kv_pairs) {
-        throw std::runtime_error("Attempting to add to full Run");
+        die("Run::put: Attempting to add to full Run");
     }
 
     kv_pair kv = {key, val};
@@ -87,13 +87,13 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto page_index = static_cast<long>(std::distance(fence_pointers.begin(), fence_pointers_iter)) - 1;
 
     if (page_index < 0) {
-        throw std::runtime_error("Negative index from fence pointer");
+        die("Run::get: Negative index from fence pointer");
     }
 
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw std::runtime_error("Run::get: Failed to open temporary file for Run");
+        die("Run::get: Failed to open temporary file for Run");
     }
 
     // Search the page for the key
@@ -158,16 +158,16 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     // Check that the start and end page indices are valid
     if (searchPageStart < 0 || searchPageEnd < 0) {
-        throw std::runtime_error("Negative index from fence pointer");
+        die("Run::range: Negative index from fence pointer");
     }
     // Check that the start page index is less than the end page index
     if (searchPageStart >= searchPageEnd) {
-        throw std::runtime_error("Start page index is greater than or equal to end page index");
+        die("Run::range: Start page index is greater than or equal to end page index");
     }
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw std::runtime_error("Run::range: Failed to open temporary file for Run");
+        die("Run::range: Failed to open temporary file for Run");
     }
     lsm_tree->incrementIoCount();
     bool stopSearch = false;
@@ -203,11 +203,13 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
  std::map<KEY_t, VAL_t> Run::getMap() {
     std::map<KEY_t, VAL_t> map;
 
+    if (lsm_tree == nullptr) {
+        die("Run::getMap: LSM tree is null");
+    }
     // Open the file descriptor for the temporary file
     fd = open(tmp_file.c_str(), O_RDONLY);
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        throw std::runtime_error("Run::getMap: Failed to open temporary file for Run");
-
+        die("Run::getMap: Failed to open temporary file for Run");
     }
     // Read all the key-value pairs from the temporary file
     lsm_tree->incrementIoCount();
@@ -232,6 +234,8 @@ json Run::serialize() const {
     j["tmp_file"] = tmp_file;
     j["size"] = size;
     j["max_key"] = max_key;
+    j["true_positives"] = truePositives;
+    j["false_positives"] = falsePositives;
     return j;
 }
 
@@ -244,6 +248,8 @@ void Run::deserialize(const json& j) {
     tmp_file = j["tmp_file"];
     size = j["size"];
     max_key = j["max_key"];
+    truePositives = j["true_positives"];
+    falsePositives = j["false_positives"];
 }
 
 float Run::getBfFalsePositiveRate() {
@@ -255,7 +261,12 @@ float Run::getBfFalsePositiveRate() {
     }
 }
 
-// Bloom Filter Size: 0, FPR: 0.000000, TP: 0, FP: 0, Max Keys: 0, Number of Keys: 0
+void Run::setLSMTree(LSMTree* lsm_tree) {
+    this->lsm_tree = lsm_tree;
+}
+
+// Example:
+// Run 0: Bloom Filter Size: 25,126,656, Num Hash Functions: 16, FPR: 0.046875, TP: 183, FP: 9, Max Keys: 1,048,576, Number of Keys: 1,048,576
 std::string Run::getBloomFilterSummary() {
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
