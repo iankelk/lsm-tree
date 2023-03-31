@@ -31,7 +31,7 @@ void Server::listenToStdIn()
 
 
 // Thread function to handle client connections
-void Server::handleClient(int client_socket)
+void Server::handleClient(int clientSocket)
 {
     std::cout << "New client connected" << std::endl;
 
@@ -41,7 +41,7 @@ void Server::handleClient(int client_socket)
     while (!termination_flag)
     {
         // Receive command
-        ssize_t n_read = recv(client_socket, buffer, sizeof(buffer), 0);
+        ssize_t n_read = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (n_read == -1) {
             std::cerr << "Error receiving data from client" << std::endl;
             break;
@@ -54,34 +54,39 @@ void Server::handleClient(int client_socket)
 
         // Parse command
         std::stringstream ss(command);
-        handleCommand(ss, client_socket);
+        handleCommand(ss, clientSocket);
     }
     // Clean up resources
-    ::close(client_socket);
+    ::close(clientSocket);
     std::cout << "Client disconnected" << std::endl;
 }
 
 // Send a response to the client in chunks of BUFFER_SIZE bytes
-void Server::sendResponse(int client_socket, const std::string &response) {
+void Server::sendResponse(int clientSocket, const std::string &response) {
     for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
         char chunk[BUFFER_SIZE] = {};
         std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
-        send(client_socket, chunk, strlen(chunk), 0);
+        send(clientSocket, chunk, strlen(chunk), 0);
     }
     // Send the end of message indicator
-    send(client_socket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+    send(clientSocket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
 }
 
-void Server::handleCommand(std::stringstream& ss, int client_socket) {
+void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     char op;
     ss >> op;
     KEY_t key, start, end;
     VAL_t value;
     
     // Pointers to store the results of get and range
-    std::unique_ptr<VAL_t> value_ptr;
-    std::unique_ptr<std::map<KEY_t, VAL_t>> range_ptr;
-    std::string file_name;
+    std::unique_ptr<VAL_t> valuePtr;
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
+    // fileName is used for load and benchmark operations
+    std::string fileName;
+
+    // Path to data directory and JSON file for serialization
+    std::string dataDir = DATA_DIRECTORY;
+    std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
 
     // Response to send back to client
     std::string response;
@@ -98,7 +103,7 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
         shared_lock = std::shared_lock<std::shared_mutex>(sharedMtx);
     } else {
         response = printDSLHelp();
-        sendResponse(client_socket, response);
+        sendResponse(clientSocket, response);
         return;
     }
     switch (op) {
@@ -129,19 +134,19 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
             response = OK;
             break;
         case 'l':
-            ss >> file_name;
-            lsmTree->load(file_name);
+            ss >> fileName;
+            lsmTree->load(fileName);
             response = OK;
             break;
         case 'b':
-            ss >> file_name;
-            lsmTree->benchmark(file_name, verbose);
+            ss >> fileName;
+            lsmTree->benchmark(fileName, verbose);
             response = OK;
             break;
         case 'q':
-            lsmTree->serializeLSMTreeToFile(LSM_TREE_FILE);
+            lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
             response = OK;
-            sendResponse(client_socket, response);
+            sendResponse(clientSocket, response);
             termination_flag = 1;
             close();
             break;
@@ -153,9 +158,9 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
                 response = printDSLHelp();
                 break;
             }
-            value_ptr = lsmTree->get(key);
-            if (value_ptr != nullptr) {
-                response = std::to_string(*value_ptr);
+            valuePtr = lsmTree->get(key);
+            if (valuePtr != nullptr) {
+                response = std::to_string(*valuePtr);
             }
             else {
                 response = NO_VALUE;
@@ -168,10 +173,10 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
                 response = printDSLHelp();
                 break;
             }
-            range_ptr = lsmTree->range(start, end);
-            if (range_ptr->size() > 0) {
+            rangePtr = lsmTree->range(start, end);
+            if (rangePtr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
-                for (const auto &p : *range_ptr) {
+                for (const auto &p : *rangePtr) {
                     // Return key-value pairs as key:value separated by spaces
                     response += std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
                 }
@@ -189,23 +194,23 @@ void Server::handleCommand(std::stringstream& ss, int client_socket) {
         default:
             response = printDSLHelp();
         }
-        sendResponse(client_socket, response);
+        sendResponse(clientSocket, response);
 }
 
 void Server::run() {
     // Accept incoming connections
     while (!termination_flag) {
-        sockaddr_in client_address;
-        socklen_t client_address_size = sizeof(client_address);
-        int client_socket = accept(serverSocket, (sockaddr *)&client_address, &client_address_size);
-        if (client_socket == -1) {
+        sockaddr_in clientAddress;
+        socklen_t clientAddressSize = sizeof(clientAddress);
+        int clientSocket = accept(serverSocket, (sockaddr *)&clientAddress, &clientAddressSize);
+        if (clientSocket == -1) {
             std::cerr << "Error accepting incoming connection" << std::endl;
             continue;
         }
 
         // Spawn thread to handle client connection
-        std::thread client_thread(&Server::handleClient, this, client_socket);
-        client_thread.detach();
+        std::thread clientThread(&Server::handleClient, this, clientSocket);
+        clientThread.detach();
     }
 }
 
@@ -245,9 +250,12 @@ void Server::close() {
 }
 
 void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy) {
+    // Path to data directory and JSON file for serialization
+    std::string dataDir = DATA_DIRECTORY;
+    std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy);
-    lsmTree->deserialize(LSM_TREE_FILE);
+    lsmTree->deserialize(lsmTreeJsonFile);
     printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy());
 }
 
@@ -291,11 +299,11 @@ std::string Server::printDSLHelp() {
         "   Syntax: d [INT1]\n"
         "   Example: d 10\n\n"
         "5. Load (Insert key-value pairs from a binary file)\n"
-        "   Syntax: l \"/path/to/file_name\"\n"
+        "   Syntax: l \"/path/to/fileName\"\n"
         "   Example: l \"~/load_file.bin\"\n\n"
         "6. Benchmark (Run commands from a text file quietly with no output.)\n"
         "   NOT MULTIPLE THREAD SAFE since it bypasses the server/client blocking)\n"
-        "   Syntax: b \"/path/to/file_name\"\n"
+        "   Syntax: b \"/path/to/fileName\"\n"
         "   Example: b \"~/workload.txt\"\n\n"
         "7. Print Stats (Display information about the current state of the tree)\n"
         "   Syntax: s\n"
