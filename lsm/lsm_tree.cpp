@@ -305,7 +305,8 @@ void LSMTree::load(const std::string& filename) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Processing " << filename << " file took " << duration.count() << " microseconds" << std::endl;
+    std::cout << "Processing " << filename << " file took " << duration.count() << " microseconds ("
+    << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
 // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 

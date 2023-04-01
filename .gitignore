@@ -17,3 +17,7 @@ order-mil.txt
 test.txt
 5mil
 data/
+data-lazy-500mil/
+*.dat
+single
+500
