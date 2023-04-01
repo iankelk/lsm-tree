@@ -46,7 +46,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // If levelPolicy is Level::LEVELED, or if levelPolicy is Level::LAZY_LEVELED and there is only one level, compact the first level
     if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(levels.begin()))) {
-        levels.front().compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
+        levels.front().compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, true);
     }
 
     // Clear the buffer and add the key-value pair to it
@@ -88,14 +88,14 @@ void LSMTree::mergeLevels(int currentLevelNum) {
     }
 
     if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-        it->compactLevel(bfErrorRate, Level::FULL);
+        it->compactLevel(bfErrorRate, Level::FULL, isLastLevel(it));
         // Move the single run pointed to by runs.begin() into the next level
         next->runs.push_back(std::move(it->runs.front()));
     } 
     if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
         // Merge the current level into the next level by moving the entire deque of runs into the next level
         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
-        next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN);
+        next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
     }
 
     // Update the number of key/value pairs in the next level. 
@@ -410,7 +410,8 @@ std::string LSMTree::printTree() {
     }
     // For each level, print if it is the last level
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Is level " + std::to_string(it->getLevelNum()) + " the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
+        output += "Level " + std::to_string(it->getLevelNum()) + " disk type: " + it->getDiskName() + ", disk penalty multiplier: " + 
+                   std::to_string(it->getDiskPenaltyMultiplier()) + ", is it the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
     }
     // Remove the last newline from the output string
     output.pop_back();

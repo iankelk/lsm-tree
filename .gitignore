@@ -18,6 +18,8 @@ test.txt
 5mil
 data/
 data-lazy-500mil/
+data-tiered-1bil/
 *.dat
 single
 500
+10mil.txt

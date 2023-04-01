@@ -267,7 +267,7 @@ void printHelp() {
               << "  -f <fanout>          LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <levelPolicy>     Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
-              << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes\n"
+              << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes.\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
@@ -379,6 +379,8 @@ int main(int argc, char **argv) {
             break;
         case 'v':
             verbose = true;
+            // print "verbose is enabled"
+            std::cout << "Verbose is enabled" << std::endl;
             break;
         case 'h':
             printHelp();
@@ -387,6 +389,13 @@ int main(int argc, char **argv) {
             printHelp();
             exit(1);
         }
+    }
+
+    // Check if there are any unparsed arguments
+    if (optind < argc) {
+        std::cerr << "Unexpected argument: " << argv[optind] << std::endl;
+        printHelp();
+        exit(1);
     }
 
     // Create server instance with the specified port

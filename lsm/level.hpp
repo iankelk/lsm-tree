@@ -3,6 +3,7 @@
 #include <queue>
 #include <cmath>
 #include "run.hpp"
+#include "storage.hpp"
 
 class LSMTree;
 class Run;
@@ -22,15 +23,18 @@ public:
     // constructor
     Level(long bs, int f, Policy l, int ln, LSMTree* lsmTree) :
     bufferSize(bs), fanout(f), levelPolicy(l), levelNum(ln),
-    isLastLevel(false), kvPairs(0), maxKvPairs(pow(f, ln) * bs), lsmTree(lsmTree) {};
+    kvPairs(0), maxKvPairs(pow(f, ln) * bs), lsmTree(lsmTree), 
+    diskName(Storage::getDiskName(ln)), diskPenaltyMultiplier(Storage::getDiskPenaltyMultiplier(ln)) {};
 
     Level() = default; // default constructor
     ~Level() {}; // destructor
     std::deque<std::unique_ptr<Run>> runs; // std::deque of std::unique_ptr pointing to runs in the level
     void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
     void dump(); // dump prints the contents of the level. TODO: remove this function
-    void compactLevel(double errorRate, State state);
+    void compactLevel(double errorRate, State state, bool isLastLevel); 
     long getLevelSize(int levelNum); 
+    std::string getDiskName() const;
+    int getDiskPenaltyMultiplier() const;
     bool willLowerLevelFit(); // true if there is enough space in the level to add a run with maxKvPairs
     bool willBufferFit(); // true if there is enough space in the level to flush the memtable
     int addUpKVPairsInLevel(); // Iterates over the runs to calculate the total number of kvPairs in the level
@@ -69,6 +73,8 @@ public:
           levelPolicy(other.levelPolicy),
           kvPairs(other.kvPairs),
           lsmTree(other.lsmTree),
+          diskName(other.diskName),
+          diskPenaltyMultiplier(other.diskPenaltyMultiplier),
           runs(std::move(other.runs)) {
     }
     // copy assignment operator 
@@ -80,12 +86,13 @@ public:
         levelPolicy = other.levelPolicy;
         kvPairs = other.kvPairs;
         lsmTree = other.lsmTree;
+        diskName = other.diskName;
+        diskPenaltyMultiplier = other.diskPenaltyMultiplier;
         runs = std::move(other.runs);
         return *this;
     }
 private:
     int levelNum;
-    bool isLastLevel;
     long kvPairs; // the number of key-value pairs in the level    
     Policy levelPolicy; // can be TIERED, LEVELED, or LAZY_LEVELED
     long maxKvPairs; // the maximum number of key-value pairs that can be in the level
@@ -93,6 +100,8 @@ private:
     int fanout;
     std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup
     LSMTree* lsmTree;
+    std::string diskName;
+    int diskPenaltyMultiplier;
 };
 
 #endif /* LEVEL_HPP */

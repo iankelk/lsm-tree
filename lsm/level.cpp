@@ -24,9 +24,10 @@ void Level::dump() {
     std::cout << "  bufferSize: " << bufferSize << std::endl;
     std::cout << "  fanout: " << fanout << std::endl;
     std::cout << "  levelNum: " << levelNum <<std:: endl;
-    std::cout << "  isLastLevel: " << isLastLevel << std::endl;
     std::cout << "  levelPolicy: " << levelPolicy << std::endl;
     std::cout << "  runs: " << std::endl;
+    std::cout << "  diskName: " << diskName << std::endl;
+    std::cout << "  diskPenaltyMultiplier: " << diskPenaltyMultiplier << std::endl;
     // Iterate through the runs in the level
     for (auto &run : runs) {
         // Print out the map of the run returned by getMap()
@@ -36,7 +37,7 @@ void Level::dump() {
     }
 }
 
-void Level::compactLevel(double error_rate, State state) {
+void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
     long size;
     // Nothing to compact if there is only one run
     if (runs.size() == 1) {
@@ -149,16 +150,25 @@ long Level::getMaxKvPairs() const {
     return maxKvPairs;
 }
 
+std::string Level::getDiskName() const {
+    return diskName;
+}
+
+int Level::getDiskPenaltyMultiplier() const {
+    return diskPenaltyMultiplier;
+}
+
 json Level::serialize() const {
     json j;
     j["maxKvPairs"] = maxKvPairs;
     j["bufferSize"] = bufferSize;
     j["fanout"] = fanout;
     j["levelNum"] = levelNum;
-    j["isLastLevel"] = isLastLevel;
     j["levelPolicy"] = policyToString(levelPolicy);
     j["kvPairs"] = kvPairs;
     j["runs"] = json::array();
+    j["diskName"] = diskName;
+    j["diskPenaltyMultiplier"] = diskPenaltyMultiplier;
     for (const auto& run : runs) {
         j["runs"].push_back(run->serialize());
     }
@@ -169,9 +179,10 @@ void Level::deserialize(const json& j) {
     bufferSize = j["bufferSize"];
     fanout = j["fanout"];
     levelNum = j["levelNum"];
-    isLastLevel = j["isLastLevel"];
     maxKvPairs = j["maxKvPairs"];
     kvPairs = j["kvPairs"];
+    diskName = j["diskName"];
+    diskPenaltyMultiplier = j["diskPenaltyMultiplier"];
 
     std::string policy_str = j["levelPolicy"];
     levelPolicy = stringToPolicy(policy_str);
