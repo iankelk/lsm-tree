@@ -4,6 +4,7 @@
 #include <sstream>
 #include <string>
 #include <filesystem>
+#include <algorithm>
 #include "run.hpp"
 #include "lsm_tree.hpp"
 #include "utils.hpp"
@@ -18,6 +19,7 @@ Run::Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree 
     fd(FILE_DESCRIPTOR_UNINITIALIZED),
     lsmTree(lsmTree) 
 {
+
     if (createFile) {
         std::string dataDir = DATA_DIRECTORY;
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
@@ -104,21 +106,33 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     // Search the page for the key
     long offset = pageIndex * getpagesize() * sizeof(kvPair);
-    long end = offset + getpagesize() * sizeof(kvPair);
+    long numPairsInPage = std::min<long>(maxKvPairs - pageIndex * getpagesize(), getpagesize());
 
     lseek(fd, offset, SEEK_SET);
     kvPair kv;
     lsmTree->incrementIoCount();
-    // Read the key-value pairs from the temporary file starting at the offset and ending at the end of the page
-    // TODO: This is a linear search. Could be better with a binary search?
-    while (read(fd, &kv, sizeof(kvPair)) > 0 && offset < end) {
-        if (kv.key == key) {
-            val = std::make_unique<VAL_t>(kv.value);
-            lsmTree->incrementBfTruePositives();
-            truePositives++;
+    
+    // Binary search for the key-value pair in the page
+    long left = 0, right = numPairsInPage - 1;
+    while (left <= right) {
+        long mid = left + (right - left) / 2;
+        long midOffset = offset + mid * sizeof(kvPair);
+
+        lseek(fd, midOffset, SEEK_SET);
+        if (read(fd, &kv, sizeof(kvPair)) > 0) {
+            if (kv.key == key) {
+                val = std::make_unique<VAL_t>(kv.value);
+                lsmTree->incrementBfTruePositives();
+                truePositives++;
+                break;
+            } else if (kv.key < key) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
+            }
+        } else {
             break;
         }
-        offset += sizeof(kvPair);
     }
     if (val == nullptr) {
         // If the key was not found, increment the false positive count

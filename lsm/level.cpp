@@ -5,12 +5,12 @@
 #include "utils.hpp"
 
 // Add run to the beginning of the Level runs queue 
-void Level::put(std::unique_ptr<Run> run_ptr) {
+void Level::put(std::unique_ptr<Run> runPtr) {
     // Check if there is enough space in the level to add the run
-    if (kvPairs + run_ptr->getMaxKvPairs() > maxKvPairs) {
+    if (kvPairs + runPtr->getMaxKvPairs() > maxKvPairs) {
         die("Level::put: Attempted to add run to level with insufficient space");
     }
-    runs.emplace_front(move(run_ptr));
+    runs.emplace_front(std::move(runPtr));
     // Increment the kvPairs in the level
     kvPairs += runs.front()->getMaxKvPairs(); 
 }
@@ -43,7 +43,6 @@ void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
     if (runs.size() == 1) {
         return;
     }
-
     if (state == State::FULL) {
         size = getLevelSize(levelNum);
     }
@@ -53,7 +52,6 @@ void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
     else {
         size = addUpKVPairsInLevel();
     }
-    
     // Create a new map to hold the merged data
     std::map<KEY_t, VAL_t> merged_map;
 
@@ -72,13 +70,11 @@ void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
             }
         }
     }
-
     // Delete all the old files in the runs queue that have now been compacted
     for (const auto &run : runs) {
         run->closeFile();
         run->deleteFile();
     }
-
     // Clear the runs queue and reset the kvPairs
     runs.clear();
     kvPairs = 0;
