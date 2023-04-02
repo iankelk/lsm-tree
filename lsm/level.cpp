@@ -37,7 +37,7 @@ void Level::dump() {
     }
 }
 
-void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
+void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     long size;
     // Nothing to compact if there is only one run
     if (runs.size() == 1) {
@@ -79,7 +79,7 @@ void Level::compactLevel(double error_rate, State state, bool isLastLevel) {
     runs.clear();
     kvPairs = 0;
 
-    put(std::make_unique<Run>(size, error_rate, true, lsmTree));
+    put(std::make_unique<Run>(size, errorRate, true, lsmTree));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : merged_map) {
