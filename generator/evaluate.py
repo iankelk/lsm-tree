@@ -11,7 +11,7 @@
 import sys
 import time
 import struct
-from blist import sorteddict, sortedlist
+from sortedcontainers import SortedDict, SortedList
 
 # ------------------------------------------------
 #                     Stats
@@ -49,7 +49,7 @@ def log(action, verbose):
     elif action == "LOAD":
         loads += 1
     if verbose:
-        print action
+        print(action)
 
 # Printing stats
 def print_stats(time_elapsed):
@@ -60,16 +60,16 @@ def print_stats(time_elapsed):
     global successful_deletes
     global failed_deletes
     global loads  
-    print "------------------------------------"
-    print "PUTS", puts
-    print "SUCCESFUL_GETS", successful_gets
-    print "FAILED_GETS", failed_gets
-    print "RANGES", ranges
-    print "SUCCESSFUL_DELS", successful_deletes
-    print "FAILED_DELS", failed_deletes
-    print "LOADS", loads
-    print "TIME_ELAPSED", time_elapsed
-    print "------------------------------------"
+    print("------------------------------------")
+    print("PUTS", puts)
+    print("SUCCESFUL_GETS", successful_gets)
+    print("FAILED_GETS", failed_gets)
+    print("RANGES", ranges)
+    print("SUCCESSFUL_DELS", successful_deletes)
+    print("FAILED_DELS", failed_deletes)
+    print("LOADS", loads)
+    print("TIME_ELAPSED", time_elapsed)
+    print("------------------------------------")
 
 # ------------------------------------------------
 #                   Main function
@@ -77,10 +77,10 @@ def print_stats(time_elapsed):
 if __name__ == "__main__":
     # Options
     verbose = False
-    show_output = True
+    show_output = False
 
     # Initialize sorted dictionary (key value store)
-    db = sorteddict({})
+    db = SortedDict({})
 
     # Open file
     f = open(sys.argv[1])
@@ -100,29 +100,29 @@ if __name__ == "__main__":
                 try:
                     val = db[key]
                     if show_output:
-                        print val
+                        print(val)
                     log("SUCCESFUL_GET", verbose)
                 except:
                     if show_output:
-                        print ""
+                        print("")
                     log("FAILED_GET", verbose)
             # RANGE
             if line[0] == "r":
                 (range_start, range_end) = map(int, line.split(" ")[1:3])
-                sorted_keys = sortedlist(db.keys())
+                sorted_keys = SortedList(db.keys())
                 left_index = sorted_keys.bisect_left(range_start)
                 right_index = sorted_keys.bisect_left(range_end)
                 valid_keys = sorted_keys[left_index:right_index]
                 valid_vals = map(lambda x: db[x], valid_keys)
-                res = zip(valid_keys, valid_vals)
+                res = list(zip(valid_keys, valid_vals))
                 if show_output:
-                    print " ".join(map(lambda x: str(x[0])+":"+str(x[1]), res))
+                    print(" ".join(map(lambda x: str(x[0])+":"+str(x[1]), res)))
                 log("RANGE", verbose)
             # DELETE
             if line[0] == "d":
                 key = int(line.split(" ")[1])
                 try:
-                    del db[key] 
+                    del db[key]
                     log("SUCCESSFUL_DELETE", verbose)
                 except:
                     log("FAILED_DELETE", verbose)
@@ -151,5 +151,3 @@ if __name__ == "__main__":
 
     # Closing file
     f.close()
-
-
