@@ -90,13 +90,14 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     }
     runs.front()->closeFile();
 }
-
+// Merge the key-value pairs from the segment runs, eliminating duplicate keys and reducing the overall size of the level.
+// The compacted data is then stored in a new run, which replaces the original runs in the segment. 
 void Level::compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel) {
     std::map<KEY_t, VAL_t> mergedMap;
 
     for (size_t idx = segStartIdx; idx < segEndIdx; ++idx) {
-        std::map<KEY_t, VAL_t> run_map = runs[idx]->getMap();
-        for (const auto &kv : run_map) {
+        std::map<KEY_t, VAL_t> runMap = runs[idx]->getMap();
+        for (const auto &kv : runMap) {
             if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
                 it->second = kv.second;
             }
@@ -109,8 +110,8 @@ void Level::compactSegment(double errorRate, size_t segStartIdx, size_t segEndId
     }
     runs.erase(runs.begin() + segStartIdx, runs.begin() + segEndIdx);
 
-    // Decrement kvPairs in level by the number of kvPairs in the merged_map
-    kvPairs -= std::accumulate(runs.begin() + segStartIdx, runs.begin() + segEndIdx, 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
+    // Decrement kvPairs in level by the number of kvPairs in the mergedMap
+    kvPairs -= std::accumulate(runs. begin() + segStartIdx, runs.begin() + segEndIdx, 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 
     // Create a new run with the merged data
     auto merged_run = std::make_unique<Run>(mergedMap.size(), errorRate, true, lsmTree);
@@ -125,7 +126,7 @@ void Level::compactSegment(double errorRate, size_t segStartIdx, size_t segEndId
     // Insert the new run into the segment
     runs.insert(runs.begin() + segStartIdx, std::move(merged_run));
 
-    // Increment kvPairs in level by the number of kvPairs in the merged_map
+    // Increment kvPairs in level by the number of kvPairs in the mergedMap
     kvPairs += mergedMap.size();
 }
 
@@ -141,7 +142,8 @@ long Level::getLevelSize(int levelNum) {
         return level_size;
     }
 }
-
+// Iterate through the runs of the level, calculating the difference between the last key of a run and the first
+// key of the next run. Return the start and end indices of the segment with the minimum key difference.
 std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
     size_t bestStartIdx = 0;
     size_t bestEndIdx = 1;

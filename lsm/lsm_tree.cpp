@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "lsm_tree.hpp"
+#include "run.hpp"
 #include "utils.hpp"
 
 LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy) :
@@ -98,6 +99,7 @@ void LSMTree::mergeLevels(int currentLevelNum) {
         next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
     } else if (levelPolicy == Level::PARTIAL) {
         auto segmentBounds = it->findBestSegmentToCompact();
+        // If the segment is not the entire level, compact it
         if (segmentBounds.first != it->runs.size() && segmentBounds.second != it->runs.size()) {
             it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
         }
@@ -526,3 +528,52 @@ void LSMTree::deserialize(const std::string& filename) {
     std::cout << "Finished!\n" << std::endl;
     std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
+
+// int LSMTree::TrySwitch(Run& run1, Run& run2, int delta, int R) {
+//     int R_new = R - eval(run1.bits, run1.entries)
+//                 - eval(run2.bits, run2.entries)
+//                 + eval(run1.bits + delta, run1.entries)
+//                 + eval(run2.bits - delta, run2.entries);
+    
+//     if (R_new < R && (run2.bits - delta > 0)) {
+//         R = R_new;
+//         run1.bits += delta;
+//         run2.bits -= delta;
+//     }
+//     return R;
+// }
+
+// double LSMTree::eval(int bits, int entries) {
+//     return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
+// }
+
+// int LSMTree::AutotuneFilters(int M_filters) {
+//     int delta = M_filters;
+//     levels.front().runs.front()->bits = M_filters;
+
+//     int R = 0;
+//     for (const auto& level : levels) {
+//         for (const auto& run_ptr : level.runs) {
+//             R += static_cast<int>(eval(run_ptr->bits, run_ptr->entries));
+//         }
+//     }
+    
+//     while (delta >= 1) {
+//         int R_new = R;
+//         for (size_t l_idx = 0; l_idx < levels.size(); l_idx++) {
+//             auto& level_runs = levels[l_idx].runs;
+//             for (size_t i = 0; i < level_runs.size() - 1; i++) {
+//                 for (size_t j = i + 1; j < level_runs.size(); j++) {
+//                     R_new = TrySwitch(*level_runs[i], *level_runs[j], delta, R_new);
+//                     R_new = TrySwitch(*level_runs[j], *level_runs[i], delta, R_new);
+//                 }
+//             }
+//         }
+//         if (R_new == R) {
+//             delta /= 2;
+//         } else {
+//             R = R_new;
+//         }
+//     }
+//     return R;
+// }
