@@ -96,6 +96,11 @@ void LSMTree::mergeLevels(int currentLevelNum) {
         // Merge the current level into the next level by moving the entire deque of runs into the next level
         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
         next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
+    } else if (levelPolicy == Level::PARTIAL) {
+        auto segmentBounds = it->findBestSegmentToCompact();
+        if (segmentBounds.first != it->runs.size() && segmentBounds.second != it->runs.size()) {
+            it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
+        }
     }
 
     // Update the number of key/value pairs in the next level. 

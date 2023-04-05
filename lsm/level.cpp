@@ -91,6 +91,46 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     runs.front()->closeFile();
 }
 
+void Level::compactSegment(double error_rate, size_t seg_start_idx, size_t seg_end_idx, bool isLastLevel) {
+    std::map<KEY_t, VAL_t> merged_map;
+
+    for (size_t idx = seg_start_idx; idx < seg_end_idx; ++idx) {
+        std::map<KEY_t, VAL_t> run_map = runs[idx]->getMap();
+        for (const auto &kv : run_map) {
+            if (const auto &[it, inserted] = merged_map.try_emplace(kv.first, kv.second); !inserted) {
+                it->second = kv.second;
+            }
+        }
+    }
+
+    // Delete all the old files in the segment and remove the runs that have now been compacted
+    for (size_t idx = seg_start_idx; idx < seg_end_idx; ++idx) {
+        runs[idx]->deleteFile();
+    }
+    runs.erase(runs.begin() + seg_start_idx, runs.begin() + seg_end_idx);
+
+    // Decrement kvPairs in level by the number of kvPairs in the merged_map
+    kvPairs -= std::accumulate(runs.begin() + seg_start_idx, runs.begin() + seg_end_idx, 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
+
+    // Create a new run with the merged data
+    auto merged_run = std::make_unique<Run>(merged_map.size(), error_rate, true, lsmTree);
+    for (const auto &kv : merged_map) {
+        // Check if the key-value pair is a tombstone and if the level is the last level
+        if (!(isLastLevel && kv.second == TOMBSTONE)) {
+            merged_run->put(kv.first, kv.second);
+        }
+    }
+    merged_run->closeFile();
+
+    // Insert the new run into the segment
+    runs.insert(runs.begin() + seg_start_idx, std::move(merged_run));
+
+    // Increment kvPairs in level by the number of kvPairs in the merged_map
+    kvPairs += merged_map.size();
+}
+
+
+
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
 long Level::getLevelSize(int levelNum) {
     // Check if the levelNum - 1 is in the levelSizes map. 
@@ -102,6 +142,23 @@ long Level::getLevelSize(int levelNum) {
         levelSizes[levelNum] = level_size;
         return level_size;
     }
+}
+
+std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
+    size_t best_start_idx = 0;
+    size_t best_end_idx = 1;
+    long best_diff = LONG_MAX;
+
+    for (size_t idx = 0; idx < runs.size() - 1; ++idx) {
+        long diff = labs(runs[idx]->getMap().rbegin()->first - runs[idx + 1]->getMap().begin()->first);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best_start_idx = idx;
+            best_end_idx = idx + 1;
+        }
+    }
+
+    return {best_start_idx, best_end_idx};
 }
 
 // Returns true if there is enough space in the level to flush the buffer

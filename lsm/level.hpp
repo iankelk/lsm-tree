@@ -13,7 +13,8 @@ public:
     enum Policy {
         TIERED,
         LEVELED,
-        LAZY_LEVELED
+        LAZY_LEVELED,
+        PARTIAL
     };
     enum State {
         FULL,
@@ -32,6 +33,8 @@ public:
     void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
     void dump(); // dump prints the contents of the level. TODO: remove this function
     void compactLevel(double errorRate, State state, bool isLastLevel); 
+    void compactSegment(double error_rate, size_t seg_start_idx, size_t seg_end_idx, bool isLastLevel);
+    std::pair<size_t, size_t> findBestSegmentToCompact(); 
     long getLevelSize(int levelNum); 
     std::string getDiskName() const;
     int getDiskPenaltyMultiplier() const;
@@ -48,6 +51,7 @@ public:
             case Policy::TIERED: return "TIERED";
             case Policy::LEVELED: return "LEVELED";
             case Policy::LAZY_LEVELED: return "LAZY_LEVELED";
+            case Policy::PARTIAL: return "PARTIAL";
             default: return "ERROR";
         }
     }
@@ -57,6 +61,7 @@ public:
             case 'T': return Policy::TIERED;
             case 'L': return Policy::LEVELED;
             case 'Z': return Policy::LAZY_LEVELED;
+            case 'P': return Policy::PARTIAL;
             default: return Policy::TIERED;
         }
     }
@@ -94,7 +99,7 @@ public:
 private:
     int levelNum;
     long kvPairs; // the number of key-value pairs in the level    
-    Policy levelPolicy; // can be TIERED, LEVELED, or LAZY_LEVELED
+    Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
     long maxKvPairs; // the maximum number of key-value pairs that can be in the level
     long bufferSize; // Memtable size
     int fanout;

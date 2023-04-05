@@ -369,8 +369,11 @@ int main(int argc, char **argv) {
             else if (strcmp(optarg, "LAZY_LEVELED") == 0) {
                 levelPolicy = Level::Policy::LAZY_LEVELED;
             }
+            else if (strcmp(optarg, "PARTIAL") == 0) {
+                levelPolicy = Level::Policy::PARTIAL;
+            } 
             else {
-                std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, and LAZY_LEVELED" << std::endl;
+                std::cerr << "Invalid value for -l option. Valid options are TIERED, LEVELED, LAZY_LEVELED, and PARTIAL" << std::endl;
                 exit(1);
             }
             break;
