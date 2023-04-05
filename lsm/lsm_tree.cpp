@@ -529,51 +529,68 @@ void LSMTree::deserialize(const std::string& filename) {
     std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
 
-// int LSMTree::TrySwitch(Run& run1, Run& run2, int delta, int R) {
-//     int R_new = R - eval(run1.bits, run1.entries)
-//                 - eval(run2.bits, run2.entries)
-//                 + eval(run1.bits + delta, run1.entries)
-//                 + eval(run2.bits - delta, run2.entries);
+// Get the total amount of bits currently used by all runs in the LSMTree
+long long LSMTree::getTotalBits() const {
+    long long totalBits = 0;
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
+            totalBits += (*run)->getNumBits();
+        }
+    }
+    return totalBits;
+}
+
+long long LSMTree::TrySwitch(Run& run1, Run& run2, long long delta, long long R) const {
+    long long run1Bits = run1.getNumBits();
+    long long run2Bits = run2.getNumBits();
+
+    long long run1Entries = run1.getSize();
+    long long run2Entries = run2.getSize();
+
+    long long R_new = R - eval(run1Bits, run1Entries)
+                - eval(run2Bits, run2Entries)
+                + eval(run1Bits + delta, run1Entries)
+                + eval(run2Bits - delta, run2Entries);
     
-//     if (R_new < R && (run2.bits - delta > 0)) {
-//         R = R_new;
-//         run1.bits += delta;
-//         run2.bits -= delta;
-//     }
-//     return R;
-// }
+    if (R_new < R && (run2Bits - delta > 0)) {
+        R = R_new;
+        run1.setNumBits(run1Bits + delta);
+        run2.setNumBits(run2Bits - delta);
+    }
+    return R;
+}
 
-// double LSMTree::eval(int bits, int entries) {
-//     return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
-// }
+double LSMTree::eval(long long bits, long long entries) const {
+    return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
+}
 
-// int LSMTree::AutotuneFilters(int M_filters) {
-//     int delta = M_filters;
-//     levels.front().runs.front()->bits = M_filters;
+long long LSMTree::AutotuneFilters(long long mFilters) const {
+    long long delta = mFilters;
+    levels.front().runs.front()->setNumBits(mFilters);
 
-//     int R = 0;
-//     for (const auto& level : levels) {
-//         for (const auto& run_ptr : level.runs) {
-//             R += static_cast<int>(eval(run_ptr->bits, run_ptr->entries));
-//         }
-//     }
+    long long R = 0;
+    for (const auto& level : levels) {
+        for (const auto& run_ptr : level.runs) {
+            R += static_cast<long long>(eval(run_ptr->getNumBits(), run_ptr->getSize()));
+        }
+    }
     
-//     while (delta >= 1) {
-//         int R_new = R;
-//         for (size_t l_idx = 0; l_idx < levels.size(); l_idx++) {
-//             auto& level_runs = levels[l_idx].runs;
-//             for (size_t i = 0; i < level_runs.size() - 1; i++) {
-//                 for (size_t j = i + 1; j < level_runs.size(); j++) {
-//                     R_new = TrySwitch(*level_runs[i], *level_runs[j], delta, R_new);
-//                     R_new = TrySwitch(*level_runs[j], *level_runs[i], delta, R_new);
-//                 }
-//             }
-//         }
-//         if (R_new == R) {
-//             delta /= 2;
-//         } else {
-//             R = R_new;
-//         }
-//     }
-//     return R;
-// }
+    while (delta >= 1) {
+        long long R_new = R;
+        for (size_t l_idx = 0; l_idx < levels.size(); l_idx++) {
+            auto& level_runs = levels[l_idx].runs;
+            for (size_t i = 0; i < level_runs.size() - 1; i++) {
+                for (size_t j = i + 1; j < level_runs.size(); j++) {
+                    R_new = TrySwitch(*level_runs[i], *level_runs[j], delta, R_new);
+                    R_new = TrySwitch(*level_runs[j], *level_runs[i], delta, R_new);
+                }
+            }
+        }
+        if (R_new == R) {
+            delta /= 2;
+        } else {
+            R = R_new;
+        }
+    }
+    return R;
+}

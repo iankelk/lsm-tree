@@ -22,6 +22,9 @@ public:
     void deserialize(const json& j);
     void deleteFile();
     void setLSMTree(LSMTree* lsmTree);
+    long long getNumBits() { return bloomFilter.getNumBits(); }
+    long long setNumBits(long long numBits) { bloomFilter.setNumBits(numBits); }
+    long long getSize() { return size; }
 private:
     KEY_t maxKey;
     long maxKvPairs;
