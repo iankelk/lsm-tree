@@ -105,18 +105,18 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     // Search the page for the key
-    long offset = pageIndex * getpagesize() * sizeof(kvPair);
-    long numPairsInPage = std::min<long>(maxKvPairs - pageIndex * getpagesize(), getpagesize());
+    size_t offset = pageIndex * getpagesize() * sizeof(kvPair);
+    size_t numPairsInPage = std::min<long>(maxKvPairs - pageIndex * getpagesize(), getpagesize());
 
     lseek(fd, offset, SEEK_SET);
     kvPair kv;
     lsmTree->incrementIoCount();
     
     // Binary search for the key-value pair in the page
-    long left = 0, right = numPairsInPage - 1;
+    size_t left = 0, right = numPairsInPage - 1;
     while (left <= right) {
-        long mid = left + (right - left) / 2;
-        long midOffset = offset + mid * sizeof(kvPair);
+        size_t mid = left + (right - left) / 2;
+        size_t midOffset = offset + mid * sizeof(kvPair);
 
         lseek(fd, midOffset, SEEK_SET);
         if (read(fd, &kv, sizeof(kvPair)) > 0) {
@@ -145,7 +145,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
 // Return a map of all the key-value pairs in the range [start, end]
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
-    long searchPageStart, searchPageEnd;
+    size_t searchPageStart, searchPageEnd;
 
     // Initialize an empty map
     std::map<KEY_t, VAL_t> rangeMap;
@@ -192,9 +192,9 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     lsmTree->incrementIoCount();
     bool stopSearch = false;
     // Search the pages for the keys in the range
-    for (long pageIndex = searchPageStart; pageIndex < searchPageEnd; pageIndex++) {
-        long offset = pageIndex * getpagesize() * sizeof(kvPair);
-        long offset_end = searchPageEnd * getpagesize() * sizeof(kvPair);
+    for (size_t pageIndex = searchPageStart; pageIndex < searchPageEnd; pageIndex++) {
+        size_t offset = pageIndex * getpagesize() * sizeof(kvPair);
+        size_t offset_end = searchPageEnd * getpagesize() * sizeof(kvPair);
         lseek(fd, offset, SEEK_SET);
         kvPair kv;
         // Search the page and keep the most recently added value'

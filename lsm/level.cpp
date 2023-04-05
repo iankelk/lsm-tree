@@ -53,7 +53,7 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
         size = addUpKVPairsInLevel();
     }
     // Create a new map to hold the merged data
-    std::map<KEY_t, VAL_t> merged_map;
+    std::map<KEY_t, VAL_t> mergedMap;
 
     // Iterate through the runs in the level
     for  (const auto& run : runs) {     
@@ -64,7 +64,7 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
         // Iterate through the key-value pairs in the run map
         for (const auto &kv : run_map) {
             // Check if the key is already in the merged map
-            if (const auto &[it, inserted] = merged_map.try_emplace(kv.first, kv.second); !inserted) {
+            if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
                 // The key already exists, so replace the value with the new value
                 it->second = kv.second;
             }
@@ -82,7 +82,7 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     put(std::make_unique<Run>(size, errorRate, true, lsmTree));
 
     // Iterate through the merged map and add the key-value pairs to the run
-    for (const auto &kv : merged_map) {
+    for (const auto &kv : mergedMap) {
         // Check if the key-value pair is a tombstone and if the level is the last level
         if (!(isLastLevel && kv.second == TOMBSTONE)) {
             runs.front()->put(kv.first, kv.second);
@@ -91,30 +91,30 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     runs.front()->closeFile();
 }
 
-void Level::compactSegment(double error_rate, size_t seg_start_idx, size_t seg_end_idx, bool isLastLevel) {
-    std::map<KEY_t, VAL_t> merged_map;
+void Level::compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel) {
+    std::map<KEY_t, VAL_t> mergedMap;
 
-    for (size_t idx = seg_start_idx; idx < seg_end_idx; ++idx) {
+    for (size_t idx = segStartIdx; idx < segEndIdx; ++idx) {
         std::map<KEY_t, VAL_t> run_map = runs[idx]->getMap();
         for (const auto &kv : run_map) {
-            if (const auto &[it, inserted] = merged_map.try_emplace(kv.first, kv.second); !inserted) {
+            if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
                 it->second = kv.second;
             }
         }
     }
 
     // Delete all the old files in the segment and remove the runs that have now been compacted
-    for (size_t idx = seg_start_idx; idx < seg_end_idx; ++idx) {
+    for (size_t idx = segStartIdx; idx < segEndIdx; ++idx) {
         runs[idx]->deleteFile();
     }
-    runs.erase(runs.begin() + seg_start_idx, runs.begin() + seg_end_idx);
+    runs.erase(runs.begin() + segStartIdx, runs.begin() + segEndIdx);
 
     // Decrement kvPairs in level by the number of kvPairs in the merged_map
-    kvPairs -= std::accumulate(runs.begin() + seg_start_idx, runs.begin() + seg_end_idx, 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
+    kvPairs -= std::accumulate(runs.begin() + segStartIdx, runs.begin() + segEndIdx, 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 
     // Create a new run with the merged data
-    auto merged_run = std::make_unique<Run>(merged_map.size(), error_rate, true, lsmTree);
-    for (const auto &kv : merged_map) {
+    auto merged_run = std::make_unique<Run>(mergedMap.size(), errorRate, true, lsmTree);
+    for (const auto &kv : mergedMap) {
         // Check if the key-value pair is a tombstone and if the level is the last level
         if (!(isLastLevel && kv.second == TOMBSTONE)) {
             merged_run->put(kv.first, kv.second);
@@ -123,13 +123,11 @@ void Level::compactSegment(double error_rate, size_t seg_start_idx, size_t seg_e
     merged_run->closeFile();
 
     // Insert the new run into the segment
-    runs.insert(runs.begin() + seg_start_idx, std::move(merged_run));
+    runs.insert(runs.begin() + segStartIdx, std::move(merged_run));
 
     // Increment kvPairs in level by the number of kvPairs in the merged_map
-    kvPairs += merged_map.size();
+    kvPairs += mergedMap.size();
 }
-
-
 
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
 long Level::getLevelSize(int levelNum) {
@@ -145,20 +143,19 @@ long Level::getLevelSize(int levelNum) {
 }
 
 std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
-    size_t best_start_idx = 0;
-    size_t best_end_idx = 1;
+    size_t bestStartIdx = 0;
+    size_t bestEndIdx = 1;
     long best_diff = LONG_MAX;
 
     for (size_t idx = 0; idx < runs.size() - 1; ++idx) {
         long diff = labs(runs[idx]->getMap().rbegin()->first - runs[idx + 1]->getMap().begin()->first);
         if (diff < best_diff) {
             best_diff = diff;
-            best_start_idx = idx;
-            best_end_idx = idx + 1;
+            bestStartIdx = idx;
+            bestEndIdx = idx + 1;
         }
     }
-
-    return {best_start_idx, best_end_idx};
+    return {bestStartIdx, bestEndIdx};
 }
 
 // Returns true if there is enough space in the level to flush the buffer

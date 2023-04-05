@@ -33,7 +33,7 @@ public:
     void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
     void dump(); // dump prints the contents of the level. TODO: remove this function
     void compactLevel(double errorRate, State state, bool isLastLevel); 
-    void compactSegment(double error_rate, size_t seg_start_idx, size_t seg_end_idx, bool isLastLevel);
+    void compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
     long getLevelSize(int levelNum); 
     std::string getDiskName() const;
