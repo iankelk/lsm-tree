@@ -32,7 +32,6 @@ public:
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
-    int getTotalRuns() const;
 
 private:
     Memtable buffer;
@@ -47,8 +46,8 @@ private:
     long long bfTruePositives = 0;
     long long ioCount = 0;
     size_t getTotalBits() const;
-    double TrySwitch(Run* run1, Run* run2, int64_t delta, double R) const;
-    double eval(int64_t bits, int64_t entries) const;
+    double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
+    double eval(size_t bits, size_t entries) const;
     double AutotuneFilters(size_t mFilters);
 };
 

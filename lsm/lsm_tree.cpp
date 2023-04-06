@@ -553,12 +553,12 @@ size_t LSMTree::getTotalBits() const {
     return totalBits;
 }
 
-double LSMTree::TrySwitch(Run* run1, Run* run2, int64_t delta, double R) const {
-    int64_t run1Bits = run1->getBloomFilterNumBits();
-    int64_t run2Bits = run2->getBloomFilterNumBits();
+double LSMTree::TrySwitch(Run* run1, Run* run2, size_t delta, double R) const {
+    size_t run1Bits = run1->getBloomFilterNumBits();
+    size_t run2Bits = run2->getBloomFilterNumBits();
 
-    int64_t run1Entries = run1->getSize();
-    int64_t run2Entries = run2->getSize();
+    size_t run1Entries = run1->getSize();
+    size_t run2Entries = run2->getSize();
 
     double R_new = R - eval(run1Bits, run1Entries)
                 - eval(run2Bits, run2Entries)
@@ -567,66 +567,47 @@ double LSMTree::TrySwitch(Run* run1, Run* run2, int64_t delta, double R) const {
     
     if ((R_new < R) && ((run2Bits - delta) > 0)) {
         R = R_new;
-        std::cout << "Setting run1 numBits from " << run1Bits << " to " << run1Bits + delta << " by adding " << delta << std::endl;
-        std::cout << "Setting run2 numBits from " << run2Bits << " to " << run2Bits - delta << " by subtracting " << delta << std::endl;  
-        // print newline
-        std::cout << std::endl;  
         run1->setBloomFilterNumBits(run1Bits + delta);
         run2->setBloomFilterNumBits(run2Bits - delta);
     }
     return R;
 }
 
-double LSMTree::eval(int64_t bits, int64_t entries) const {
-    return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
-}
-
-// Calculate the total number of runs in the LSMTree
-int LSMTree::getTotalRuns() const {
-    int totalRuns = 0;
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        totalRuns += it->runs.size();
-    }
-    return totalRuns;
+double LSMTree::eval(size_t bits, size_t entries) const {
+    return std::exp(static_cast<double>(-static_cast<int64_t>(bits)) / static_cast<double>(entries) * std::pow(std::log(2), 2));
 }
 
 double LSMTree::AutotuneFilters(size_t mFilters) {
-    int64_t delta = mFilters;
+    size_t delta = mFilters;
     double R_new;
-    levels.front().runs.front()->setBloomFilterNumBits(mFilters);
-    // Set all the other runs to have 0 bits
-    for (size_t i = 1; i < levels.front().runs.size(); i++) {
-        levels.front().runs[i]->setBloomFilterNumBits(0);
-    }
 
-    double R = getTotalRuns() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
-
-    // Flatten the tree structure into a single runs vector
+    // Flatten the tree structure into a single runs vector and zero out all the bits
     std::vector<Run*> all_runs;
     for (auto& level : levels) {
         for (auto& run_ptr : level.runs) {
+            run_ptr->setBloomFilterNumBits(0);
             all_runs.push_back(run_ptr.get());
         }
     }
+    levels.front().runs.front()->setBloomFilterNumBits(mFilters);
+    double R = all_runs.size() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
 
     while (delta >= 1) {
         R_new = R;
         // Iterate through every run in the whole tree
         for (size_t i = 0; i < all_runs.size() - 1; i++) {
-            // Compare the current run with every other run in the whole tree
             for (size_t j = i + 1; j < all_runs.size(); j++) {
                 R_new = TrySwitch(all_runs[i], all_runs[j], delta, std::min(R, R_new));
                 R_new = TrySwitch(all_runs[j], all_runs[i], delta, std::min(R, R_new));
             }
         }
+
         if (R_new == R) {
             delta /= 2;
         } else {
             R = R_new;
         }
     }
-    // print out the final result
-    std::cout << "AutotuneFilters::R " << R << std::endl;
     return R;
 }
 
@@ -641,25 +622,7 @@ void LSMTree::monkeyOptimizeBloomFilters() {
             (*run)->populateBloomFilter();
         }
     }
+    std::cout << "\nNew Bloom Filter summaries:" << std::endl;
     // Print out the bloom filter summary using LSMTree::getBloomFilterSummary()
     std::cout << getBloomFilterSummary() << std::endl;
-    totalBits = getTotalBits();
-    std::cout << "Total bits: " << totalBits << std::endl;
 }
-
-// double LSMTree::eval(size_t bits, size_t entries) const {
-//     // Convert the bits and entries to doubles and cast the bits to a negative int64_t
-//     double negativeBits = static_cast<double>(-static_cast<int64_t>(bits));
-//     double doubleEntries = static_cast<double>(entries);
-//     double log2Squared = std::pow(std::log(2), 2);
-
-//     double result = std::exp(negativeBits / doubleEntries * log2Squared);
-
-//     // Print the intermediate variables
-//     std::cout << "Negative Bits: " << negativeBits << std::endl;
-//     std::cout << "Double Entries: " << doubleEntries << std::endl;
-//     std::cout << "Log2 Squared: " << log2Squared << std::endl;
-//     std::cout << "Result: " << result << std::endl;
-
-//     return result;
-// }

@@ -18,6 +18,7 @@ public:
     int getNumHashes() { return numHashes; }
     void resetBitset();
     void resize(size_t newNumBits);
+    double theoreticalErrorRate() const;
 
 private:
     size_t capacity;

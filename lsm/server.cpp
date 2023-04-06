@@ -26,7 +26,7 @@ void Server::listenToStdIn()
         {
             std::cout << lsmTree->getBloomFilterSummary() << std::endl;
         } else if (input == "monkey") {
-            std::cout << "MONKEY Bloom Filter optimization starting..." << std::endl;
+            std::cout << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
             lsmTree->monkeyOptimizeBloomFilters();
             std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
         }

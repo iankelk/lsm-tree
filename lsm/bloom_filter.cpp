@@ -50,6 +50,10 @@ void BloomFilter::resize(size_t newNumBits) {
     this->bits.resize(newNumBits);
 }
 
+double BloomFilter::theoreticalErrorRate() const {
+    return std::exp(static_cast<double>(-static_cast<int64_t>(numBits)) / static_cast<double>(capacity) * std::pow(std::log(2), 2));
+}
+
 json BloomFilter::serialize() const {
     json j;
     j["capacity"] = capacity;
