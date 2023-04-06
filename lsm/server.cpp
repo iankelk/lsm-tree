@@ -3,6 +3,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <shared_mutex>
+#include <sys/select.h>
 #include "server.hpp"
 
 volatile sig_atomic_t terminationFlag = 0;
@@ -16,36 +17,51 @@ void sigintHandler(int signal) {
     }
 }
 
-void Server::listenToStdIn()
-{
+void Server::listenToStdIn() {
     std::unique_lock<std::shared_mutex> exclusiveLock;
     std::shared_lock<std::shared_mutex> sharedLock;
     std::string input;
+
+    // Prepare for select
+    fd_set readfds;
+    struct timeval timeout;
+
     while (!terminationFlag)
     {
-        std::getline(std::cin, input);
-        if (input == "bloom") {
-            sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-            std::cout << lsmTree->getBloomFilterSummary() << std::endl;
-            sharedLock.unlock();
-        } else if (input == "monkey") {
-            exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  // Lock the LSM Tree during monkey optimization
-            std::cout << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
-            lsmTree->monkeyOptimizeBloomFilters();
-            std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
-            exclusiveLock.unlock();
-        } else if (input == "misses") {
-            sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-            lsmTree->printMissesStats();
-            sharedLock.unlock();
+        // Clear the set and add standard input (0) to it
+        FD_ZERO(&readfds);
+        FD_SET(0, &readfds);
+
+        // Set timeout to 0, so select won't block and will allow checking terminationFlag
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000; // 100ms
+
+        // Use select to check if standard input has data
+        int activity = select(1, &readfds, nullptr, nullptr, &timeout);
+        if (activity > 0 && FD_ISSET(0, &readfds))
+        {
+            std::getline(std::cin, input);
+            if (input == "bloom") {
+                sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
+                std::cout << lsmTree->getBloomFilterSummary() << std::endl;
+                sharedLock.unlock();
+            } else if (input == "monkey") {
+                exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  // Lock the LSM Tree during monkey optimization
+                std::cout << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
+                lsmTree->monkeyOptimizeBloomFilters();
+                std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
+                exclusiveLock.unlock();
+            } else if (input == "misses") {
+                sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
+                lsmTree->printMissesStats();
+                sharedLock.unlock();
+            }
         }
     }
 }
 
-
 // Thread function to handle client connections
-void Server::handleClient(int clientSocket)
-{
+void Server::handleClient(int clientSocket) {
     std::cout << "New client connected" << std::endl;
 
     // Read commands from client
@@ -255,7 +271,7 @@ Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
 }
 
 void Server::close() {
-    terminationFlag = true;
+    terminationFlag = 1;
     if (serverSocket != -1) {
         shutdown(serverSocket, SHUT_RDWR);
         ::close(serverSocket);
