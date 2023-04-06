@@ -296,3 +296,32 @@ std::string Run::getBloomFilterSummary() {
     << ", Max Keys: " << addCommas(std::to_string(maxKvPairs)) <<  ", Number of Keys: " << addCommas(std::to_string(size));
     return ss.str();
 }
+
+void Run::clearBloomFilter() {
+    bloomFilter.clear();
+}
+void Run::resizeBloomFilter(long long numBits) {
+    bloomFilter.resize(numBits);
+}
+void Run::addKeyToBloomFilter(KEY_t key) {
+    bloomFilter.add(key);
+}
+
+// Populate the bloom filter. This will typically be called after MONKEY resizes them.
+void Run::populateBloomFilter() {
+    if (size == 0) {
+        return;
+    }
+    // Open the file descriptor for the temporary file
+    fd = open(tmpFile.c_str(), O_RDONLY);
+    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+        die("Run::populateBloomFilter: Failed to open temporary file for Run");
+    }
+    // Read all the key-value pairs from the temporary file and add the keys to the bloom filter
+    kvPair kv;
+    while (read(fd, &kv, sizeof(kvPair)) > 0) {
+        bloomFilter.add(kv.key);
+    }
+    // Close the file descriptor
+    closeFile();
+}

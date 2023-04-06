@@ -16,6 +16,9 @@ public:
     long long getNumBits() { return numBits; }
     void setNumBits(long long numBits) { this->numBits = numBits; } 
     int getNumHashes() { return numHashes; }
+    void clear();
+    void resize(long long numBits);
+
 private:
     int capacity;
     double errorRate;

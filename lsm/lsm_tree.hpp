@@ -31,6 +31,8 @@ public:
     long getIoCount() { return ioCount; }
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
+    void monkeyOptimizeBloomFilters();
+
 private:
     Memtable buffer;
     double bfErrorRate;

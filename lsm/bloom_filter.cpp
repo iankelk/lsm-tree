@@ -40,6 +40,24 @@ bool BloomFilter::contains(const KEY_t key) {
     return true;
 }
 
+// Clear bitset and reset numBits
+void BloomFilter::clear() {
+    this->bits.reset();
+    this->numBits = 0;
+}
+
+// Resize bloom filter to new bitset size
+void BloomFilter::resize(long long numBits) {
+    boost::dynamic_bitset<> newBits(numBits);
+    for (auto i = 0; i < this->numBits; i++) {
+        if (this->bits.test(i)) {
+            newBits.set(i);
+        }
+    }
+    this->bits = newBits;
+    this->numBits = numBits;
+}
+
 json BloomFilter::serialize() const {
     json j;
     j["capacity"] = capacity;

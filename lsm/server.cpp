@@ -25,6 +25,10 @@ void Server::listenToStdIn()
         if (input == "bloom")
         {
             std::cout << lsmTree->getBloomFilterSummary() << std::endl;
+        } else if (input == "monkey") {
+            std::cout << "MONKEY Bloom Filter optimization starting..." << std::endl;
+            lsmTree->monkeyOptimizeBloomFilters();
+            std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
         }
     }
 }

@@ -574,7 +574,6 @@ long long LSMTree::AutotuneFilters(long long mFilters) const {
             R += static_cast<long long>(eval(run_ptr->getNumBits(), run_ptr->getSize()));
         }
     }
-    
     while (delta >= 1) {
         long long R_new = R;
         for (size_t l_idx = 0; l_idx < levels.size(); l_idx++) {
@@ -593,4 +592,20 @@ long long LSMTree::AutotuneFilters(long long mFilters) const {
         }
     }
     return R;
+}
+
+// 
+void LSMTree::monkeyOptimizeBloomFilters() {
+    long long totalBits = getTotalBits();
+    long long R = AutotuneFilters(totalBits);
+    std::cout << "Total cost R: " << R << std::endl;
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
+            (*run)->clearBloomFilter();
+            (*run)->resizeBloomFilter((*run)->getNumBits());
+            (*run)->populateBloomFilter();
+        }
+    }
+    // Print out the bloom filter summary using LSMTree::getBloomFilterSummary()
+    std::cout << getBloomFilterSummary() << std::endl;
 }

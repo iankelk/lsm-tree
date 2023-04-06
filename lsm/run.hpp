@@ -23,8 +23,12 @@ public:
     void deleteFile();
     void setLSMTree(LSMTree* lsmTree);
     long long getNumBits() { return bloomFilter.getNumBits(); }
-    long long setNumBits(long long numBits) { bloomFilter.setNumBits(numBits); }
+    void setNumBits(long long numBits) { bloomFilter.setNumBits(numBits); }
     long long getSize() { return size; }
+    void clearBloomFilter();
+    void resizeBloomFilter(long long numBits);
+    void addKeyToBloomFilter(KEY_t key);
+    void populateBloomFilter();
 private:
     KEY_t maxKey;
     long maxKvPairs;
