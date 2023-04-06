@@ -7,22 +7,22 @@ using json = nlohmann:: json;
 
 class BloomFilter {
 public:
-    BloomFilter(int capacity, double error_rate);
+    BloomFilter(size_t capacity, double error_rate);
 
     void add(const KEY_t key);
     bool contains(const KEY_t key);
     json serialize() const;
     void deserialize(const json& j);
-    long long getNumBits() { return numBits; }
-    void setNumBits(long long numBits) { this->numBits = numBits; } 
+    size_t getNumBits() { return numBits; }
+    void setNumBits(size_t numBits) { this->numBits = numBits; } 
     int getNumHashes() { return numHashes; }
-    void clear();
-    void resize(long long numBits);
+    void resetBitset();
+    void resize(size_t newNumBits);
 
 private:
-    int capacity;
+    size_t capacity;
     double errorRate;
-    long long numBits;
+    size_t numBits;
     int numHashes;
     boost::dynamic_bitset<> bits;
 };

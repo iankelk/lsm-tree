@@ -291,17 +291,17 @@ std::string Run::getBloomFilterSummary() {
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     std::stringstream ss;
-    ss << "Bloom Filter Size: " << addCommas(std::to_string(bloomFilter.getNumBits())) << ", Num Hash Functions: " << bloomFilter.getNumHashes() << 
+    ss << "Bloom Filter Size: " << addCommas(std::to_string(getBloomFilterNumBits())) << ", Num Hash Functions: " << bloomFilter.getNumHashes() << 
     ", FPR: " << bfStatus << ", TP: " << addCommas(std::to_string(truePositives)) << ", FP: " << addCommas(std::to_string(falsePositives))
     << ", Max Keys: " << addCommas(std::to_string(maxKvPairs)) <<  ", Number of Keys: " << addCommas(std::to_string(size));
     return ss.str();
 }
 
-void Run::clearBloomFilter() {
-    bloomFilter.clear();
+void Run::resetBloomFilterBitset() {
+    bloomFilter.resetBitset();
 }
-void Run::resizeBloomFilter(long long numBits) {
-    bloomFilter.resize(numBits);
+void Run::resizeBloomFilterBitset(size_t numBits) {
+    bloomFilter.resize(bloomFilter.getNumBits());
 }
 void Run::addKeyToBloomFilter(KEY_t key) {
     bloomFilter.add(key);

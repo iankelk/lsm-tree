@@ -46,10 +46,10 @@ private:
     long long bfFalsePositives = 0;
     long long bfTruePositives = 0;
     long long ioCount = 0;
-    long long getTotalBits() const;
-    double TrySwitch(Run& run1, Run& run2, long long delta, double R) const;
-    double eval(long long bits, long long entries) const;
-    double AutotuneFilters(long long mFilters) const;
+    size_t getTotalBits() const;
+    double TrySwitch(Run& run1, Run& run2, size_t delta, double R) const;
+    double eval(size_t bits, size_t entries) const;
+    double AutotuneFilters(size_t mFilters) const;
 };
 
 #endif /* LSM_TREE_HPP */

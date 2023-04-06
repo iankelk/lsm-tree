@@ -22,11 +22,11 @@ public:
     void deserialize(const json& j);
     void deleteFile();
     void setLSMTree(LSMTree* lsmTree);
-    long long getNumBits() { return bloomFilter.getNumBits(); }
-    void setNumBits(long long numBits) { bloomFilter.setNumBits(numBits); }
-    long long getSize() { return size; }
-    void clearBloomFilter();
-    void resizeBloomFilter(long long numBits);
+    size_t getBloomFilterNumBits() { return bloomFilter.getNumBits(); }
+    void setBloomFilterNumBits(size_t numBits) { bloomFilter.setNumBits(numBits); }
+    size_t getSize() { return size; }
+    void resetBloomFilterBitset();
+    void resizeBloomFilterBitset(size_t numBits);
     void addKeyToBloomFilter(KEY_t key);
     void populateBloomFilter();
 private:
@@ -36,7 +36,7 @@ private:
     BloomFilter bloomFilter;
     std::vector<KEY_t> fencePointers;
     std::string tmpFile;
-    long size;
+    size_t size;
     int fd;
     LSMTree* lsmTree;
     float getBfFalsePositiveRate();

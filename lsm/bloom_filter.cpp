@@ -5,7 +5,7 @@
 #include "bloom_filter.hpp"
 #include "utils.hpp"
 
-BloomFilter::BloomFilter(int capacity, double errorRate) :
+BloomFilter::BloomFilter(size_t capacity, double errorRate) :
     capacity(capacity), errorRate(errorRate),
     numBits(std::ceil(-(capacity * std::log(errorRate)) / std::log(2) / std::log(2))),
     numHashes(std::ceil(std::log(2) * (numBits / capacity))),
@@ -40,22 +40,14 @@ bool BloomFilter::contains(const KEY_t key) {
     return true;
 }
 
-// Clear bitset and reset numBits
-void BloomFilter::clear() {
+// Reset bitset to all 0s
+void BloomFilter::resetBitset() {
     this->bits.reset();
-    this->numBits = 0;
 }
 
 // Resize bloom filter to new bitset size
-void BloomFilter::resize(long long numBits) {
-    boost::dynamic_bitset<> newBits(numBits);
-    for (auto i = 0; i < this->numBits; i++) {
-        if (this->bits.test(i)) {
-            newBits.set(i);
-        }
-    }
-    this->bits = newBits;
-    this->numBits = numBits;
+void BloomFilter::resize(size_t newNumBits) {
+    this->bits.resize(newNumBits);
 }
 
 json BloomFilter::serialize() const {
