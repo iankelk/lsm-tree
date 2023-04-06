@@ -64,14 +64,14 @@ void Run::put(KEY_t key, VAL_t val) {
     // Add the key to the fence pointers vector if it is a multiple of the page size. 
     // We can assume it is sorted because the buffer is sorted
     // TODO: CHECK THIS
-    // if (size % getpagesize() == 0) {
-    //     fencePointers.push_back(key);
-    // }
-
-    int keysPerPage = getpagesize() / sizeof(kvPair);
-    if (size % keysPerPage == 0) {
+    if (size % getpagesize() == 0) {
         fencePointers.push_back(key);
     }
+
+    // int keysPerPage = getpagesize() / sizeof(kvPair);
+    // if (size % keysPerPage == 0) {
+    //     fencePointers.push_back(key);
+    // }
 
     // If the key is greater than the max key, update the max key
     if (key > maxKey) {

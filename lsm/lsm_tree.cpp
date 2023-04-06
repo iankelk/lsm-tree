@@ -141,6 +141,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     if (val != nullptr) {
         // Check that val is not the TOMBSTONE
         if (*val == TOMBSTONE) {
+            getMisses++;
             return nullptr;
         }
         return val;
@@ -155,12 +156,14 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             if (val != nullptr) {
                 // Check that val is not the TOMBSTONE
                 if (*val == TOMBSTONE) {
+                    getMisses++;
                     return nullptr;
                 }
                 return val;
             }
         }
     }
+    getMisses++;
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
@@ -220,12 +223,21 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     }
     // Remove all the TOMBSTONES from the range map
     removeTombstones(rangeMap);
+    if (rangeMap->size() == 0) {
+        rangeMisses++;
+    }
     return rangeMap;
 }
 
 // Given a key, delete the key-value pair from the tree.
 void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
+}
+
+// Print out getMisses and rangeMisses stats
+void LSMTree::printMissesStats() {
+    std::cout << "getMisses: " << getMisses << std::endl;
+    std::cout << "rangeMisses: " << rangeMisses << std::endl;
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
@@ -487,6 +499,8 @@ json LSMTree::serialize() const {
     j["bfFalsePositives"] = bfFalsePositives;
     j["bfTruePositives"] = bfTruePositives;
     j["ioCount"] = ioCount;
+    j["getMisses"] = getMisses;
+    j["rangeMisses"] = rangeMisses;
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -522,6 +536,8 @@ void LSMTree::deserialize(const std::string& filename) {
     bfFalsePositives = treeJson["bfFalsePositives"].get<long long>();
     bfTruePositives = treeJson["bfTruePositives"].get<long long>();
     ioCount = treeJson["ioCount"].get<long long>();
+    getMisses = treeJson["getMisses"].get<long long>();
+    rangeMisses = treeJson["rangeMisses"].get<long long>();
 
     buffer.deserialize(treeJson["buffer"]);
 
@@ -560,13 +576,13 @@ double LSMTree::TrySwitch(Run* run1, Run* run2, size_t delta, double R) const {
     size_t run1Entries = run1->getSize();
     size_t run2Entries = run2->getSize();
 
-    double R_new = R - eval(run1Bits, run1Entries)
+    double rNew = R - eval(run1Bits, run1Entries)
                 - eval(run2Bits, run2Entries)
                 + eval(run1Bits + delta, run1Entries)
                 + eval(run2Bits - delta, run2Entries);
     
-    if ((R_new < R) && ((run2Bits - delta) > 0)) {
-        R = R_new;
+    if ((rNew < R) && ((run2Bits - delta) > 0)) {
+        R = rNew;
         run1->setBloomFilterNumBits(run1Bits + delta);
         run2->setBloomFilterNumBits(run2Bits - delta);
     }
@@ -579,33 +595,33 @@ double LSMTree::eval(size_t bits, size_t entries) const {
 
 double LSMTree::AutotuneFilters(size_t mFilters) {
     size_t delta = mFilters;
-    double R_new;
+    double rNew;
 
     // Flatten the tree structure into a single runs vector and zero out all the bits
-    std::vector<Run*> all_runs;
+    std::vector<Run*> allRuns;
     for (auto& level : levels) {
-        for (auto& run_ptr : level.runs) {
-            run_ptr->setBloomFilterNumBits(0);
-            all_runs.push_back(run_ptr.get());
+        for (auto& runPtr : level.runs) {
+            runPtr->setBloomFilterNumBits(0);
+            allRuns.push_back(runPtr.get());
         }
     }
     levels.front().runs.front()->setBloomFilterNumBits(mFilters);
-    double R = all_runs.size() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
+    double R = allRuns.size() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
 
     while (delta >= 1) {
-        R_new = R;
+        rNew = R;
         // Iterate through every run in the whole tree
-        for (size_t i = 0; i < all_runs.size() - 1; i++) {
-            for (size_t j = i + 1; j < all_runs.size(); j++) {
-                R_new = TrySwitch(all_runs[i], all_runs[j], delta, std::min(R, R_new));
-                R_new = TrySwitch(all_runs[j], all_runs[i], delta, std::min(R, R_new));
+        for (size_t i = 0; i < allRuns.size() - 1; i++) {
+            for (size_t j = i + 1; j < allRuns.size(); j++) {
+                rNew = TrySwitch(allRuns[i], allRuns[j], delta, std::min(R, rNew));
+                rNew = TrySwitch(allRuns[j], allRuns[i], delta, std::min(R, rNew));
             }
         }
 
-        if (R_new == R) {
+        if (rNew == R) {
             delta /= 2;
         } else {
-            R = R_new;
+            R = rNew;
         }
     }
     return R;
@@ -623,6 +639,5 @@ void LSMTree::monkeyOptimizeBloomFilters() {
         }
     }
     std::cout << "\nNew Bloom Filter summaries:" << std::endl;
-    // Print out the bloom filter summary using LSMTree::getBloomFilterSummary()
     std::cout << getBloomFilterSummary() << std::endl;
 }

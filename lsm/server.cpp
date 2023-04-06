@@ -5,12 +5,12 @@
 #include <shared_mutex>
 #include "server.hpp"
 
-volatile sig_atomic_t termination_flag = 0;
+volatile sig_atomic_t terminationFlag = 0;
 
 Server *server_ptr = nullptr;
 
 void sigintHandler(int signal) {
-    termination_flag = 1;
+    terminationFlag = 1;
     if (server_ptr) {
         server_ptr->close();
     }
@@ -18,17 +18,26 @@ void sigintHandler(int signal) {
 
 void Server::listenToStdIn()
 {
+    std::unique_lock<std::shared_mutex> exclusiveLock;
+    std::shared_lock<std::shared_mutex> sharedLock;
     std::string input;
-    while (!termination_flag)
+    while (!terminationFlag)
     {
         std::getline(std::cin, input);
-        if (input == "bloom")
-        {
+        if (input == "bloom") {
+            sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
             std::cout << lsmTree->getBloomFilterSummary() << std::endl;
+            sharedLock.unlock();
         } else if (input == "monkey") {
+            exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  // Lock the LSM Tree during monkey optimization
             std::cout << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
             lsmTree->monkeyOptimizeBloomFilters();
             std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
+            exclusiveLock.unlock();
+        } else if (input == "misses") {
+            sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
+            lsmTree->printMissesStats();
+            sharedLock.unlock();
         }
     }
 }
@@ -42,7 +51,7 @@ void Server::handleClient(int clientSocket)
     // Read commands from client
     char buffer[BUFFER_SIZE];
     // Check if client is still connected
-    while (!termination_flag)
+    while (!terminationFlag)
     {
         // Receive command
         ssize_t n_read = recv(clientSocket, buffer, sizeof(buffer), 0);
@@ -96,15 +105,15 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     std::string response;
 
     // Locks to ensure exclusive or shared access to the LSM tree
-    std::unique_lock<std::shared_mutex> exclusive_lock;
-    std::shared_lock<std::shared_mutex> shared_lock;
+    std::unique_lock<std::shared_mutex> exclusiveLock;
+    std::shared_lock<std::shared_mutex> sharedLock;
 
     // put, delete, load, benchmark, and quit operations are exclusive
     if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
-        exclusive_lock = std::unique_lock<std::shared_mutex>(sharedMtx);  
+        exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  
     // get, range, printStats, and info operations are shared  
     } else if (op == 'g' || op == 'r' || op == 's' || op == 'i') {
-        shared_lock = std::shared_lock<std::shared_mutex>(sharedMtx);
+        sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
     } else {
         response = printDSLHelp();
         sendResponse(clientSocket, response);
@@ -151,7 +160,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
             response = OK;
             sendResponse(clientSocket, response);
-            termination_flag = 1;
+            terminationFlag = 1;
             close();
             break;
         // Get, range, printStats, and info operations are shared
@@ -203,7 +212,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
 
 void Server::run() {
     // Accept incoming connections
-    while (!termination_flag) {
+    while (!terminationFlag) {
         sockaddr_in clientAddress;
         socklen_t clientAddressSize = sizeof(clientAddress);
         int clientSocket = accept(serverSocket, (sockaddr *)&clientAddress, &clientAddressSize);
@@ -246,7 +255,7 @@ Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
 }
 
 void Server::close() {
-    termination_flag = true;
+    terminationFlag = true;
     if (serverSocket != -1) {
         shutdown(serverSocket, SHUT_RDWR);
         ::close(serverSocket);

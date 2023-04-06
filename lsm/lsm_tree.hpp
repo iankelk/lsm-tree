@@ -32,6 +32,7 @@ public:
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
+    void printMissesStats();
 
 private:
     Memtable buffer;
@@ -49,6 +50,8 @@ private:
     double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
     double eval(size_t bits, size_t entries) const;
     double AutotuneFilters(size_t mFilters);
+    long long getMisses = 0;
+    long long rangeMisses = 0;
 };
 
 #endif /* LSM_TREE_HPP */
