@@ -540,14 +540,14 @@ long long LSMTree::getTotalBits() const {
     return totalBits;
 }
 
-long long LSMTree::TrySwitch(Run& run1, Run& run2, long long delta, long long R) const {
+double LSMTree::TrySwitch(Run& run1, Run& run2, long long delta, double R) const {
     long long run1Bits = run1.getNumBits();
     long long run2Bits = run2.getNumBits();
 
     long long run1Entries = run1.getSize();
     long long run2Entries = run2.getSize();
 
-    long long R_new = R - eval(run1Bits, run1Entries)
+    double R_new = R - eval(run1Bits, run1Entries)
                 - eval(run2Bits, run2Entries)
                 + eval(run1Bits + delta, run1Entries)
                 + eval(run2Bits - delta, run2Entries);
@@ -560,29 +560,59 @@ long long LSMTree::TrySwitch(Run& run1, Run& run2, long long delta, long long R)
     return R;
 }
 
+// double LSMTree::eval(long long bits, long long entries) const {
+//     return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
+// }
+
 double LSMTree::eval(long long bits, long long entries) const {
-    return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
+    double negativeBits = static_cast<double>(-bits);
+    double doubleEntries = static_cast<double>(entries);
+    double log2Squared = std::pow(std::log(2), 2);
+
+    double result = std::exp(negativeBits / doubleEntries * log2Squared);
+
+    // Print the intermediate variables
+    std::cout << "Negative Bits: " << negativeBits << std::endl;
+    std::cout << "Double Entries: " << doubleEntries << std::endl;
+    std::cout << "Log2 Squared: " << log2Squared << std::endl;
+    std::cout << "Result: " << result << std::endl;
+
+    return result;
 }
 
-long long LSMTree::AutotuneFilters(long long mFilters) const {
+// Calculate the total number of runs in the LSMTree
+int LSMTree::getTotalRuns() const {
+    int totalRuns = 0;
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        totalRuns += it->runs.size();
+    }
+    return totalRuns;
+}
+
+double LSMTree::AutotuneFilters(long long mFilters) const {
     long long delta = mFilters;
+    double R_new;
+    int totalRuns = getTotalRuns();
     levels.front().runs.front()->setNumBits(mFilters);
 
-    long long R = 0;
-    for (const auto& level : levels) {
-        for (const auto& run_ptr : level.runs) {
-            R += static_cast<long long>(eval(run_ptr->getNumBits(), run_ptr->getSize()));
+    double R = totalRuns - 1 + eval(levels.front().runs.front()->getNumBits(), levels.front().runs.front()->getSize());
+
+    // Flatten the tree structure into a single runs vector
+    std::vector<Run*> all_runs;
+    for (auto& level : levels) {
+        for (auto& run_ptr : level.runs) {
+            all_runs.push_back(run_ptr.get());
         }
     }
+
     while (delta >= 1) {
-        long long R_new = R;
-        for (size_t l_idx = 0; l_idx < levels.size(); l_idx++) {
-            auto& level_runs = levels[l_idx].runs;
-            for (size_t i = 0; i < level_runs.size() - 1; i++) {
-                for (size_t j = i + 1; j < level_runs.size(); j++) {
-                    R_new = TrySwitch(*level_runs[i], *level_runs[j], delta, R_new);
-                    R_new = TrySwitch(*level_runs[j], *level_runs[i], delta, R_new);
-                }
+        R_new = R;
+        // Iterate through every run in the whole tree
+        for (size_t i = 0; i < all_runs.size() - 1; i++) {
+            // Compare the current run with every other run in the whole tree
+            for (size_t j = i + 1; j < all_runs.size(); j++) {
+                R_new = TrySwitch(*all_runs[i], *all_runs[j], delta, R_new);
+                R_new = TrySwitch(*all_runs[j], *all_runs[i], delta, R_new);
             }
         }
         if (R_new == R) {
@@ -591,13 +621,16 @@ long long LSMTree::AutotuneFilters(long long mFilters) const {
             R = R_new;
         }
     }
+    // print out the final result
+    std::cout << "AutotuneFilters::R " << R << std::endl;
     return R;
 }
+
 
 // 
 void LSMTree::monkeyOptimizeBloomFilters() {
     long long totalBits = getTotalBits();
-    long long R = AutotuneFilters(totalBits);
+    double R = AutotuneFilters(totalBits);
     std::cout << "Total cost R: " << R << std::endl;
     for (auto it = levels.begin(); it != levels.end(); it++) {
         for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
