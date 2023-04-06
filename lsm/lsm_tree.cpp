@@ -97,19 +97,32 @@ void LSMTree::mergeLevels(int currentLevelNum) {
         // Merge the current level into the next level by moving the entire deque of runs into the next level
         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
         next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
-    } else if (levelPolicy == Level::PARTIAL) {
+   } else if (levelPolicy == Level::PARTIAL) {
         auto segmentBounds = it->findBestSegmentToCompact();
         // If the segment is not the entire level, compact it
-        if (segmentBounds.first != it->runs.size() && segmentBounds.second != it->runs.size()) {
-            it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
+        if (segmentBounds.second - segmentBounds.first < it->runs.size()) {
+            // Compact and replace the segment with the compacted run
+            auto compactedRun = it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
+            it->replaceSegment(segmentBounds.first, segmentBounds.second, std::move(compactedRun));
+
+            // // Update the number of key/value pairs in the current level. (done in replaceSegment)
+            // it->setKvPairs(it->addUpKVPairsInLevel());
+        }
+         // If the current level is still full after compaction, move the compacted run to the next level
+        if (!it->willLowerLevelFit()) {
+            next->runs.push_back(std::move(it->runs.back()));
+            it->runs.pop_back();
+            it->setKvPairs(it->addUpKVPairsInLevel());
+            next->setKvPairs(next->addUpKVPairsInLevel());
         }
     }
-
-    // Update the number of key/value pairs in the next level. 
-    next->setKvPairs(next->addUpKVPairsInLevel());
-    // Clear the current level and reset the number of key/value pairs to 0
-    it->runs.clear();
-    it->setKvPairs(0);
+    // Clear the current level and reset the number of key/value pairs to 0 if the policy is not Level::PARTIAL
+    if (levelPolicy != Level::PARTIAL) {
+        // Update the number of key/value pairs in the next level.
+        next->setKvPairs(next->addUpKVPairsInLevel());
+        it->runs.clear();
+        it->setKvPairs(0);
+    }
 }
 
 // Given a key, search the tree for the key. If the key is found, return the value. 
@@ -540,48 +553,33 @@ size_t LSMTree::getTotalBits() const {
     return totalBits;
 }
 
-double LSMTree::TrySwitch(Run& run1, Run& run2, size_t delta, double R) const {
-    size_t run1Bits = run1.getBloomFilterNumBits();
-    size_t run2Bits = run2.getBloomFilterNumBits();
+double LSMTree::TrySwitch(Run* run1, Run* run2, int64_t delta, double R) const {
+    int64_t run1Bits = run1->getBloomFilterNumBits();
+    int64_t run2Bits = run2->getBloomFilterNumBits();
 
-    size_t run1Entries = run1.getSize();
-    size_t run2Entries = run2.getSize();
+    int64_t run1Entries = run1->getSize();
+    int64_t run2Entries = run2->getSize();
 
     double R_new = R - eval(run1Bits, run1Entries)
                 - eval(run2Bits, run2Entries)
                 + eval(run1Bits + delta, run1Entries)
                 + eval(run2Bits - delta, run2Entries);
     
-    if (R_new < R && (run2Bits - delta > 0)) {
+    if ((R_new < R) && ((run2Bits - delta) > 0)) {
         R = R_new;
-        std::cout << "Setting run1 numBits from " << run1Bits << " to " << run1Bits + delta << std::endl;
-        std::cout << "Setting run2 numBits from " << run2Bits << " to " << run2Bits - delta << std::endl;
-        run1.setBloomFilterNumBits(run1Bits + delta);
-        run2.setBloomFilterNumBits(run2Bits - delta);
+        std::cout << "Setting run1 numBits from " << run1Bits << " to " << run1Bits + delta << " by adding " << delta << std::endl;
+        std::cout << "Setting run2 numBits from " << run2Bits << " to " << run2Bits - delta << " by subtracting " << delta << std::endl;  
+        // print newline
+        std::cout << std::endl;  
+        run1->setBloomFilterNumBits(run1Bits + delta);
+        run2->setBloomFilterNumBits(run2Bits - delta);
     }
     return R;
 }
 
-double LSMTree::eval(size_t bits, size_t entries) const {
-    return std::exp(static_cast<double>(-static_cast<int64_t>(bits)) / static_cast<double>(entries) * std::pow(std::log(2), 2));
+double LSMTree::eval(int64_t bits, int64_t entries) const {
+    return std::exp(static_cast<double>(-bits) / static_cast<double>(entries) * std::pow(std::log(2), 2));
 }
-
-// double LSMTree::eval(size_t bits, size_t entries) const {
-//     // Convert the bits and entries to doubles and cast the bits to a negative int64_t
-//     double negativeBits = static_cast<double>(-static_cast<int64_t>(bits));
-//     double doubleEntries = static_cast<double>(entries);
-//     double log2Squared = std::pow(std::log(2), 2);
-
-//     double result = std::exp(negativeBits / doubleEntries * log2Squared);
-
-//     // Print the intermediate variables
-//     std::cout << "Negative Bits: " << negativeBits << std::endl;
-//     std::cout << "Double Entries: " << doubleEntries << std::endl;
-//     std::cout << "Log2 Squared: " << log2Squared << std::endl;
-//     std::cout << "Result: " << result << std::endl;
-
-//     return result;
-// }
 
 // Calculate the total number of runs in the LSMTree
 int LSMTree::getTotalRuns() const {
@@ -592,10 +590,14 @@ int LSMTree::getTotalRuns() const {
     return totalRuns;
 }
 
-double LSMTree::AutotuneFilters(size_t mFilters) const {
-    size_t delta = mFilters;
+double LSMTree::AutotuneFilters(size_t mFilters) {
+    int64_t delta = mFilters;
     double R_new;
     levels.front().runs.front()->setBloomFilterNumBits(mFilters);
+    // Set all the other runs to have 0 bits
+    for (size_t i = 1; i < levels.front().runs.size(); i++) {
+        levels.front().runs[i]->setBloomFilterNumBits(0);
+    }
 
     double R = getTotalRuns() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
 
@@ -613,8 +615,8 @@ double LSMTree::AutotuneFilters(size_t mFilters) const {
         for (size_t i = 0; i < all_runs.size() - 1; i++) {
             // Compare the current run with every other run in the whole tree
             for (size_t j = i + 1; j < all_runs.size(); j++) {
-                R_new = TrySwitch(*all_runs[i], *all_runs[j], delta, R_new);
-                R_new = TrySwitch(*all_runs[j], *all_runs[i], delta, R_new);
+                R_new = TrySwitch(all_runs[i], all_runs[j], delta, std::min(R, R_new));
+                R_new = TrySwitch(all_runs[j], all_runs[i], delta, std::min(R, R_new));
             }
         }
         if (R_new == R) {
@@ -641,4 +643,23 @@ void LSMTree::monkeyOptimizeBloomFilters() {
     }
     // Print out the bloom filter summary using LSMTree::getBloomFilterSummary()
     std::cout << getBloomFilterSummary() << std::endl;
+    totalBits = getTotalBits();
+    std::cout << "Total bits: " << totalBits << std::endl;
 }
+
+// double LSMTree::eval(size_t bits, size_t entries) const {
+//     // Convert the bits and entries to doubles and cast the bits to a negative int64_t
+//     double negativeBits = static_cast<double>(-static_cast<int64_t>(bits));
+//     double doubleEntries = static_cast<double>(entries);
+//     double log2Squared = std::pow(std::log(2), 2);
+
+//     double result = std::exp(negativeBits / doubleEntries * log2Squared);
+
+//     // Print the intermediate variables
+//     std::cout << "Negative Bits: " << negativeBits << std::endl;
+//     std::cout << "Double Entries: " << doubleEntries << std::endl;
+//     std::cout << "Log2 Squared: " << log2Squared << std::endl;
+//     std::cout << "Result: " << result << std::endl;
+
+//     return result;
+// }

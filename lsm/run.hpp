@@ -31,7 +31,7 @@ public:
     void populateBloomFilter();
 private:
     KEY_t maxKey;
-    long maxKvPairs;
+    size_t maxKvPairs;
     double bfErrorRate;
     BloomFilter bloomFilter;
     std::vector<KEY_t> fencePointers;

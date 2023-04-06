@@ -33,8 +33,7 @@ public:
     void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
     void dump(); // dump prints the contents of the level. TODO: remove this function
     void compactLevel(double errorRate, State state, bool isLastLevel); 
-    void compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
-    std::pair<size_t, size_t> findBestSegmentToCompact(); 
+    //void compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
     long getLevelSize(int levelNum); 
     std::string getDiskName() const;
     int getDiskPenaltyMultiplier() const;
@@ -46,6 +45,13 @@ public:
     long getKvPairs() const;  // Get the number of kvPairs in the level
     void setKvPairs(long kvPairs); // Set the number of kvPairs in the level
     long getMaxKvPairs() const; // Get the max number of kvPairs in the level
+
+    void replaceSegment(size_t segStartIdx, size_t segEndIdx, std::unique_ptr<Run> compactedRun);
+    std::unique_ptr<Run> compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
+    std::pair<size_t, size_t> findBestSegmentToCompact(); 
+
+
+
     static std::string policyToString(Policy policy) {
         switch (policy) {
             case Policy::TIERED: return "TIERED";
