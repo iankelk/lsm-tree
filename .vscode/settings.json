@@ -84,7 +84,9 @@
         "ranges": "cpp",
         "span": "cpp",
         "__verbose_abort": "cpp",
-        "shared_mutex": "cpp"
+        "shared_mutex": "cpp",
+        "condition_variable": "cpp",
+        "future": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }

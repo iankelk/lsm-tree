@@ -8,9 +8,9 @@
 #include "run.hpp"
 #include "utils.hpp"
 
-LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy) :
+LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair))
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads)
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
@@ -161,6 +161,43 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                 }
                 return val;
             }
+        }
+    }
+    getMisses++;
+    return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
+}
+
+std::unique_ptr<VAL_t> LSMTree::cGet(KEY_t key) {
+    std::unique_ptr<VAL_t> val;
+    if (key < KEY_MIN || key > KEY_MAX) {
+        std::cerr << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
+        return nullptr;
+    }
+    val = buffer.get(key);
+    if (val != nullptr) {
+        if (*val == TOMBSTONE) {
+            getMisses++;
+            return nullptr;
+        }
+        return val;
+    }
+    std::vector<std::future<std::unique_ptr<VAL_t>>> futures;
+    for (auto &level : levels) {
+        for (auto &run : level.runs) {
+            // Capture run by reference and key by value
+            futures.push_back(threadPool.enqueue([&run, key]() {
+                return run->get(key);
+            }));
+        }
+    }
+    for (auto &future : futures) {
+        val = future.get();
+        if (val != nullptr) {
+            if (*val == TOMBSTONE) {
+                getMisses++;
+                return nullptr;
+            }
+            return val;
         }
     }
     getMisses++;

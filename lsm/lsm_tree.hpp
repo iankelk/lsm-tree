@@ -3,14 +3,16 @@
 #include "memtable.hpp"
 #include "level.hpp"
 #include "run.hpp"
+#include "threadpool.hpp"
 
 class Run;
 
 class LSMTree {
 public:
-    LSMTree(float, int, int, Level::Policy);
+    LSMTree(float, int, int, Level::Policy, size_t);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
+    std::unique_ptr<VAL_t> cGet(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
     void benchmark(const std::string& filename, bool verbose);
@@ -33,9 +35,11 @@ public:
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
     void printMissesStats();
+    size_t getNumThreads() { return threadPool.getNumThreads(); }
 
 private:
     Memtable buffer;
+    ThreadPool threadPool;
     double bfErrorRate;
     int fanout;
     Level::Policy levelPolicy;
