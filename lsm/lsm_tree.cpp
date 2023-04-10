@@ -87,26 +87,50 @@ void LSMTree::mergeLevels(int currentLevelNum) {
             }
         }
     }
+    
+    std::mutex runs_mutex;
+    std::atomic<size_t> tasksCompleted(0);
+    std::condition_variable tasksCompletedCond;
+
+    auto task1 = [&]() {
+        {
+            std::unique_lock<std::mutex> lock(runs_mutex);
+            it->compactLevel(bfErrorRate, Level::FULL, isLastLevel(it));
+            next->runs.push_back(std::move(it->runs.front()));
+        }
+        tasksCompleted.fetch_add(1);
+        tasksCompletedCond.notify_one();
+    };
+
+    auto task2 = [&]() {
+        {
+            std::unique_lock<std::mutex> lock(runs_mutex);
+            next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
+            next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
+        }
+        tasksCompleted.fetch_add(1);
+        tasksCompletedCond.notify_one();
+    };
 
     if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-        it->compactLevel(bfErrorRate, Level::FULL, isLastLevel(it));
-        // Move the single run pointed to by runs.begin() into the next level
-        next->runs.push_back(std::move(it->runs.front()));
-    } 
+        threadPool.enqueue(task1);
+    }
     if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
-        // Merge the current level into the next level by moving the entire deque of runs into the next level
-        next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), make_move_iterator(it->runs.end()));
-        next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
-   } else if (levelPolicy == Level::PARTIAL) {
+        threadPool.enqueue(task2);
+    }
+
+    if (levelPolicy == Level::TIERED || levelPolicy == Level::LEVELED || levelPolicy == Level::LAZY_LEVELED) {
+        std::unique_lock<std::mutex> lock(runs_mutex);
+        tasksCompletedCond.wait(lock, [&]() { return tasksCompleted.load() >= 1; });
+    }
+
+    if (levelPolicy == Level::PARTIAL) {
         auto segmentBounds = it->findBestSegmentToCompact();
         // If the segment is not the entire level, compact it
         if (segmentBounds.second - segmentBounds.first < it->runs.size()) {
             // Compact and replace the segment with the compacted run
             auto compactedRun = it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
             it->replaceSegment(segmentBounds.first, segmentBounds.second, std::move(compactedRun));
-
-            // // Update the number of key/value pairs in the current level. (done in replaceSegment)
-            // it->setKvPairs(it->addUpKVPairsInLevel());
         }
          // If the current level is still full after compaction, move the compacted run to the next level
         if (!it->willLowerLevelFit()) {

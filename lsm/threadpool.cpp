@@ -6,7 +6,7 @@
 #include <functional>
 #include "threadpool.hpp"
 
-ThreadPool::ThreadPool(size_t numThreads) : stop(false) {
+ThreadPool::ThreadPool(size_t numThreads) : stop(false), activeTasks(0) {
     for (size_t i = 0; i < numThreads; ++i) {
         workers.emplace_back([this] {
             while (true) {
@@ -35,4 +35,9 @@ ThreadPool::~ThreadPool() {
     for (std::thread &worker : workers) {
         worker.join();
     }
+}
+
+void ThreadPool::waitForAllTasks() {
+    std::unique_lock<std::mutex> lock(tasksMutex);
+    condition.wait(lock, [this]() { return tasks.empty() && activeTasks.load() == 0; });
 }

@@ -17,12 +17,14 @@ public:
     auto enqueue(F&& f) -> std::future<typename std::invoke_result<F>::type>;
 
     size_t getNumThreads() { return workers.size(); }
+    void waitForAllTasks();
 private:
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
 
     std::mutex tasksMutex;
     std::condition_variable condition;
+    std::atomic<std::size_t> activeTasks;
     bool stop;
 };
 
@@ -33,7 +35,11 @@ auto ThreadPool::enqueue(F&& f) -> std::future<typename std::invoke_result<F>::t
     std::future<return_type> res = task->get_future();
     {
         std::unique_lock<std::mutex> lock(tasksMutex);
-        tasks.emplace([task]() { (*task)(); });
+        tasks.emplace([task, this]() { 
+            (*task)();
+            --activeTasks;
+        });
+        ++activeTasks;
     }
     condition.notify_one();
     return res;
