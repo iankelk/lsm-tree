@@ -46,8 +46,8 @@ public:
     void setKvPairs(long kvPairs); // Set the number of kvPairs in the level
     long getMaxKvPairs() const; // Get the max number of kvPairs in the level
 
-    void replaceSegment(size_t segStartIdx, size_t segEndIdx, std::unique_ptr<Run> compactedRun);
-    std::unique_ptr<Run> compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
+    void replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun);
+    std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
 
 

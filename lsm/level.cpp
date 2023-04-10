@@ -92,11 +92,12 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
 }
 // Merge the key-value pairs from the segment runs, eliminating duplicate keys and reducing the overall size of the level.
 // The compacted data is then stored in a new run, which replaces the original runs in the segment.
-std::unique_ptr<Run> Level::compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel) {
+std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
     std::map<KEY_t, VAL_t> mergedMap;
     size_t newMaxKvPairs = 0;
 
-    for (size_t idx = segStartIdx; idx <= segEndIdx; ++idx) {
+    // Iterate through the runs in the segment and merge the data
+    for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
         std::map<KEY_t, VAL_t> runMap = runs[idx]->getMap();
         for (const auto &kv : runMap) {
             if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
@@ -117,16 +118,16 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, size_t segStartIdx,
     return compactedRun;
 }
 
-void Level::replaceSegment(size_t segStartIdx, size_t segEndIdx, std::unique_ptr<Run> compactedRun) {
+void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {
     // Close and delete files for old runs in the segment
-    for (size_t idx = segStartIdx; idx <= segEndIdx; ++idx) {
+    for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
         runs[idx]->closeFile();
         runs[idx]->deleteFile();
     }
 
     // Replace the old runs with the compacted one
-    runs.erase(runs.begin() + segStartIdx, runs.begin() + segEndIdx + 1);
-    runs.insert(runs.begin() + segStartIdx, std::move(compactedRun));
+    runs.erase(runs.begin() + segmentBounds.first, runs.begin() + segmentBounds.second + 1);
+    runs.insert(runs.begin() + segmentBounds.first, std::move(compactedRun));
 
     // Update the number of key-value pairs in the level
     setKvPairs(addUpKVPairsInLevel());

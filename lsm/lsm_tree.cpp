@@ -87,65 +87,52 @@ void LSMTree::mergeLevels(int currentLevelNum) {
             }
         }
     }
-    
-    std::mutex runs_mutex;
-    std::atomic<size_t> tasksCompleted(0);
-    std::condition_variable tasksCompletedCond;
-
-    auto task1 = [&]() {
-        {
-            std::unique_lock<std::mutex> lock(runs_mutex);
-            it->compactLevel(bfErrorRate, Level::FULL, isLastLevel(it));
-            next->runs.push_back(std::move(it->runs.front()));
-        }
-        tasksCompleted.fetch_add(1);
-        tasksCompletedCond.notify_one();
-    };
-
-    auto task2 = [&]() {
-        {
-            std::unique_lock<std::mutex> lock(runs_mutex);
-            next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
-            next->compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, isLastLevel(next));
-        }
-        tasksCompleted.fetch_add(1);
-        tasksCompletedCond.notify_one();
-    };
 
     if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-        threadPool.enqueue(task1);
-    }
-    if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
-        threadPool.enqueue(task2);
-    }
-
-    if (levelPolicy == Level::TIERED || levelPolicy == Level::LEVELED || levelPolicy == Level::LAZY_LEVELED) {
-        std::unique_lock<std::mutex> lock(runs_mutex);
-        tasksCompletedCond.wait(lock, [&]() { return tasksCompleted.load() >= 1; });
-    }
-
-    if (levelPolicy == Level::PARTIAL) {
-        auto segmentBounds = it->findBestSegmentToCompact();
-        // If the segment is not the entire level, compact it
-        if (segmentBounds.second - segmentBounds.first < it->runs.size()) {
-            // Compact and replace the segment with the compacted run
-            auto compactedRun = it->compactSegment(bfErrorRate, segmentBounds.first, segmentBounds.second, isLastLevel(it));
-            it->replaceSegment(segmentBounds.first, segmentBounds.second, std::move(compactedRun));
-        }
-         // If the current level is still full after compaction, move the compacted run to the next level
-        if (!it->willLowerLevelFit()) {
-            next->runs.push_back(std::move(it->runs.back()));
-            it->runs.pop_back();
-            it->setKvPairs(it->addUpKVPairsInLevel());
-            next->setKvPairs(next->addUpKVPairsInLevel());
-        }
-    }
-    // Clear the current level and reset the number of key/value pairs to 0 if the policy is not Level::PARTIAL
-    if (levelPolicy != Level::PARTIAL) {
-        // Update the number of key/value pairs in the next level.
-        next->setKvPairs(next->addUpKVPairsInLevel());
+        // Save the number of runs in the current level pointed to by iterator it
+        size_t numRuns = it->runs.size();
+        // Move those runs to the next level
+        next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
+        // Use compactSegment() to only compact the runs that had just been moved to the next level
+        auto segmentBounds = std::make_pair<size_t, size_t>(next->runs.size() - numRuns, next->runs.size() - 1);
+        auto compactedRun = next->compactSegment(bfErrorRate, segmentBounds, isLastLevel(next));
+        next->replaceSegment(segmentBounds, std::move(compactedRun));
         it->runs.clear();
         it->setKvPairs(0);
+    } else 
+    if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
+        // Merge the current level into the next level by moving the entire deque of runs into the next level
+        next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
+        auto segmentBounds = std::make_pair<size_t, size_t>(0, next->runs.size() - 1);
+        auto compactedRun = next->compactSegment(bfErrorRate, segmentBounds, isLastLevel(next));
+        next->replaceSegment(segmentBounds, std::move(compactedRun));
+        it->runs.clear();
+        it->setKvPairs(0);
+   } else
+    if (levelPolicy == Level::PARTIAL) {
+        auto segmentBounds = it->findBestSegmentToCompact();
+        // Check if the current level is full
+        if (!it->willLowerLevelFit()) {
+            // If the current level is full, move the 2 best runs to the next level
+            next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin() + segmentBounds.first), std::make_move_iterator(it->runs.begin() + segmentBounds.second + 1));
+            it->runs.erase(it->runs.begin() + segmentBounds.first, it->runs.begin() + segmentBounds.second + 1);
+            
+            // Update the number of key-value pairs in the levels
+            it->setKvPairs(it->addUpKVPairsInLevel());
+            next->setKvPairs(next->addUpKVPairsInLevel());
+            
+            // Compact the runs that had just been moved to the next level
+            auto compactSegmentBounds = std::make_pair<size_t, size_t>(next->runs.size() - (segmentBounds.second - segmentBounds.first) - 1, next->runs.size() - 1);
+            auto compactedRun = next->compactSegment(bfErrorRate, compactSegmentBounds, isLastLevel(next));
+            next->replaceSegment(compactSegmentBounds, std::move(compactedRun));
+        } else {
+            // If the segment is not the entire level, compact it
+            if (segmentBounds.second - segmentBounds.first < it->runs.size()) {
+                // Compact and replace the segment with the compacted run
+                auto compactedRun = it->compactSegment(bfErrorRate, segmentBounds, isLastLevel(it));
+                it->replaceSegment(segmentBounds, std::move(compactedRun));
+            }
+        }
     }
 }
 
