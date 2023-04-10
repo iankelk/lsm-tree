@@ -12,10 +12,10 @@ public:
     LSMTree(float, int, int, Level::Policy, size_t);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
-    std::unique_ptr<VAL_t> cGet(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
+    std::unique_ptr<std::map<KEY_t, VAL_t>> cRange(KEY_t start, KEY_t end);
     void del(KEY_t key);
-    void benchmark(const std::string& filename, bool verbose);
+    void benchmark(const std::string& filename, bool verbose, bool concurrent);
     void load(const std::string& filename);
     bool isLastLevel(std::vector<Level>::iterator it);
     std::string printStats();

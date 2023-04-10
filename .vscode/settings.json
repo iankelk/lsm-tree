@@ -86,7 +86,9 @@
         "__verbose_abort": "cpp",
         "shared_mutex": "cpp",
         "condition_variable": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "charconv": "cpp",
+        "source_location": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }

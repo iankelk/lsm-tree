@@ -7,7 +7,7 @@
 #include "server.hpp"
 
 volatile sig_atomic_t terminationFlag = 0;
-bool concurrentGet = false;
+bool concurrent = false;
 
 Server *server_ptr = nullptr;
 
@@ -57,13 +57,13 @@ void Server::listenToStdIn() {
                 lsmTree->printMissesStats();
                 sharedLock.unlock();
             } else if (input == "concurrent") {
-                concurrentGet = !concurrentGet;
-                std::cout << "Concurrent get: " << concurrentGet << std::endl;
+                concurrent = !concurrent;
+                std::cout << "Concurrent: " << concurrent << std::endl;
             } else if (input == "help") {
                 std::cout << "bloom: Print Bloom Filter summary" << std::endl;
                 std::cout << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;
                 std::cout << "misses: Print misses stats" << std::endl;
-                std::cout << "concurrent: Toggle concurrent get" << std::endl;
+                std::cout << "concurrent: Toggle concurrent" << std::endl;
                 std::cout << "help: Print this help message" << std::endl;
             } else {
                 std::cout << "Invalid command" << std::endl;
@@ -181,7 +181,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             break;
         case 'b':
             ss >> fileName;
-            lsmTree->benchmark(fileName, verbose);
+            lsmTree->benchmark(fileName, verbose, concurrent);
             response = OK;
             break;
         case 'q':
@@ -199,22 +199,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
                 response = printDSLHelp();
                 break;
             }
-            valuePtr = concurrentGet ? lsmTree->cGet(key) : lsmTree->get(key);
-            if (valuePtr != nullptr) {
-                response = std::to_string(*valuePtr);
-            }
-            else {
-                response = NO_VALUE;
-            }
-            break;
-        case 'c':
-            ss >> key;
-            // Break if key is not a number
-            if (ss.fail()) {
-                response = printDSLHelp();
-                break;
-            }
-            valuePtr = lsmTree->cGet(key);
+            valuePtr = lsmTree->get(key);
             if (valuePtr != nullptr) {
                 response = std::to_string(*valuePtr);
             }
@@ -229,7 +214,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
                 response = printDSLHelp();
                 break;
             }
-            rangePtr = lsmTree->range(start, end);
+            concurrent ? lsmTree->cRange(start, end) : lsmTree->range(start, end);
             if (rangePtr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
                 for (const auto &p : *rangePtr) {

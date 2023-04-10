@@ -167,44 +167,6 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
-std::unique_ptr<VAL_t> LSMTree::cGet(KEY_t key) {
-    std::unique_ptr<VAL_t> val;
-    if (key < KEY_MIN || key > KEY_MAX) {
-        std::cerr << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
-        return nullptr;
-    }
-    val = buffer.get(key);
-    if (val != nullptr) {
-        if (*val == TOMBSTONE) {
-            getMisses++;
-            return nullptr;
-        }
-        return val;
-    }
-    std::vector<std::future<std::unique_ptr<VAL_t>>> futures;
-    for (auto &level : levels) {
-        for (auto &run : level.runs) {
-            // Capture run by reference and key by value
-            futures.push_back(threadPool.enqueue([&run, key]() {
-                return run->get(key);
-            }));
-        }
-    }
-    for (auto &future : futures) {
-        val = future.get();
-        if (val != nullptr) {
-            if (*val == TOMBSTONE) {
-                getMisses++;
-                return nullptr;
-            }
-            return val;
-        }
-    }
-    getMisses++;
-    return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
-}
-
-
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
 // If the range is not empty, return a map of all the found pairs.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
@@ -243,10 +205,10 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     for (auto level = levels.begin(); level != levels.end(); level++) {
         // Iterate through the runs in the level and check if the range is in the run
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            std::map<KEY_t, VAL_t> temp_map = (*run)->range(start, end);
+            std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
             // If keys from the range are found in the run, add them to the range map
-            if (temp_map.size() != 0) {
-                for (const auto &kv : temp_map) {
+            if (tempMap.size() != 0) {
+                for (const auto &kv : tempMap) {
                     // Only add the key/value pair if the key is not already in the range map
                     rangeMap->try_emplace(kv.first, kv.second);
                 }
@@ -266,6 +228,73 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     return rangeMap;
 }
 
+// Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
+// If the range is not empty, return a map of all the found pairs.
+std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) {
+    
+    // if either start or end is not within the range of the available keys, print to the server stderr and skip it
+    if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
+        std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
+        return nullptr;
+    }
+    // If the start key is greater than the end key, swap them
+    if (start > end) {
+        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
+        KEY_t temp = start;
+        start = end;
+        end = temp;
+    }
+
+    // If the start key is equal to the end key, return nullptr
+    if (start == end) {
+        return nullptr;
+    }
+
+    int allPossibleKeys = end - start;
+
+    // Search the buffer for the key range and return the range map as a unique_ptr
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
+
+    // If the range has the size of the entire range, return the range
+    if (rangeMap->size() == allPossibleKeys) {
+        // Remove all the TOMBSTONES from the range map
+        removeTombstones(rangeMap);
+        return rangeMap;
+    }
+
+    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
+
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            // Enqueue task for searching in the run
+            futures.push_back(threadPool.enqueue([&, run] {
+                return (*run)->range(start, end);
+            }));
+        }
+    }
+
+    // Wait for all tasks to finish and aggregate the results
+    for (auto &future : futures) {
+        std::map<KEY_t, VAL_t> tempMap = future.get();
+        if (tempMap.size() != 0) {
+            for (const auto &kv : tempMap) {
+                rangeMap->try_emplace(kv.first, kv.second);
+            }
+        }
+        if (rangeMap->size() == allPossibleKeys) {
+            removeTombstones(rangeMap);
+            return rangeMap;
+        }
+    }
+
+    removeTombstones(rangeMap);
+    if (rangeMap->size() == 0) {
+        rangeMisses++;
+    }
+    return rangeMap;
+}
+
+
 // Given a key, delete the key-value pair from the tree.
 void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
@@ -278,7 +307,7 @@ void LSMTree::printMissesStats() {
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
-void LSMTree::benchmark(const std::string& filename, bool verbose) {
+void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurrent) {
     int count = 0;
     std::ifstream file(filename);
 
@@ -291,7 +320,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
     ss << file.rdbuf();
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
+    std::cout << "Benchmark: loaded \"" << filename << "\" and concurrent is " << concurrent << std::endl;
 
     std::string line;
     while (std::getline(ss, line)) {
@@ -323,7 +352,8 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                range(start, end);
+                
+                concurrent ? cRange(start, end) : range(start, end);
                 break;
             }
             default: {
