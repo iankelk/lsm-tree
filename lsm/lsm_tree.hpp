@@ -18,6 +18,7 @@ public:
     void benchmark(const std::string& filename, bool verbose, bool concurrent);
     void load(const std::string& filename);
     bool isLastLevel(std::vector<Level>::iterator it);
+    bool isLastLevel(int levelNum);
     std::string printStats();
     std::string printTree();
     json serialize() const;
@@ -46,7 +47,15 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
+    std::map<int, std::pair<size_t, size_t>> compactionPlan;
+
+
     void mergeLevels(int currentLevelNum);
+    void moveRuns(int currentLevelNum);
+    void executeCompactionPlan();
+
+
+
     long long bfFalsePositives = 0;
     long long bfTruePositives = 0;
     long long ioCount = 0;
