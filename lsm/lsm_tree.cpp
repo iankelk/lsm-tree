@@ -58,87 +58,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     buffer.put(key, val);
 }
 
-
-// Given an iterator for the levels vector, check to see if there is space to insert another run
-// If the next level does not have space for the current level, recursively merge the next level downwards
-// until a level has space for a new run in it.
-// void LSMTree::mergeLevels(int currentLevelNum) {
-//     std::vector<Level>::iterator it;
-//     std::vector<Level>::iterator next;
-
-//     // Get the iterator for the current level and subtract 1 since the levels vector is 0-indexed
-//     it = levels.begin() + currentLevelNum - 1;
-
-//     // If the current level has space for another run, return
-//     if (it->willLowerLevelFit()) {
-//         return;
-//     } else {
-//         // If we have reached the end of the levels vector, create a new level. Move the next pointer to the new level.
-//         if (it + 1 == levels.end()) {
-//             levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-//             // Get the iterators "it" and "next" which are lost when the vector is resized
-//             it = levels.end() - 2;
-//             next = levels.end() - 1;
-//         // If the next level has space for another run, move the next pointer to the next level
-//         } else {
-//             next = it + 1;
-//             if (!next->willLowerLevelFit()) {
-//                 mergeLevels(currentLevelNum + 1);
-//                 // These iterators need to be reset when returning from the recursion in case the levels vector is resized
-//                 it = levels.begin() + currentLevelNum - 1;
-//                 next = levels.begin() + currentLevelNum;
-//             }
-//         }
-//     }
-
-//     if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-//         // Save the number of runs in the current level pointed to by iterator it
-//         size_t numRuns = it->runs.size();
-//         // Move those runs to the next level
-//         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
-//         // Use compactSegment() to only compact the runs that had just been moved to the next level
-//         auto segmentBounds = std::make_pair<size_t, size_t>(next->runs.size() - numRuns, next->runs.size() - 1);
-//         auto compactedRun = next->compactSegment(bfErrorRate, segmentBounds, isLastLevel(next));
-//         next->replaceSegment(segmentBounds, std::move(compactedRun));
-//         it->runs.clear();
-//         it->setKvPairs(0);
-//     } else 
-//     if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
-//         // Merge the current level into the next level by moving the entire deque of runs into the next level
-//         next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
-//         auto segmentBounds = std::make_pair<size_t, size_t>(0, next->runs.size() - 1);
-//         auto compactedRun = next->compactSegment(bfErrorRate, segmentBounds, isLastLevel(next));
-//         next->replaceSegment(segmentBounds, std::move(compactedRun));
-//         it->runs.clear();
-//         it->setKvPairs(0);
-//    } else
-//     if (levelPolicy == Level::PARTIAL) {
-//         auto segmentBounds = it->findBestSegmentToCompact();
-//         // Check if the current level is full
-//         if (!it->willLowerLevelFit()) {
-//             // If the current level is full, move the 2 best runs to the next level
-//             next->runs.insert(next->runs.end(), std::make_move_iterator(it->runs.begin() + segmentBounds.first), std::make_move_iterator(it->runs.begin() + segmentBounds.second + 1));
-//             it->runs.erase(it->runs.begin() + segmentBounds.first, it->runs.begin() + segmentBounds.second + 1);
-            
-//             // Update the number of key-value pairs in the levels
-//             it->setKvPairs(it->addUpKVPairsInLevel());
-//             next->setKvPairs(next->addUpKVPairsInLevel());
-            
-//             // Compact the runs that had just been moved to the next level
-//             auto compactSegmentBounds = std::make_pair<size_t, size_t>(next->runs.size() - (segmentBounds.second - segmentBounds.first) - 1, next->runs.size() - 1);
-//             auto compactedRun = next->compactSegment(bfErrorRate, compactSegmentBounds, isLastLevel(next));
-//             next->replaceSegment(compactSegmentBounds, std::move(compactedRun));
-//         } else {
-//             // If the segment is not the entire level, compact it
-//             if (segmentBounds.second - segmentBounds.first < it->runs.size()) {
-//                 // Compact and replace the segment with the compacted run
-//                 auto compactedRun = it->compactSegment(bfErrorRate, segmentBounds, isLastLevel(it));
-//                 it->replaceSegment(segmentBounds, std::move(compactedRun));
-//             }
-//         }
-//     }
-// }
-
 void LSMTree::moveRuns(int currentLevelNum) {
     std::vector<Level>::iterator it;
     std::vector<Level>::iterator next;
@@ -185,13 +104,35 @@ void LSMTree::moveRuns(int currentLevelNum) {
     }
 }
 
+// void LSMTree::executeCompactionPlan() {
+//     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
+//         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
+//             auto &level = levels[levelNum - 1];
+//             auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
+//             level.replaceSegment(segmentBounds, std::move(compactedRun));
+//         }
+//     }
+// }
+
 void LSMTree::executeCompactionPlan() {
+    std::vector<std::future<void>> compactResults;
+    compactResults.reserve(compactionPlan.size());
+
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
+            int first = segmentBounds.first;
+            int second = segmentBounds.second;
             auto &level = levels[levelNum - 1];
-            auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
-            level.replaceSegment(segmentBounds, std::move(compactedRun));
+            auto task = [this, &level, first, second] {
+                auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
+                level.replaceSegment({first, second}, std::move(compactedRun));
+            };
+            compactResults.push_back(threadPool.enqueue(task));
         }
+    }
+    // Wait for all compacting tasks to complete
+    for (auto &result : compactResults) {
+        result.get();
     }
 }
 
@@ -310,7 +251,6 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
 // If the range is not empty, return a map of all the found pairs.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) {
-    
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
@@ -372,7 +312,6 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) 
     }
     return rangeMap;
 }
-
 
 // Given a key, delete the key-value pair from the tree.
 void LSMTree::del(KEY_t key) {
@@ -633,7 +572,6 @@ std::string LSMTree::getBloomFilterSummary() {
     output.pop_back();
     return output;
 }
-
 
 json LSMTree::serialize() const {
     json j;
