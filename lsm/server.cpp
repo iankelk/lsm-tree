@@ -116,6 +116,7 @@ void Server::sendResponse(int clientSocket, const std::string &response) {
 void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     char op;
     ss >> op;
+    int numToPrintFromEachLevel;
     KEY_t key, start, end;
     VAL_t value;
     
@@ -226,8 +227,21 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
                 response = NO_VALUE;
             }
             break;
-        case 's':            
-            response = lsmTree->printStats();
+        case 's':
+            // Check if there's an integer after the 's' option
+            if (ss >> numToPrintFromEachLevel) {
+                // Check if the integer is positive
+                if (numToPrintFromEachLevel > 0) {
+                    // Pass the integer to the printStats function if it's provided and positive
+                    response = lsmTree->printStats(numToPrintFromEachLevel);
+                } else {
+                    // Set the response to an error message if the integer is not positive
+                    response = "For printing stats, the number of key-value pairs to print must be positive.\n";
+                }
+            } else {
+                // Call the function without any arguments if the integer is not provided
+                response = lsmTree->printStats(STATS_PRINT_EVERYTHING);
+            }
             break;
         case 'i':
             response = lsmTree->printTree();
@@ -349,7 +363,7 @@ std::string Server::printDSLHelp() {
         "   Syntax: b \"/path/to/fileName\"\n"
         "   Example: b \"~/workload.txt\"\n\n"
         "7. Print Stats (Display information about the current state of the tree)\n"
-        "   Syntax: s\n"
+        "   Syntax: s [INT1 (optional number of results returned per level)]\n"
         "   Example: \n"
         "     Logical Pairs: 10\n"
         "     LVL1: 3, LVL3: 9\n"

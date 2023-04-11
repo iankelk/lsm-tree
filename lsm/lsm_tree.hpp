@@ -19,7 +19,7 @@ public:
     void load(const std::string& filename);
     bool isLastLevel(std::vector<Level>::iterator it);
     bool isLastLevel(int levelNum);
-    std::string printStats();
+    std::string printStats(size_t numToPrintFromEachLevel);
     std::string printTree();
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);
