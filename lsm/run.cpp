@@ -182,11 +182,6 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), end);
         searchPageEnd = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter));
     }
-
-    // Check that the start and end page indices are valid
-    if (searchPageStart < 0 || searchPageEnd < 0) {
-        die("Run::range: Negative index from fence pointer");
-    }
     // Check that the start page index is less than the end page index
     if (searchPageStart >= searchPageEnd) {
         die("Run::range: Start page index is greater than or equal to end page index");
@@ -305,14 +300,8 @@ std::string Run::getBloomFilterSummary() {
     return ss.str();
 }
 
-void Run::resetBloomFilterBitset() {
-    bloomFilter.resetBitset();
-}
 void Run::resizeBloomFilterBitset(size_t numBits) {
     bloomFilter.resize(bloomFilter.getNumBits());
-}
-void Run::addKeyToBloomFilter(KEY_t key) {
-    bloomFilter.add(key);
 }
 
 // Populate the bloom filter. This will typically be called after MONKEY resizes them.

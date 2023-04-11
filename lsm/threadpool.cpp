@@ -11,7 +11,6 @@ ThreadPool::ThreadPool(size_t numThreads) : stop(false), activeTasks(0) {
         workers.emplace_back([this] {
             while (true) {
                 std::function<void()> task;
-
                 {
                     std::unique_lock<std::mutex> lock(tasksMutex);
                     condition.wait(lock, [this] { return stop || !tasks.empty(); });
@@ -19,8 +18,8 @@ ThreadPool::ThreadPool(size_t numThreads) : stop(false), activeTasks(0) {
                     task = std::move(tasks.front());
                     tasks.pop();
                 }
-
                 task();
+                condition.notify_all();
             }
         });
     }

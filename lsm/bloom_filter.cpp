@@ -9,11 +9,7 @@ BloomFilter::BloomFilter(size_t capacity, double errorRate) :
     capacity(capacity), errorRate(errorRate),
     numBits(std::ceil(-(capacity * std::log(errorRate)) / std::log(2) / std::log(2))),
     numHashes(std::ceil(std::log(2) * (numBits / capacity))),
-    bits(numBits) {
-        if (capacity < 0) {
-            die("BloomFilter::Constructor: Capacity must be non-negative.");
-    }
-}
+    bits(numBits) {}
 
 void BloomFilter::add(const KEY_t key) {
     XXH128_hash_t hash = XXH3_128bits(static_cast<const void*>(&key), sizeof(KEY_t));
@@ -38,11 +34,6 @@ bool BloomFilter::contains(const KEY_t key) {
         }
     }
     return true;
-}
-
-// Reset bitset to all 0s
-void BloomFilter::resetBitset() {
-    this->bits.reset();
 }
 
 // Resize bloom filter to new bitset size

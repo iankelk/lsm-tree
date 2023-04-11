@@ -25,9 +25,7 @@ public:
     size_t getBloomFilterNumBits() { return bloomFilter.getNumBits(); }
     void setBloomFilterNumBits(size_t numBits) { bloomFilter.setNumBits(numBits); }
     size_t getSize() { return size; }
-    void resetBloomFilterBitset();
     void resizeBloomFilterBitset(size_t numBits);
-    void addKeyToBloomFilter(KEY_t key);
     void populateBloomFilter();
 private:
     KEY_t maxKey;

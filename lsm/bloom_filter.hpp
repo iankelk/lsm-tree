@@ -16,7 +16,6 @@ public:
     size_t getNumBits() { return numBits; }
     void setNumBits(size_t numBits) { this->numBits = numBits; } 
     int getNumHashes() { return numHashes; }
-    void resetBitset();
     void resize(size_t newNumBits);
     double theoreticalErrorRate() const;
 

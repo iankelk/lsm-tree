@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
+#include <numeric>
 
 #include "lsm_tree.hpp"
 #include "run.hpp"
@@ -130,10 +131,12 @@ void LSMTree::executeCompactionPlan() {
             compactResults.push_back(threadPool.enqueue(task));
         }
     }
-    // Wait for all compacting tasks to complete
-    for (auto &result : compactResults) {
-        result.get();
-    }
+    // TODO: check if this is necessary
+    // // Wait for all compacting tasks to complete
+    // for (auto &result : compactResults) {
+    //     result.get();
+    // }
+    threadPool.waitForAllTasks();
 }
 
 void LSMTree::mergeLevels(int currentLevelNum) {
@@ -646,9 +649,10 @@ void LSMTree::deserialize(const std::string& filename) {
 size_t LSMTree::getTotalBits() const {
     size_t totalBits = 0;
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
-            totalBits += (*run)->getBloomFilterNumBits();
-        }
+        totalBits += std::accumulate(it->runs.begin(), it->runs.end(), size_t(0),
+            [](size_t sum, const std::unique_ptr<Run>& run) {
+                return sum + run->getBloomFilterNumBits();
+            });
     }
     return totalBits;
 }
@@ -679,7 +683,6 @@ double LSMTree::eval(size_t bits, size_t entries) const {
 
 double LSMTree::AutotuneFilters(size_t mFilters) {
     size_t delta = mFilters;
-    double rNew;
 
     // Flatten the tree structure into a single runs vector and zero out all the bits
     std::vector<Run*> allRuns;
@@ -693,7 +696,7 @@ double LSMTree::AutotuneFilters(size_t mFilters) {
     double R = allRuns.size() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
 
     while (delta >= 1) {
-        rNew = R;
+        double rNew = R;
         // Iterate through every run in the whole tree
         for (size_t i = 0; i < allRuns.size() - 1; i++) {
             for (size_t j = i + 1; j < allRuns.size(); j++) {

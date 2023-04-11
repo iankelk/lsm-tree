@@ -10,7 +10,7 @@
 
 class ThreadPool {
 public:
-    ThreadPool(size_t numThreads);
+    explicit ThreadPool(size_t numThreads);
     ~ThreadPool();
 
     template<class F>
@@ -38,6 +38,7 @@ auto ThreadPool::enqueue(F&& f) -> std::future<typename std::invoke_result<F>::t
         tasks.emplace([task, this]() { 
             (*task)();
             --activeTasks;
+            condition.notify_all();
         });
         ++activeTasks;
     }
