@@ -174,7 +174,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else { // PARTIAL
         auto segmentBounds = it->findBestSegmentToCompact();
         if (!it->willLowerLevelFit()) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first - 1);
+            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
             next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin() + segmentBounds.first), std::make_move_iterator(it->runs.begin() + segmentBounds.second + 1));
             it->runs.erase(it->runs.begin() + segmentBounds.first, it->runs.begin() + segmentBounds.second + 1);
             it->setKvPairs(it->addUpKVPairsInLevel());
