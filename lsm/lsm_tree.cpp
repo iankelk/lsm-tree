@@ -162,11 +162,11 @@ void LSMTree::moveRuns(int currentLevelNum) {
         }
     }
     if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED
-        size_t numRuns = it->runs.size();
+        int numRuns = it->runs.size();
         if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<size_t, size_t>(next->runs.size() - numRuns, next->runs.size() - 1);
+            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, numRuns - 1);
         } else if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<size_t, size_t>(0, next->runs.size() + numRuns - 1);
+            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, next->runs.size() + numRuns - 1);
         } 
         next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
         it->runs.clear();
@@ -174,7 +174,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else { // PARTIAL
         auto segmentBounds = it->findBestSegmentToCompact();
         if (!it->willLowerLevelFit()) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<size_t, size_t>(next->runs.size() - (segmentBounds.second - segmentBounds.first) - 1, next->runs.size() - 1);
+            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first - 1);
             next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin() + segmentBounds.first), std::make_move_iterator(it->runs.begin() + segmentBounds.second + 1));
             it->runs.erase(it->runs.begin() + segmentBounds.first, it->runs.begin() + segmentBounds.second + 1);
             it->setKvPairs(it->addUpKVPairsInLevel());

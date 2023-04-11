@@ -47,7 +47,7 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
-    std::map<int, std::pair<size_t, size_t>> compactionPlan;
+    std::map<int, std::pair<int, int>> compactionPlan;
 
 
     void mergeLevels(int currentLevelNum);
