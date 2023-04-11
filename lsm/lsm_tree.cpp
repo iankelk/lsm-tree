@@ -471,9 +471,6 @@ int LSMTree::countLogicalPairs() {
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::string output = "";
-    // print numToPrintFromEachLevel
-    std::cout << "Printing " << numToPrintFromEachLevel << " key/value pairs from each level" << std::endl;
-
     // Create a string to hold the number of logical key value pairs in the tree
     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
@@ -500,7 +497,9 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
         }
         pairsCounter++;
     }
-    treeDump += "\n\n";
+    if (pairsCounter > 0) {
+        treeDump += "\n\n";
+    }
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         pairsCounter = 0;
@@ -512,7 +511,6 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
                     break;
                 }
                 pairsCounter++;
-                std::cout << "pairsCounter: " << pairsCounter << std::endl;
                 if (it->second == TOMBSTONE) {
                     treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string(level->getLevelNum()) + " ";
                 } else {
@@ -520,7 +518,9 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
                 }
             }
         }
-        treeDump += "\n\n";
+        if (pairsCounter > 0) {
+            treeDump += "\n\n";
+        }
     }
     treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
