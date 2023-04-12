@@ -38,8 +38,8 @@ private:
     int fd;
     LSMTree* lsmTree;
     float getBfFalsePositiveRate();
-    long long falsePositives = 0;
-    long long truePositives = 0;
+    size_t falsePositives = 0;
+    size_t truePositives = 0;
     size_t levelOfRun;
 };
 

@@ -36,9 +36,10 @@ public:
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
-    void printMissesStats();
+    void printHitsMissesStats();
     size_t getNumThreads() { return threadPool.getNumThreads(); }
-    void incrementLevelIoCount(int levelNum) { levelIoCout[levelNum]++; }
+    void incrementLevelIoCount(int levelNum) { levelIoCount[levelNum-1]++; }
+    size_t getLevelIoCount(int levelNum) { return levelIoCount[levelNum-1]; }
 
 private:
     Memtable buffer;
@@ -49,7 +50,7 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
-    std::vector<size_t> levelIoCout;
+    std::vector<size_t> levelIoCount;
     std::map<int, std::pair<int, int>> compactionPlan;
 
 
@@ -57,15 +58,17 @@ private:
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
 
-    long long bfFalsePositives = 0;
-    long long bfTruePositives = 0;
+    size_t bfFalsePositives = 0;
+    size_t bfTruePositives = 0;
     size_t ioCount = 0;
     size_t getTotalBits() const;
     double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
     double eval(size_t bits, size_t entries) const;
     double AutotuneFilters(size_t mFilters);
-    long long getMisses = 0;
-    long long rangeMisses = 0;
+    size_t getMisses = 0;
+    size_t getHits = 0;
+    size_t rangeMisses = 0;
+    size_t rangeHits = 0;
 };
 
 #endif /* LSM_TREE_HPP */

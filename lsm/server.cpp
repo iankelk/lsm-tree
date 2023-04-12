@@ -54,23 +54,25 @@ void Server::listenToStdIn() {
                 exclusiveLock.unlock();
             } else if (input == "misses") {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-                lsmTree->printMissesStats();
+                lsmTree->printHitsMissesStats();
                 sharedLock.unlock();
             } else if (input == "concurrent") {
                 concurrent = !concurrent;
                 std::cout << "Concurrent: " << concurrent << std::endl;
             } else if (input == "levelIO") {
+                std::cout << "Level IO Count:" << std::endl;
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-                lsmTree->printLevelIoCount();
+                std::cout << lsmTree->printLevelIoCount() << std::endl;
                 sharedLock.unlock();
             } else if (input == "help") {
                 std::cout << "bloom: Print Bloom Filter summary" << std::endl;
                 std::cout << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;
-                std::cout << "misses: Print misses stats" << std::endl;
+                std::cout << "misses: Print hits and misses stats" << std::endl;
                 std::cout << "concurrent: Toggle concurrent" << std::endl;
+                std::cout << "levelIO: Print level IO count" << std::endl;
                 std::cout << "help: Print this help message" << std::endl;
             } else {
-                std::cout << "Invalid command" << std::endl;
+                std::cout << "Invalid command. Use \"help\" for list of available commands" << std::endl;
             }
         }
     }

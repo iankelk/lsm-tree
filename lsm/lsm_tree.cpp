@@ -15,7 +15,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
-    levelIoCout.push_back(0);
+    levelIoCount.push_back(0);
 }
 
 // Calculate whether an std::vector<Level>::iterator is pointing to the last level
@@ -28,14 +28,33 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    // if (key == 2147466802 || key == 2147435494) {
+    //     std::cout << "putting key " << key << std::endl;
+    // }
     // Try to insert the key-value pair into the buffer. If it succeeds, return.
     if(buffer.put(key, val)) {
+        // if (key == 2147466802 || key == 2147435494) {
+        //     std::cout << "put " << key << " into buffer" << std::endl;
+        // }
         return;
     }
 
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
+        // std::unique_ptr<VAL_t> result1 = get(2147466802);
+        // std::unique_ptr<VAL_t> result2 = get(2147435494);
+        // if (result1) {
+        //     std::cout << "get " << 2147466802 << ": " << *result1 << std::endl;
+        // } else {
+        //     std::cout << "get " << 2147466802 << ": nullptr" << std::endl;
+        // }
+
+        // if (result2) {
+        //     std::cout << "get " << 2147435494 << ": " << *result2 << std::endl;
+        // } else {
+        //     std::cout << "get " << 2147435494 << ": nullptr" << std::endl;
+        // }
     }
     
     // Create a new run and add a unique pointer to it to the first level
@@ -71,7 +90,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else {
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-            levelIoCout.push_back(0);
+            levelIoCount.push_back(0);
             it = levels.end() - 2;
             next = levels.end() - 1;
         } else {
@@ -107,39 +126,39 @@ void LSMTree::moveRuns(int currentLevelNum) {
     }
 }
 
-// void LSMTree::executeCompactionPlan() {
-//     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-//         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-//             auto &level = levels[levelNum - 1];
-//             auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
-//             level.replaceSegment(segmentBounds, std::move(compactedRun));
-//         }
-//     }
-// }
-
 void LSMTree::executeCompactionPlan() {
-    std::vector<std::future<void>> compactResults;
-    compactResults.reserve(compactionPlan.size());
-
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-            int first = segmentBounds.first;
-            int second = segmentBounds.second;
             auto &level = levels[levelNum - 1];
-            auto task = [this, &level, first, second] {
-                auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
-                level.replaceSegment({first, second}, std::move(compactedRun));
-            };
-            compactResults.push_back(threadPool.enqueue(task));
+            auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
+            level.replaceSegment(segmentBounds, std::move(compactedRun));
         }
     }
-    // TODO: check if this is necessary
-    // // Wait for all compacting tasks to complete
-    // for (auto &result : compactResults) {
-    //     result.get();
-    // }
-    threadPool.waitForAllTasks();
 }
+
+// void LSMTree::executeCompactionPlan() {
+//     std::vector<std::future<void>> compactResults;
+//     compactResults.reserve(compactionPlan.size());
+
+//     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
+//         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
+//             int first = segmentBounds.first;
+//             int second = segmentBounds.second;
+//             auto &level = levels[levelNum - 1];
+//             auto task = [this, &level, first, second] {
+//                 auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
+//                 level.replaceSegment({first, second}, std::move(compactedRun));
+//             };
+//             compactResults.push_back(threadPool.enqueue(task));
+//         }
+//     }
+//     // TODO: check if this is necessary
+//     // // Wait for all compacting tasks to complete
+//     // for (auto &result : compactResults) {
+//     //     result.get();
+//     // }
+//     threadPool.waitForAllTasks();
+// }
 
 void LSMTree::mergeLevels(int currentLevelNum) {
     moveRuns(currentLevelNum);
@@ -164,11 +183,13 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     val = buffer.get(key);
     // If the key is found in the buffer, return the value
     if (val != nullptr) {
+        getHits++;
         // Check that val is not the TOMBSTONE
         if (*val == TOMBSTONE) {
-            getMisses++;
             return nullptr;
         }
+        // print the key and value to the server stdout
+        //std::cout << key << std::endl;
         return val;
     }
 
@@ -179,11 +200,12 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             val = (*run)->get(key);
             // If the key is found in the run, return the value
             if (val != nullptr) {
+                getHits++;
                 // Check that val is not the TOMBSTONE
                 if (*val == TOMBSTONE) {
-                    getMisses++;
                     return nullptr;
                 }
+                //std::cout << key << std::endl;
                 return val;
             }
         }
@@ -223,6 +245,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     if (rangeMap->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
         removeTombstones(rangeMap);
+        rangeHits++;
         return rangeMap;
     }
 
@@ -241,15 +264,18 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
             // If the range map has the size of the entire range, return the range
             if (rangeMap->size() == allPossibleKeys) {
                 removeTombstones(rangeMap);
+                rangeHits++;
                 return rangeMap;
             }
         }
     }
-    // Remove all the TOMBSTONES from the range map
-    removeTombstones(rangeMap);
     if (rangeMap->size() == 0) {
         rangeMisses++;
+    } else {
+        rangeHits++;
     }
+    // Remove all the TOMBSTONES from the range map
+    removeTombstones(rangeMap);
     return rangeMap;
 }
 
@@ -283,6 +309,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) 
     if (rangeMap->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
         removeTombstones(rangeMap);
+        rangeHits++;
         return rangeMap;
     }
 
@@ -307,14 +334,16 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) 
         }
         if (rangeMap->size() == allPossibleKeys) {
             removeTombstones(rangeMap);
+            rangeHits++;
             return rangeMap;
         }
     }
-
-    removeTombstones(rangeMap);
     if (rangeMap->size() == 0) {
         rangeMisses++;
+    } else {
+        rangeHits++;
     }
+    removeTombstones(rangeMap);
     return rangeMap;
 }
 
@@ -324,8 +353,10 @@ void LSMTree::del(KEY_t key) {
 }
 
 // Print out getMisses and rangeMisses stats
-void LSMTree::printMissesStats() {
+void LSMTree::printHitsMissesStats() {
+    std::cout << "getHits: " << getHits << std::endl;
     std::cout << "getMisses: " << getMisses << std::endl;
+    std::cout << "rangeHits: " << rangeHits << std::endl;
     std::cout << "rangeMisses: " << rangeMisses << std::endl;
 }
 
@@ -562,11 +593,16 @@ std::string LSMTree::printTree() {
 std::string LSMTree::printLevelIoCount() {
     std::string output = "";
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(levelIoCout[it->getLevelNum()-1])) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+    }
+    // print out the levelIoCount vector in this format showing the indices: [0]: 123 [1]: 456 [2]: 789
+    output += "Level I/O count vector: ";
+    for (auto it = levelIoCount.begin(); it != levelIoCount.end(); it++) {
+        output += "[" + std::to_string(it - levelIoCount.begin()) + "]: " + addCommas(std::to_string(*it)) + " ";
     }
     output += "Total I/O count: " + addCommas(std::to_string(ioCount)) + "\n";
     // Add up all the I/O counts for each level
-    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCout.begin(), levelIoCout.end(), 0))) + "\n";
+    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCount.begin(), levelIoCount.end(), 0))) + "\n";
     output.pop_back();
     return output;
 }
@@ -621,7 +657,10 @@ json LSMTree::serialize() const {
     j["bfTruePositives"] = bfTruePositives;
     j["ioCount"] = ioCount;
     j["getMisses"] = getMisses;
+    j["getHits"] = getHits;
     j["rangeMisses"] = rangeMisses;
+    j["rangeHits"] = rangeHits;
+    j["levelIoCount"] = levelIoCount;
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -654,11 +693,14 @@ void LSMTree::deserialize(const std::string& filename) {
     bfErrorRate = treeJson["bfErrorRate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
     levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
-    bfFalsePositives = treeJson["bfFalsePositives"].get<long long>();
-    bfTruePositives = treeJson["bfTruePositives"].get<long long>();
-    ioCount = treeJson["ioCount"].get<long long>();
-    getMisses = treeJson["getMisses"].get<long long>();
-    rangeMisses = treeJson["rangeMisses"].get<long long>();
+    bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
+    bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
+    ioCount = treeJson["ioCount"].get<size_t>();
+    levelIoCount = treeJson["levelIoCount"].get<std::vector<size_t>>();
+    getMisses = treeJson["getMisses"].get<size_t>();
+    getHits = treeJson["getHits"].get<size_t>();
+    rangeMisses = treeJson["rangeMisses"].get<size_t>();
+    rangeHits = treeJson["rangeHits"].get<size_t>();
 
     buffer.deserialize(treeJson["buffer"]);
 
