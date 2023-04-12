@@ -15,6 +15,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
+    levelIoCout.push_back(0);
 }
 
 // Calculate whether an std::vector<Level>::iterator is pointing to the last level
@@ -38,7 +39,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
     
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, this));
+    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, 1, this));
 
     // Flush the buffer to level 1
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -70,6 +71,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else {
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+            levelIoCout.push_back(0);
             it = levels.end() - 2;
             next = levels.end() - 1;
         } else {
@@ -553,6 +555,22 @@ std::string LSMTree::printTree() {
     output.pop_back();
     return output;
 }
+// Print the I/O count for each level. Remember when printing the level to increment it by 1 because the vector is zero-indexed.
+// The first level is level 1, not level 0. Use std::string Storage::getDiskName and std::string Storage::getDiskPenaltyMultiplier to get the disk name and penalty multiplier.
+// Print the I/O count, disk name, penalty multiplier for each level.
+// On the last line, print the total I/O count.
+std::string LSMTree::printLevelIoCount() {
+    std::string output = "";
+    for (auto it = levels.begin(); it != levels.end(); it++) {
+        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(levelIoCout[it->getLevelNum()-1])) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+    }
+    output += "Total I/O count: " + addCommas(std::to_string(ioCount)) + "\n";
+    // Add up all the I/O counts for each level
+    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCout.begin(), levelIoCout.end(), 0))) + "\n";
+    output.pop_back();
+    return output;
+}
+
 
 // Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
 void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
@@ -569,7 +587,7 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap
 }
 
 float LSMTree::getBfFalsePositiveRate() {
-    int total = bfFalsePositives + bfTruePositives;
+    size_t total = bfFalsePositives + bfTruePositives;
     if (total > 0) {
         return (float)bfFalsePositives / total;
     } else {

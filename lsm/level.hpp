@@ -34,17 +34,17 @@ public:
     void dump(); // dump prints the contents of the level. TODO: remove this function
     void compactLevel(double errorRate, State state, bool isLastLevel); 
     //void compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
-    long getLevelSize(int levelNum); 
+    size_t getLevelSize(int levelNum); 
     std::string getDiskName() const;
     int getDiskPenaltyMultiplier() const;
     bool willLowerLevelFit(); // true if there is enough space in the level to add a run with maxKvPairs
     bool willBufferFit(); // true if there is enough space in the level to flush the memtable
-    int addUpKVPairsInLevel(); // Iterates over the runs to calculate the total number of kvPairs in the level
+    size_t addUpKVPairsInLevel(); // Iterates over the runs to calculate the total number of kvPairs in the level
     int getLevelNum() const;
     Policy getLevelPolicy() const;
-    long getKvPairs() const;  // Get the number of kvPairs in the level
+    size_t getKvPairs() const;  // Get the number of kvPairs in the level
     void setKvPairs(long kvPairs); // Set the number of kvPairs in the level
-    long getMaxKvPairs() const; // Get the max number of kvPairs in the level
+    size_t getMaxKvPairs() const; // Get the max number of kvPairs in the level
 
     void replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun);
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);

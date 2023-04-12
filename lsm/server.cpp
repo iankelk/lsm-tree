@@ -59,6 +59,10 @@ void Server::listenToStdIn() {
             } else if (input == "concurrent") {
                 concurrent = !concurrent;
                 std::cout << "Concurrent: " << concurrent << std::endl;
+            } else if (input == "levelIO") {
+                sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
+                lsmTree->printLevelIoCount();
+                sharedLock.unlock();
             } else if (input == "help") {
                 std::cout << "bloom: Print Bloom Filter summary" << std::endl;
                 std::cout << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;

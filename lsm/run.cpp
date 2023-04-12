@@ -9,7 +9,7 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
-Run::Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree = nullptr) :
+Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree = nullptr) :
     maxKvPairs(maxKvPairs),
     bfErrorRate(bfErrorRate),
     bloomFilter(maxKvPairs, bfErrorRate),
@@ -17,6 +17,7 @@ Run::Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree 
     size(0),
     maxKey(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED),
+    levelOfRun(levelOfRun),
     lsmTree(lsmTree) 
 {
 
@@ -83,6 +84,7 @@ void Run::put(KEY_t key, VAL_t val) {
     assert(result != -1);
     size++;
     lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCount(levelOfRun);
 }
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
@@ -118,6 +120,8 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     lseek(fd, offset, SEEK_SET);
     kvPair kv;
     lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCount(levelOfRun);
+
     
     // Binary search for the key-value pair in the page
     size_t left = 0, right = numPairsInPage - 1;
@@ -192,6 +196,8 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         die("Run::range: Failed to open temporary file for Run");
     }
     lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCount(levelOfRun);
+
     bool stopSearch = false;
     // Search the pages for the keys in the range
     for (size_t pageIndex = searchPageStart; pageIndex < searchPageEnd; pageIndex++) {
@@ -235,6 +241,8 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     }
     // Read all the key-value pairs from the temporary file
     lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCount(levelOfRun);
+
     kvPair kv;
     while (read(fd, &kv, sizeof(kvPair)) > 0) {
         map[kv.key] = kv.value;
@@ -243,7 +251,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     return map;
  }
 
-long Run::getMaxKvPairs() {
+size_t Run::getMaxKvPairs() {
     return maxKvPairs;
 }
 

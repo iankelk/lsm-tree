@@ -9,13 +9,13 @@ class LSMTree;
 
 class Run {
 public:
-    Run(long maxKvPairs, double bfErrorRate, bool createFile, LSMTree* lsmTree);
+    Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree);
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
     std::map<KEY_t, VAL_t> getMap();
-    long getMaxKvPairs();
+    size_t getMaxKvPairs();
     std::string getBloomFilterSummary();
     void closeFile();
     json serialize() const;
@@ -40,6 +40,7 @@ private:
     float getBfFalsePositiveRate();
     long long falsePositives = 0;
     long long truePositives = 0;
+    size_t levelOfRun;
 };
 
 #endif /* LSM_RUN_HPP */

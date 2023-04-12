@@ -21,11 +21,12 @@ public:
     bool isLastLevel(int levelNum);
     std::string printStats(size_t numToPrintFromEachLevel);
     std::string printTree();
+    std::string printLevelIoCount();
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
     float getBfErrorRate() const { return bfErrorRate; }
-    int getBufferNumPages() { return buffer.getMaxKvPairs(); }
+    size_t getBufferNumPages() { return buffer.getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
@@ -37,6 +38,7 @@ public:
     void monkeyOptimizeBloomFilters();
     void printMissesStats();
     size_t getNumThreads() { return threadPool.getNumThreads(); }
+    void incrementLevelIoCount(int levelNum) { levelIoCout[levelNum]++; }
 
 private:
     Memtable buffer;
@@ -47,6 +49,7 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
+    std::vector<size_t> levelIoCout;
     std::map<int, std::pair<int, int>> compactionPlan;
 
 
@@ -54,11 +57,9 @@ private:
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
 
-
-
     long long bfFalsePositives = 0;
     long long bfTruePositives = 0;
-    long long ioCount = 0;
+    size_t ioCount = 0;
     size_t getTotalBits() const;
     double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
     double eval(size_t bits, size_t entries) const;

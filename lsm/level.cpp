@@ -79,7 +79,7 @@ void Level::compactLevel(double errorRate, State state, bool isLastLevel) {
     runs.clear();
     kvPairs = 0;
 
-    put(std::make_unique<Run>(size, errorRate, true, lsmTree));
+    put(std::make_unique<Run>(size, errorRate, true, levelNum, lsmTree));
 
     // Iterate through the merged map and add the key-value pairs to the run
     for (const auto &kv : mergedMap) {
@@ -108,7 +108,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
     }
 
     // Create a new run with the merged data
-    auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, lsmTree);
+    auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, levelNum, lsmTree);
     for (const auto &kv : mergedMap) {
         if (!(isLastLevel && kv.second == TOMBSTONE)) {
             compactedRun->put(kv.first, kv.second);
@@ -134,7 +134,7 @@ void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_
 }
 
 // If we haven't cached the size of a level, calculate it and cache it. Otherwise return the cached value.
-long Level::getLevelSize(int levelNum) {
+size_t Level::getLevelSize(int levelNum) {
     // Check if the levelNum - 1 is in the levelSizes map. 
     // If it is, get the level size from the map. If not, calculate it and cache it
     if (levelSizes.find(levelNum) != levelSizes.end()) {
@@ -179,7 +179,7 @@ bool Level::willLowerLevelFit() {
 }
 
 // Count the number of kvPairs in a level by accumulating the runs queue
-int Level::addUpKVPairsInLevel() {
+size_t Level::addUpKVPairsInLevel() {
     return std::accumulate(runs.begin(), runs.end(), 0, [](int total, const auto& run) { return total + run->getMaxKvPairs(); });
 }
 
@@ -192,7 +192,7 @@ Level::Policy Level::getLevelPolicy() const {
     return levelPolicy;
 }
 // Get the number of kvPairs in the level
-long Level::getKvPairs() const {
+size_t Level::getKvPairs() const {
     return kvPairs;
 }
 // Set the number of kvPairs in the level
@@ -201,7 +201,7 @@ void Level::setKvPairs(long kvPairs) {
 }
 
 // Return the maximum number of key-value pairs allowed in the memtable
-long Level::getMaxKvPairs() const {
+size_t Level::getMaxKvPairs() const {
     return maxKvPairs;
 }
 
@@ -243,7 +243,7 @@ void Level::deserialize(const json& j) {
     levelPolicy = stringToPolicy(policy_str);
 
     for (const auto& runJson : j["runs"]) {
-        std::unique_ptr<Run> run = std::make_unique<Run>(maxKvPairs, DEFAULT_ERROR_RATE, false, lsmTree);
+        std::unique_ptr<Run> run = std::make_unique<Run>(maxKvPairs, DEFAULT_ERROR_RATE, false, levelNum, lsmTree);
         run->deserialize(runJson);
         runs.emplace_back(std::move(run));
     }
