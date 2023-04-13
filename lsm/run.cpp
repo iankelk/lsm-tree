@@ -145,11 +145,52 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
             break;
         }
     }
+
+    // Check if the last element in the search range is equal to the target key
+    if (val == nullptr && left <= numPairsInPage - 1) {
+        size_t lastOffset = offset + left * sizeof(kvPair);
+        lseek(fd, lastOffset, SEEK_SET);
+        if (read(fd, &kv, sizeof(kvPair)) > 0 && kv.key == key) {
+            val = std::make_unique<VAL_t>(kv.value);
+            lsmTree->incrementBfTruePositives();
+            truePositives++;
+        }
+    }
+
+    // Check if the key is in the part of the file added after the last full page
+    size_t numPairsAtEnd = (size % getpagesize()) / sizeof(kvPair);
+    int counter = 0;
+    if (val == nullptr && key > fencePointers.back() && key <= maxKey) {
+        // The key is in the part of the file added after the last full page
+        offset = (fencePointers.size()-1) * getpagesize() * sizeof(kvPair);
+        lseek(fd, offset, SEEK_SET);
+        while (read(fd, &kv, sizeof(kvPair)) > 0) {
+            counter++;
+            if (kv.key == key) {
+                val = std::make_unique<VAL_t>(kv.value);
+                lsmTree->incrementBfTruePositives();
+                truePositives++;
+                std::cout << "Found key at counter: " << counter << " with page size: " << getpagesize() << std::endl;
+                break;
+            }
+        }
+    }
+    
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
         lsmTree->incrementBfFalsePositives();
         falsePositives++;
     }
+
+    // If the value of val is equal to the number 2147466802
+    if (val == nullptr && (key == 2147466802 || key == 2147435494)) {
+        // print the last fence pointer and the max key
+        std::cout << "FUCK UP: Last fence pointer: " << fencePointers.back() << " max key: " << maxKey << std::endl;
+        std::cout << "Page Index: " << pageIndex << " fencePointers.size() " << fencePointers.size() << std::endl;
+        std::cout << "numPairsAtEnd: " << numPairsAtEnd << " pagesize: " << getpagesize() << std::endl;
+        std::cout << "size of run in entries: " << size << " offset: " << offset << std::endl;
+    }
+
     closeFile();
     return val;
 }

@@ -28,33 +28,14 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
-    // if (key == 2147466802 || key == 2147435494) {
-    //     std::cout << "putting key " << key << std::endl;
-    // }
     // Try to insert the key-value pair into the buffer. If it succeeds, return.
     if(buffer.put(key, val)) {
-        // if (key == 2147466802 || key == 2147435494) {
-        //     std::cout << "put " << key << " into buffer" << std::endl;
-        // }
         return;
     }
 
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
-        // std::unique_ptr<VAL_t> result1 = get(2147466802);
-        // std::unique_ptr<VAL_t> result2 = get(2147435494);
-        // if (result1) {
-        //     std::cout << "get " << 2147466802 << ": " << *result1 << std::endl;
-        // } else {
-        //     std::cout << "get " << 2147466802 << ": nullptr" << std::endl;
-        // }
-
-        // if (result2) {
-        //     std::cout << "get " << 2147435494 << ": " << *result2 << std::endl;
-        // } else {
-        //     std::cout << "get " << 2147435494 << ": nullptr" << std::endl;
-        // }
     }
     
     // Create a new run and add a unique pointer to it to the first level
