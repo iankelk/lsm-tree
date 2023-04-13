@@ -11,10 +11,10 @@ build:
 	g++ lsm/main.cpp $(SRCS) -o bin/lsm -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
 
 server:
-	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
 
 client:
-	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
 
 fast_server:
 	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
@@ -23,7 +23,7 @@ fast_client:
 	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
 
 test:
-	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
 
 .PHONY: genm1
 genm1:

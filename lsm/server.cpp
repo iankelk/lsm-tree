@@ -109,15 +109,26 @@ void Server::handleClient(int clientSocket) {
 }
 
 // Send a response to the client in chunks of BUFFER_SIZE bytes
+// void Server::sendResponse(int clientSocket, const std::string &response) {
+//     for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
+//         char chunk[BUFFER_SIZE] = {};
+//         std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
+//         send(clientSocket, chunk, strlen(chunk), 0);
+//     }
+//     // Send the end of message indicator
+//     send(clientSocket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+// }
+
 void Server::sendResponse(int clientSocket, const std::string &response) {
     for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
         char chunk[BUFFER_SIZE] = {};
-        std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
+        std::strncpy(chunk, response.c_str() + i, BUFFER_SIZE - 1); // Subtracts 1 from BUFFER_SIZE to make sure the string is null-terminated
         send(clientSocket, chunk, strlen(chunk), 0);
     }
     // Send the end of message indicator
     send(clientSocket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
 }
+
 
 void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     char op;
