@@ -36,6 +36,19 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
+        // std::unique_ptr<VAL_t> result1 = get(2147466802);
+        // std::unique_ptr<VAL_t> result2 = get(2147435494);
+        // if (result1) {
+        //     std::cout << "get " << 2147466802 << ": " << *result1 << std::endl;
+        // } else {
+        //     std::cout << "get " << 2147466802 << ": nullptr" << std::endl;
+        // }
+
+        // if (result2) {
+        //     std::cout << "get " << 2147435494 << ": " << *result2 << std::endl;
+        // } else {
+        //     std::cout << "get " << 2147435494 << ": nullptr" << std::endl;
+        // }
     }
     
     // Create a new run and add a unique pointer to it to the first level
@@ -107,39 +120,39 @@ void LSMTree::moveRuns(int currentLevelNum) {
     }
 }
 
-void LSMTree::executeCompactionPlan() {
-    for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-        if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-            auto &level = levels[levelNum - 1];
-            auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
-            level.replaceSegment(segmentBounds, std::move(compactedRun));
-        }
-    }
-}
-
 // void LSMTree::executeCompactionPlan() {
-//     std::vector<std::future<void>> compactResults;
-//     compactResults.reserve(compactionPlan.size());
-
 //     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
 //         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-//             int first = segmentBounds.first;
-//             int second = segmentBounds.second;
 //             auto &level = levels[levelNum - 1];
-//             auto task = [this, &level, first, second] {
-//                 auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
-//                 level.replaceSegment({first, second}, std::move(compactedRun));
-//             };
-//             compactResults.push_back(threadPool.enqueue(task));
+//             auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
+//             level.replaceSegment(segmentBounds, std::move(compactedRun));
 //         }
 //     }
-//     // TODO: check if this is necessary
-//     // // Wait for all compacting tasks to complete
-//     // for (auto &result : compactResults) {
-//     //     result.get();
-//     // }
-//     threadPool.waitForAllTasks();
 // }
+
+void LSMTree::executeCompactionPlan() {
+    std::vector<std::future<void>> compactResults;
+    compactResults.reserve(compactionPlan.size());
+
+    for (const auto &[levelNum, segmentBounds] : compactionPlan) {
+        if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
+            int first = segmentBounds.first;
+            int second = segmentBounds.second;
+            auto &level = levels[levelNum - 1];
+            auto task = [this, &level, first, second] {
+                auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
+                level.replaceSegment({first, second}, std::move(compactedRun));
+            };
+            compactResults.push_back(threadPool.enqueue(task));
+        }
+    }
+    // TODO: check if this is necessary
+    // // Wait for all compacting tasks to complete
+    // for (auto &result : compactResults) {
+    //     result.get();
+    // }
+    threadPool.waitForAllTasks();
+}
 
 void LSMTree::mergeLevels(int currentLevelNum) {
     moveRuns(currentLevelNum);
@@ -581,7 +594,7 @@ std::string LSMTree::printLevelIoCount() {
     for (auto it = levelIoCount.begin(); it != levelIoCount.end(); it++) {
         output += "[" + std::to_string(it - levelIoCount.begin()) + "]: " + addCommas(std::to_string(*it)) + " ";
     }
-    output += "Total I/O count: " + addCommas(std::to_string(ioCount)) + "\n";
+    output += "\nTotal I/O count: " + addCommas(std::to_string(ioCount)) + "\n";
     // Add up all the I/O counts for each level
     output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCount.begin(), levelIoCount.end(), 0))) + "\n";
     output.pop_back();

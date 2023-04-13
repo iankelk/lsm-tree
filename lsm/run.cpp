@@ -69,11 +69,6 @@ void Run::put(KEY_t key, VAL_t val) {
         fencePointers.push_back(key);
     }
 
-    // int keysPerPage = getpagesize() / sizeof(kvPair);
-    // if (size % keysPerPage == 0) {
-    //     fencePointers.push_back(key);
-    // }
-
     // If the key is greater than the max key, update the max key
     if (key > maxKey) {
         maxKey = key;
@@ -147,15 +142,15 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     // Check if the last element in the search range is equal to the target key
-    if (val == nullptr && left <= numPairsInPage - 1) {
-        size_t lastOffset = offset + left * sizeof(kvPair);
-        lseek(fd, lastOffset, SEEK_SET);
-        if (read(fd, &kv, sizeof(kvPair)) > 0 && kv.key == key) {
-            val = std::make_unique<VAL_t>(kv.value);
-            lsmTree->incrementBfTruePositives();
-            truePositives++;
-        }
-    }
+    // if (val == nullptr && left <= numPairsInPage - 1) {
+    //     size_t lastOffset = offset + left * sizeof(kvPair);
+    //     lseek(fd, lastOffset, SEEK_SET);
+    //     if (read(fd, &kv, sizeof(kvPair)) > 0 && kv.key == key) {
+    //         val = std::make_unique<VAL_t>(kv.value);
+    //         lsmTree->incrementBfTruePositives();
+    //         truePositives++;
+    //     }
+    // }
 
     // Check if the key is in the part of the file added after the last full page
     size_t numPairsAtEnd = (size % getpagesize()) / sizeof(kvPair);
@@ -170,11 +165,38 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
                 val = std::make_unique<VAL_t>(kv.value);
                 lsmTree->incrementBfTruePositives();
                 truePositives++;
-                std::cout << "Found key at counter: " << counter << " with page size: " << getpagesize() << std::endl;
+                // std::cout << "Found key at counter: " << counter << " with page size: " << getpagesize() << std::endl;
                 break;
             }
         }
     }
+
+    // if (val == nullptr && key > fencePointers.back() && key <= maxKey) {
+    //     // The key is in the part of the file added after the last full page
+    //     offset = fencePointers.size() * getpagesize() * sizeof(kvPair);
+    //     size_t left = 0, right = numPairsAtEnd - 1;
+    //     while (left <= right) {
+    //         size_t mid = left + (right - left) / 2;
+    //         size_t midOffset = offset + mid * sizeof(kvPair);
+
+    //         lseek(fd, midOffset, SEEK_SET);
+    //         if (read(fd, &kv, sizeof(kvPair)) > 0) {
+    //             if (kv.key == key) {
+    //                 val = std::make_unique<VAL_t>(kv.value);
+    //                 lsmTree->incrementBfTruePositives();
+    //                 truePositives++;
+    //                 break;
+    //             } else if (kv.key < key) {
+    //                 left = mid + 1;
+    //             } else {
+    //                 right = mid - 1;
+    //             }
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    // }
+
     
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
@@ -182,14 +204,14 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
         falsePositives++;
     }
 
-    // If the value of val is equal to the number 2147466802
-    if (val == nullptr && (key == 2147466802 || key == 2147435494)) {
-        // print the last fence pointer and the max key
-        std::cout << "FUCK UP: Last fence pointer: " << fencePointers.back() << " max key: " << maxKey << std::endl;
-        std::cout << "Page Index: " << pageIndex << " fencePointers.size() " << fencePointers.size() << std::endl;
-        std::cout << "numPairsAtEnd: " << numPairsAtEnd << " pagesize: " << getpagesize() << std::endl;
-        std::cout << "size of run in entries: " << size << " offset: " << offset << std::endl;
-    }
+    // // If the value of val is equal to the number 2147466802
+    // if (val == nullptr && (key == 2147466802 || key == 2147435494)) {
+    //     // print the last fence pointer and the max key
+    //     std::cout << "FUCK UP: Last fence pointer: " << fencePointers.back() << " max key: " << maxKey << std::endl;
+    //     std::cout << "Page Index: " << pageIndex << " fencePointers.size() " << fencePointers.size() << std::endl;
+    //     std::cout << "numPairsAtEnd: " << numPairsAtEnd << " pagesize: " << getpagesize() << std::endl;
+    //     std::cout << "size of run in entries: " << size << " offset: " << offset << std::endl;
+    // }
 
     closeFile();
     return val;
