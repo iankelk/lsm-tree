@@ -17,6 +17,7 @@ public:
     std::map<KEY_t, VAL_t> getMap();
     size_t getMaxKvPairs();
     std::string getBloomFilterSummary();
+    void openFile(std::string originatingFunctionError);
     void closeFile();
     json serialize() const;
     void deserialize(const json& j);
@@ -28,6 +29,7 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
 private:
+    std::unique_ptr<VAL_t> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
     KEY_t maxKey;
     size_t maxKvPairs;
     double bfErrorRate;

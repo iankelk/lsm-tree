@@ -54,6 +54,15 @@ void Run::closeFile() {
     fd = FILE_DESCRIPTOR_UNINITIALIZED;
 }
 
+void Run::openFile(std::string originatingFunctionError) {
+    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+        fd = open(tmpFile.c_str(), O_RDWR);
+        if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
+            die(originatingFunctionError);
+        }
+    }
+}
+
 void Run::put(KEY_t key, VAL_t val) {
     int result;
     if (size >= maxKvPairs) {
@@ -63,8 +72,7 @@ void Run::put(KEY_t key, VAL_t val) {
     kvPair kv = {key, val};
     bloomFilter.add(key);
     // Add the key to the fence pointers vector if it is a multiple of the page size. 
-    // We can assume it is sorted because the buffer is sorted
-    // TODO: CHECK THIS
+    // We can assume it is sorted because the buffer is sorted before it is written to the run
     if (size % getpagesize() == 0) {
         fencePointers.push_back(key);
     }
@@ -76,10 +84,12 @@ void Run::put(KEY_t key, VAL_t val) {
 
     // Write the key-value pair to the temporary file
     result = write(fd, &kv, sizeof(kvPair));
-    assert(result != -1);
-    size++;
+    if (result == -1) {
+        die("Run::put: Failed to write to temporary file");
+    }
     lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCount(levelOfRun);
+    size++;
 }
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
@@ -94,126 +104,54 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     if (key < fencePointers.front() || key > maxKey || !bloomFilter.contains(key)) {
         return nullptr;
     }
-    // Binary search for the page containing the key in the fence pointers vector
-    auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), key);
-    auto pageIndex = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter)) - 1;
 
-    if (pageIndex < 0) {
-        die("Run::get: Negative index from fence pointer");
-    }
+    // Perform a binary search on the fence pointers to find the page that may contain the key
+    auto iter = std::upper_bound(fencePointers.begin(), fencePointers.end(), key);
+    auto pageIndex = std::distance(fencePointers.begin(), iter) - 1;
 
-    // Open the file descriptor for the temporary file
-    fd = open(tmpFile.c_str(), O_RDONLY);
-    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        die("Run::get: Failed to open temporary file for Run");
-    }
+    // Calculate the start and end position of the range to search based on the page index
+    size_t start = pageIndex * getpagesize();
+    size_t end = (pageIndex + 1 == fencePointers.size()) ? size : (pageIndex + 1) * getpagesize();
 
-    // Search the page for the key
-    size_t offset = pageIndex * getpagesize() * sizeof(kvPair);
-    size_t numPairsInPage = std::min<long>(maxKvPairs - pageIndex * getpagesize(), getpagesize());
+    // Open the file descriptor
+    openFile("Run::get: Failed to open temporary file for Run");
 
-    lseek(fd, offset, SEEK_SET);
-    kvPair kv;
     lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCount(levelOfRun);
 
-    
-    // Binary search for the key-value pair in the page
-    size_t left = 0, right = numPairsInPage - 1;
-    while (left <= right) {
-        size_t mid = left + (right - left) / 2;
-        size_t midOffset = offset + mid * sizeof(kvPair);
+    // Perform binary search within the identified range to find the key
+    val = binarySearchInRange(fd, start, end, key);
 
-        lseek(fd, midOffset, SEEK_SET);
-        if (read(fd, &kv, sizeof(kvPair)) > 0) {
-            if (kv.key == key) {
-                val = std::make_unique<VAL_t>(kv.value);
-                lsmTree->incrementBfTruePositives();
-                truePositives++;
-                break;
-            } else if (kv.key < key) {
-                left = mid + 1;
-            } else {
-                right = mid - 1;
-            }
-        } else {
-            break;
-        }
-    }
-
-    // Check if the last element in the search range is equal to the target key
-    // if (val == nullptr && left <= numPairsInPage - 1) {
-    //     size_t lastOffset = offset + left * sizeof(kvPair);
-    //     lseek(fd, lastOffset, SEEK_SET);
-    //     if (read(fd, &kv, sizeof(kvPair)) > 0 && kv.key == key) {
-    //         val = std::make_unique<VAL_t>(kv.value);
-    //         lsmTree->incrementBfTruePositives();
-    //         truePositives++;
-    //     }
-    // }
-
-    // Check if the key is in the part of the file added after the last full page
-    size_t numPairsAtEnd = (size % getpagesize()) / sizeof(kvPair);
-    int counter = 0;
-    if (val == nullptr && key > fencePointers.back() && key <= maxKey) {
-        // The key is in the part of the file added after the last full page
-        offset = (fencePointers.size()-1) * getpagesize() * sizeof(kvPair);
-        lseek(fd, offset, SEEK_SET);
-        while (read(fd, &kv, sizeof(kvPair)) > 0) {
-            counter++;
-            if (kv.key == key) {
-                val = std::make_unique<VAL_t>(kv.value);
-                lsmTree->incrementBfTruePositives();
-                truePositives++;
-                // std::cout << "Found key at counter: " << counter << " with page size: " << getpagesize() << std::endl;
-                break;
-            }
-        }
-    }
-
-    // if (val == nullptr && key > fencePointers.back() && key <= maxKey) {
-    //     // The key is in the part of the file added after the last full page
-    //     offset = fencePointers.size() * getpagesize() * sizeof(kvPair);
-    //     size_t left = 0, right = numPairsAtEnd - 1;
-    //     while (left <= right) {
-    //         size_t mid = left + (right - left) / 2;
-    //         size_t midOffset = offset + mid * sizeof(kvPair);
-
-    //         lseek(fd, midOffset, SEEK_SET);
-    //         if (read(fd, &kv, sizeof(kvPair)) > 0) {
-    //             if (kv.key == key) {
-    //                 val = std::make_unique<VAL_t>(kv.value);
-    //                 lsmTree->incrementBfTruePositives();
-    //                 truePositives++;
-    //                 break;
-    //             } else if (kv.key < key) {
-    //                 left = mid + 1;
-    //             } else {
-    //                 right = mid - 1;
-    //             }
-    //         } else {
-    //             break;
-    //         }
-    //     }
-    // }
-
-    
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
         lsmTree->incrementBfFalsePositives();
         falsePositives++;
     }
 
-    // // If the value of val is equal to the number 2147466802
-    // if (val == nullptr && (key == 2147466802 || key == 2147435494)) {
-    //     // print the last fence pointer and the max key
-    //     std::cout << "FUCK UP: Last fence pointer: " << fencePointers.back() << " max key: " << maxKey << std::endl;
-    //     std::cout << "Page Index: " << pageIndex << " fencePointers.size() " << fencePointers.size() << std::endl;
-    //     std::cout << "numPairsAtEnd: " << numPairsAtEnd << " pagesize: " << getpagesize() << std::endl;
-    //     std::cout << "size of run in entries: " << size << " offset: " << offset << std::endl;
-    // }
-
     closeFile();
+    return val;
+}
+
+std::unique_ptr<VAL_t> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
+    std::unique_ptr<VAL_t> val;
+
+    while (start <= end) {
+        size_t mid = start + (end - start) / 2;
+
+        // Read the key-value pair at the mid index
+        kvPair kv;
+        pread(fd, &kv, sizeof(kvPair), mid * sizeof(kvPair));
+
+        if (kv.key == key) {
+            val = std::make_unique<VAL_t>(kv.value);
+            break;
+        } else if (kv.key < key) {
+            start = mid + 1;
+        } else {
+            end = mid - 1;
+        }
+    }
+
     return val;
 }
 
@@ -253,11 +191,9 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (searchPageStart >= searchPageEnd) {
         die("Run::range: Start page index is greater than or equal to end page index");
     }
-    // Open the file descriptor for the temporary file
-    fd = open(tmpFile.c_str(), O_RDONLY);
-    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        die("Run::range: Failed to open temporary file for Run");
-    }
+    // Open the file descriptor
+    openFile("Run::range: Failed to open temporary file for Run");
+
     lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCount(levelOfRun);
 
