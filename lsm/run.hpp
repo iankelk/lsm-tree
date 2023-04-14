@@ -29,7 +29,7 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
 private:
-    std::unique_ptr<VAL_t> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
+    std::pair<size_t, std::unique_ptr<VAL_t>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
     KEY_t maxKey;
     size_t maxKvPairs;
     double bfErrorRate;

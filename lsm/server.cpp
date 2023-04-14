@@ -232,7 +232,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
                 response = printDSLHelp();
                 break;
             }
-            concurrent ? lsmTree->cRange(start, end) : lsmTree->range(start, end);
+            rangePtr = concurrent ? lsmTree->cRange(start, end) : lsmTree->range(start, end);
             if (rangePtr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
                 for (const auto &p : *rangePtr) {

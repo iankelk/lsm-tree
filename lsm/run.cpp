@@ -93,8 +93,6 @@ void Run::put(KEY_t key, VAL_t val) {
 }
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
-    std::unique_ptr<VAL_t> val;
-
     // Check if the run is empty
     if (size == 0) {
         return nullptr;
@@ -120,7 +118,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     lsmTree->incrementLevelIoCount(levelOfRun);
 
     // Perform binary search within the identified range to find the key
-    val = binarySearchInRange(fd, start, end, key);
+    auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
 
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
@@ -129,10 +127,10 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     closeFile();
-    return val;
+    return std::move(val);
 }
 
-std::unique_ptr<VAL_t> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
+std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
     std::unique_ptr<VAL_t> val;
 
     while (start <= end) {
@@ -144,7 +142,7 @@ std::unique_ptr<VAL_t> Run::binarySearchInRange(int fd, size_t start, size_t end
 
         if (kv.key == key) {
             val = std::make_unique<VAL_t>(kv.value);
-            break;
+            return std::make_pair(mid, std::move(val));
         } else if (kv.key < key) {
             start = mid + 1;
         } else {
@@ -152,78 +150,69 @@ std::unique_ptr<VAL_t> Run::binarySearchInRange(int fd, size_t start, size_t end
         }
     }
 
-    return val;
+    return std::make_pair(0, nullptr);
 }
 
-// Return a map of all the key-value pairs in the range [start, end]
+// Return a map of all the key-value pairs in the range [start, end)
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     size_t searchPageStart, searchPageEnd;
 
     // Initialize an empty map
     std::map<KEY_t, VAL_t> rangeMap;
 
-    // Check if the run is empty
+    // Check if the run is empty. If so, return an empty result set.
     if (size == 0) {
         return rangeMap;
     }
 
-    // Check if the range is in the range of the fence pointers
+    // Check if the specified range is outside the range of keys in the run. If so, return an empty result set.
     if (end < fencePointers.front() || start > maxKey) {
         return rangeMap;
     }
-    // Check if the start of the range is less than the first fence pointer
-    if (start < fencePointers.front()) {
-        searchPageStart = 0;
-    } else {
-        // Binary search for the page containing the start key in the fence pointers vector
-        auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), start);
-        searchPageStart = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter)) - 1;
-    }
-    // Check if the end of the range is greater than the max key
-    if (end > maxKey) {
-        searchPageEnd = fencePointers.size();
-    } else {
-        // Binary search for the page containing the end key in the fence pointers vector
-        auto fencePointersIter = std::upper_bound(fencePointers.begin(),  fencePointers.end(), end);
-        searchPageEnd = static_cast<long>(std::distance(fencePointers.begin(), fencePointersIter));
-    }
-    // Check that the start page index is less than the end page index
-    if (searchPageStart >= searchPageEnd) {
-        die("Run::range: Start page index is greater than or equal to end page index");
-    }
+
+    // Use binary search to identify the starting fence pointer index where the start key might be located. 
+    auto iterStart = std::upper_bound(fencePointers.begin(), fencePointers.end(), start);
+    searchPageStart = (iterStart != fencePointers.begin()) ? std::distance(fencePointers.begin(), --iterStart) : 0;
+
+    // Find the ending fence pointer index for the end key using binary search as well.
+    auto iterEnd = std::upper_bound(fencePointers.begin(), fencePointers.end(), end);
+    searchPageEnd = (iterEnd != fencePointers.end()) ? std::distance(fencePointers.begin(), iterEnd) : fencePointers.size() - 1;
+
     // Open the file descriptor
     openFile("Run::range: Failed to open temporary file for Run");
 
     lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCount(levelOfRun);
 
-    bool stopSearch = false;
-    // Search the pages for the keys in the range
-    for (size_t pageIndex = searchPageStart; pageIndex < searchPageEnd; pageIndex++) {
-        size_t offset = pageIndex * getpagesize() * sizeof(kvPair);
-        size_t offset_end = searchPageEnd * getpagesize() * sizeof(kvPair);
-        lseek(fd, offset, SEEK_SET);
-        kvPair kv;
-        // Search the page and keep the most recently added value'
-        while (read(fd, &kv, sizeof(kvPair)) > 0 && offset < offset_end) {
-            if (kv.key >= start && kv.key <= end) {
-                rangeMap[kv.key] = kv.value;
-            } else if (kv.key > end) {
-                stopSearch = true;
-                break;
+    // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
+    // and perform binary searches within the corresponding pages for keys within the specified range.
+    for (size_t i = searchPageStart; i <= searchPageEnd; ++i) {
+        size_t pageStart = i * getpagesize();
+        size_t pageEnd = (i + 1 == fencePointers.size()) ? size : (i + 1) * getpagesize();
+
+        auto[startPos, startVal] = binarySearchInRange(fd, pageStart, pageEnd, start);
+        if (startVal) {
+            for (size_t j = startPos; j < pageEnd; ++j) {
+                kvPair kv;
+                pread(fd, &kv, sizeof(kvPair), j * sizeof(kvPair));
+
+                if (kv.key >= start && kv.key < end) {
+                    rangeMap[kv.key] = kv.value;
+                } else if (kv.key >= end) {
+                    break;
+                }
             }
-            offset += sizeof(kvPair);
         }
-        if (stopSearch) {
-            break;
-        }  
     }
+
+    // Close the file descriptor.
     closeFile();
 
-    // If the last key in the range is the end key, remove it since end is not inclusive
+    // If the last key in the range is the end key, remove it since the RANGE query is not inclusive for the end key.
     if (rangeMap.size() > 0 && rangeMap.rbegin()->first == end) {
         rangeMap.erase(rangeMap.rbegin()->first);
     }
+    // Return the data structure containing the key-value pairs within the specified range.
     return rangeMap;
 }
 

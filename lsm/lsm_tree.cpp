@@ -369,6 +369,8 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurre
 
     auto start_time = std::chrono::high_resolution_clock::now();
     std::cout << "Benchmark: loaded \"" << filename << "\" and concurrent is " << concurrent << std::endl;
+    // TODO: delete this
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
 
     std::string line;
     while (std::getline(ss, line)) {
@@ -401,7 +403,11 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurre
                 KEY_t end;
                 line_ss >> start >> end;
                 
-                concurrent ? cRange(start, end) : range(start, end);
+                rangePtr = concurrent ? cRange(start, end) : range(start, end);
+                // Print the size of the range map
+                if (rangePtr != nullptr) {
+                    std::cout << rangePtr->size() << std::endl;
+                }
                 break;
             }
             default: {

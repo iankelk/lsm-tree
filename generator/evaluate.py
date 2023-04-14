@@ -115,6 +115,7 @@ if __name__ == "__main__":
                 valid_keys = sorted_keys[left_index:right_index]
                 valid_vals = map(lambda x: db[x], valid_keys)
                 res = list(zip(valid_keys, valid_vals))
+                print(len(res))
                 if show_output:
                     print(" ".join(map(lambda x: str(x[0])+":"+str(x[1]), res)))
                 log("RANGE", verbose)

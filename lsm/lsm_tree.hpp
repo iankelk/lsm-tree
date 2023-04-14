@@ -53,7 +53,6 @@ private:
     std::vector<size_t> levelIoCount;
     std::map<int, std::pair<int, int>> compactionPlan;
 
-
     void mergeLevels(int currentLevelNum);
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
