@@ -153,7 +153,7 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
     return std::make_pair(0, nullptr);
 }
 
-// Return a map of all the key-value pairs in the range [start, end)
+// Return a map of all the key-value pairs in the range [start, end]
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     size_t searchPageStart, searchPageEnd;
 
@@ -170,13 +170,13 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         return rangeMap;
     }
 
-    // Use binary search to identify the starting fence pointer index where the start key might be located. 
-    auto iterStart = std::upper_bound(fencePointers.begin(), fencePointers.end(), start);
-    searchPageStart = (iterStart != fencePointers.begin()) ? std::distance(fencePointers.begin(), --iterStart) : 0;
+    // Use binary search to identify the starting fence pointer index where the start key might be located.
+    auto iterStart = std::lower_bound(fencePointers.begin(), fencePointers.end(), start);
+    searchPageStart = std::distance(fencePointers.begin(), iterStart);
 
-    // Find the ending fence pointer index for the end key using binary search as well.
-    auto iterEnd = std::upper_bound(fencePointers.begin(), fencePointers.end(), end);
-    searchPageEnd = (iterEnd != fencePointers.end()) ? std::distance(fencePointers.begin(), iterEnd) : fencePointers.size() - 1;
+    // Find the ending fence pointer index for the end key using binary search.
+    auto iterEnd = std::lower_bound(fencePointers.begin(), fencePointers.end(), end);
+    searchPageEnd = std::distance(fencePointers.begin(), iterEnd);
 
     // Open the file descriptor
     openFile("Run::range: Failed to open temporary file for Run");
@@ -186,21 +186,23 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
     // and perform binary searches within the corresponding pages for keys within the specified range.
-    for (size_t i = searchPageStart; i <= searchPageEnd; ++i) {
-        size_t pageStart = i * getpagesize();
-        size_t pageEnd = (i + 1 == fencePointers.size()) ? size : (i + 1) * getpagesize();
+    for (size_t pageIndex = searchPageStart; pageIndex <= searchPageEnd; pageIndex++) {
+        size_t pageStart = pageIndex * getpagesize();
+        size_t pageEnd = (pageIndex + 1 == fencePointers.size()) ? size : (pageIndex + 1) * getpagesize();
+        auto startPosPair = binarySearchInRange(fd, pageStart, pageEnd, start);
 
-        auto[startPos, startVal] = binarySearchInRange(fd, pageStart, pageEnd, start);
-        if (startVal) {
-            for (size_t j = startPos; j < pageEnd; ++j) {
-                kvPair kv;
-                pread(fd, &kv, sizeof(kvPair), j * sizeof(kvPair));
+        if (startPosPair.second != nullptr) {
+            rangeMap[startPosPair.first] = *startPosPair.second;
+        }
 
-                if (kv.key >= start && kv.key < end) {
-                    rangeMap[kv.key] = kv.value;
-                } else if (kv.key >= end) {
-                    break;
-                }
+        for (size_t i = startPosPair.first + 1; i < pageEnd; i++) {
+            kvPair kv;
+            pread(fd, &kv, sizeof(kvPair), i * sizeof(kvPair));
+
+            if (kv.key >= start && kv.key < end) {
+                rangeMap[kv.key] = kv.value;
+            } else if (kv.key >= end) {
+                break;
             }
         }
     }
@@ -212,6 +214,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (rangeMap.size() > 0 && rangeMap.rbegin()->first == end) {
         rangeMap.erase(rangeMap.rbegin()->first);
     }
+
     // Return the data structure containing the key-value pairs within the specified range.
     return rangeMap;
 }
