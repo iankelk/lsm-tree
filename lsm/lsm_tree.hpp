@@ -1,5 +1,6 @@
 #ifndef LSM_TREE_HPP
 #define LSM_TREE_HPP
+#include <shared_mutex>
 #include "memtable.hpp"
 #include "level.hpp"
 #include "run.hpp"
@@ -31,15 +32,15 @@ public:
     Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
-    void incrementIoCount() { ioCount++; }
-    long getIoCount() { return ioCount; }
+    void incrementIoCount();
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
     void printHitsMissesStats();
     size_t getNumThreads() { return threadPool.getNumThreads(); }
-    void incrementLevelIoCount(int levelNum) { levelIoCount[levelNum-1]++; }
-    size_t getLevelIoCount(int levelNum) { return levelIoCount[levelNum-1]; }
+    void incrementLevelIoCount(int levelNum);
+    size_t getIoCount();
+    size_t getLevelIoCount(int levelNum);
 
 private:
     Memtable buffer;
@@ -68,6 +69,8 @@ private:
     size_t getHits = 0;
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
+
+    std::shared_mutex ioCountMutex;
 };
 
 #endif /* LSM_TREE_HPP */

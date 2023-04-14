@@ -16,11 +16,6 @@ public:
         LAZY_LEVELED,
         PARTIAL
     };
-    enum State {
-        FULL,
-        TWO_RUNS,
-        UNKNOWN
-    };
     // constructor
     Level(long bs, int f, Policy l, int ln, LSMTree* lsmTree) :
     bufferSize(bs), fanout(f), levelPolicy(l), levelNum(ln),
@@ -31,9 +26,6 @@ public:
     ~Level() {}; // destructor
     std::deque<std::unique_ptr<Run>> runs; // std::deque of std::unique_ptr pointing to runs in the level
     void put(std::unique_ptr<Run> runPtr); // adds a std::unique_ptr to the runs queue
-    void dump(); // dump prints the contents of the level. TODO: remove this function
-    void compactLevel(double errorRate, State state, bool isLastLevel); 
-    //void compactSegment(double errorRate, size_t segStartIdx, size_t segEndIdx, bool isLastLevel);
     size_t getLevelSize(int levelNum); 
     std::string getDiskName() const;
     int getDiskPenaltyMultiplier() const;

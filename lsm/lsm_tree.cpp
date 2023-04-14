@@ -4,6 +4,7 @@
 #include <sstream>
 #include <unistd.h>
 #include <numeric>
+#include <shared_mutex>
 
 #include "lsm_tree.hpp"
 #include "run.hpp"
@@ -36,19 +37,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
-        // std::unique_ptr<VAL_t> result1 = get(2147466802);
-        // std::unique_ptr<VAL_t> result2 = get(2147435494);
-        // if (result1) {
-        //     std::cout << "get " << 2147466802 << ": " << *result1 << std::endl;
-        // } else {
-        //     std::cout << "get " << 2147466802 << ": nullptr" << std::endl;
-        // }
-
-        // if (result2) {
-        //     std::cout << "get " << 2147435494 << ": " << *result2 << std::endl;
-        // } else {
-        //     std::cout << "get " << 2147435494 << ": nullptr" << std::endl;
-        // }
     }
     
     // Create a new run and add a unique pointer to it to the first level
@@ -62,11 +50,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Close the run's file
     levels.front().runs.front()->closeFile();
-
-    // If levelPolicy is Level::LEVELED, or if levelPolicy is Level::LAZY_LEVELED and there is only one level, compact the first level
-    if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(levels.begin()))) {
-        levels.front().compactLevel(bfErrorRate, levelPolicy == Level::LEVELED ? Level::TWO_RUNS : Level::UNKNOWN, true);
-    }
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
@@ -96,7 +79,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
             }
         }
     }
-    if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED
+    if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED move the whole level to the next level
         int numRuns = it->runs.size();
         if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
             compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, numRuns - 1);
@@ -106,7 +89,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
         next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
         it->runs.clear();
         it->setKvPairs(0);
-    } else { // PARTIAL
+    } else { // PARTIAL moves the best segment of 2 runs to the next level
         auto segmentBounds = it->findBestSegmentToCompact();
         if (!it->willLowerLevelFit()) {
             compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
@@ -146,11 +129,7 @@ void LSMTree::executeCompactionPlan() {
             compactResults.push_back(threadPool.enqueue(task));
         }
     }
-    // TODO: check if this is necessary
-    // // Wait for all compacting tasks to complete
-    // for (auto &result : compactResults) {
-    //     result.get();
-    // }
+    // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
 }
 
@@ -567,7 +546,7 @@ std::string LSMTree::printTree() {
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     output += "Number of logical key-value pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     output += "Bloom filter false positive rate: " + bfStatus + "\n";
-    output += "Number of I/O operations: " + addCommas(std::to_string(ioCount)) + "\n";
+    output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
     output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
     output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + "\n";
@@ -595,12 +574,7 @@ std::string LSMTree::printLevelIoCount() {
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
     }
-    // print out the levelIoCount vector in this format showing the indices: [0]: 123 [1]: 456 [2]: 789
-    output += "Level I/O count vector: ";
-    for (auto it = levelIoCount.begin(); it != levelIoCount.end(); it++) {
-        output += "[" + std::to_string(it - levelIoCount.begin()) + "]: " + addCommas(std::to_string(*it)) + " ";
-    }
-    output += "\nTotal I/O count: " + addCommas(std::to_string(ioCount)) + "\n";
+    output += "\nTotal I/O count: " + addCommas(std::to_string(getIoCount())) + "\n";
     // Add up all the I/O counts for each level
     output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCount.begin(), levelIoCount.end(), 0))) + "\n";
     output.pop_back();
@@ -804,3 +778,28 @@ void LSMTree::monkeyOptimizeBloomFilters() {
     std::cout << "\nNew Bloom Filter summaries:" << std::endl;
     std::cout << getBloomFilterSummary() << std::endl;
 }
+
+size_t LSMTree::getLevelIoCount(int levelNum) {
+    // No mutex needed because each thread has a different levelNum
+    return levelIoCount[levelNum-1];
+}
+
+void LSMTree::incrementLevelIoCount(int levelNum) { 
+    // No mutex needed because each thread has a different levelNum
+    levelIoCount[levelNum-1]++; 
+}
+
+size_t LSMTree::getIoCount() { 
+    std::shared_lock<std::shared_mutex> lock(ioCountMutex);
+    return ioCount;
+}
+
+void LSMTree::incrementIoCount() { 
+    // Lock the mutex
+    std::unique_lock<std::shared_mutex> lock(ioCountMutex);
+    ioCount++;
+}
+
+
+
+

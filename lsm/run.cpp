@@ -87,8 +87,9 @@ void Run::put(KEY_t key, VAL_t val) {
     if (result == -1) {
         die("Run::put: Failed to write to temporary file");
     }
+
     lsmTree->incrementIoCount();
-    lsmTree->incrementLevelIoCount(levelOfRun);
+    lsmTree->incrementLevelIoCount(levelOfRun);    
     size++;
 }
 
