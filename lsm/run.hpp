@@ -28,6 +28,7 @@ public:
     size_t getSize() { return size; }
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
+    std::string getRunFilePath() { return runFilePath; }
 private:
     std::pair<size_t, std::unique_ptr<VAL_t>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
     KEY_t maxKey;
@@ -35,7 +36,7 @@ private:
     double bfErrorRate;
     BloomFilter bloomFilter;
     std::vector<KEY_t> fencePointers;
-    std::string tmpFile;
+    std::string runFilePath;
     size_t size;
     int fd;
     LSMTree* lsmTree;

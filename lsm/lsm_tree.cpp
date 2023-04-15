@@ -58,7 +58,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    //incrementIoCount();
     incrementLevelIoCountAndTime(FIRST_LEVEL_NUM, duration);
 
     // Clear the buffer and add the key-value pair to it

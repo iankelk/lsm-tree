@@ -13,7 +13,7 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
     maxKvPairs(maxKvPairs),
     bfErrorRate(bfErrorRate),
     bloomFilter(maxKvPairs, bfErrorRate),
-    tmpFile(""),
+    runFilePath(""),
     size(0),
     maxKey(0),
     fd(FILE_DESCRIPTOR_UNINITIALIZED),
@@ -34,7 +34,7 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die("Run::Constructor: Failed to create file for Run");
         }
-        tmpFile = tmpFn;
+        runFilePath = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
     }
 }
@@ -45,7 +45,7 @@ Run::~Run() {
 
 void Run::deleteFile() {
     closeFile();
-    remove(tmpFile.c_str());
+    remove(runFilePath.c_str());
 }
 
 // Close the file descriptor for the Run file for when we are performing point or range queries
@@ -56,7 +56,7 @@ void Run::closeFile() {
 
 void Run::openFile(std::string originatingFunctionError, int flags) {
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        fd = open(tmpFile.c_str(), flags);
+        fd = open(runFilePath.c_str(), flags);
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die(originatingFunctionError);
         }
@@ -129,7 +129,6 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
     return std::move(val);
@@ -265,7 +264,7 @@ json Run::serialize() const {
     j["bfErrorRate"] = bfErrorRate;
     j["bloomFilter"] = bloomFilter.serialize();
     j["fencePointers"] = fencePointers;
-    j["tmpFile"] = tmpFile;
+    j["runFilePath"] = runFilePath;
     j["size"] = size;
     j["maxKey"] = maxKey;
     j["truePositives"] = truePositives;
@@ -279,7 +278,7 @@ void Run::deserialize(const json& j) {
 
     bloomFilter.deserialize(j["bloomFilter"]);
     fencePointers = j["fencePointers"].get<std::vector<KEY_t>>();
-    tmpFile = j["tmpFile"];
+    runFilePath = j["runFilePath"];
     size = j["size"];
     maxKey = j["maxKey"];
     truePositives = j["truePositives"];
