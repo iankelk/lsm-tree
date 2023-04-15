@@ -135,7 +135,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     return std::move(val);
 }
 
-std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key, bool findNextLargerKey = false) {
+std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
     std::unique_ptr<VAL_t> val;
 
     while (start <= end) {
@@ -155,11 +155,7 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
         }
     }
 
-    if (findNextLargerKey && start < size) {
-        return std::make_pair(start, nullptr);
-    } else {
-        return std::make_pair(0, nullptr);
-    }
+    return std::make_pair(0, nullptr);
 }
 
 // Return a map of all the key-value pairs in the range [start, end]
