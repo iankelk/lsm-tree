@@ -734,4 +734,3 @@ size_t LSMTree::getIoCount() {
     });
     return ioCount;
 }
-
