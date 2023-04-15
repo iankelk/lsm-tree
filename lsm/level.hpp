@@ -65,7 +65,7 @@ public:
     }
 
     json serialize() const;
-    void deserialize(const json& j);
+    void deserialize(const json& j, LSMTree* lsmTreePtr);
 
     // copy constructor
     Level(Level&& other) noexcept

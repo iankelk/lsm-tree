@@ -32,6 +32,9 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
         newMaxKvPairs += runs[idx]->getMaxKvPairs();
     }
 
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // Create a new run with the merged data
     auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, levelNum, lsmTree);
     for (const auto &kv : mergedMap) {
@@ -40,6 +43,13 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
         }
     }
     compactedRun->closeFile();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCountAndTime(levelNum, duration);
+
     return compactedRun;
 }
 
@@ -155,7 +165,7 @@ json Level::serialize() const {
     return j;
 }
 
-void Level::deserialize(const json& j) {
+void Level::deserialize(const json& j, LSMTree* lsmTreePtr) {
     bufferSize = j["bufferSize"];
     fanout = j["fanout"];
     levelNum = j["levelNum"];
@@ -172,4 +182,7 @@ void Level::deserialize(const json& j) {
         run->deserialize(runJson);
         runs.emplace_back(std::move(run));
     }
+
+    // Set the lsmTree pointer for the level
+    lsmTree = lsmTreePtr;
 }

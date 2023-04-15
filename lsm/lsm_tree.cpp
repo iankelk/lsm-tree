@@ -16,7 +16,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
-    levelIoCount.push_back(0);
+    levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
 
 // Calculate whether an std::vector<Level>::iterator is pointing to the last level
@@ -38,6 +38,9 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
     }
+
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
     
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, 1, this));
@@ -50,6 +53,12 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Close the run's file
     levels.front().runs.front()->closeFile();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    incrementIoCount();
+    incrementLevelIoCountAndTime(FIRST_LEVEL_NUM, duration);
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
@@ -67,7 +76,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else {
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-            levelIoCount.push_back(0);
+            levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
             it = levels.end() - 2;
             next = levels.end() - 1;
         } else {
@@ -572,11 +581,16 @@ std::string LSMTree::printTree() {
 std::string LSMTree::printLevelIoCount() {
     std::string output = "";
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", Microseconds: " + 
+                   std::to_string(getLevelIoTime(it->getLevelNum()).count()) + ", Disk name: " + it->getDiskName() + ", Disk penalty multiplier: " + 
+                   std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
     }
     output += "\nTotal I/O count: " + addCommas(std::to_string(getIoCount())) + "\n";
     // Add up all the I/O counts for each level
-    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCount.begin(), levelIoCount.end(), 0))) + "\n";
+    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCountAndTime.begin(), levelIoCountAndTime.end(), 0,
+        [](size_t acc, const std::pair<size_t, std::chrono::microseconds>& p) {
+            return acc + p.first;
+        }))) + "\n";
     output.pop_back();
     return output;
 }
@@ -634,7 +648,11 @@ json LSMTree::serialize() const {
     j["getHits"] = getHits;
     j["rangeMisses"] = rangeMisses;
     j["rangeHits"] = rangeHits;
-    j["levelIoCount"] = levelIoCount;
+    j["levelIoCountAndTime"] = json::array();
+    for (const auto& levelIoCountAndTime : levelIoCountAndTime) {
+        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.first);
+        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.second.count());
+    }
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -670,7 +688,11 @@ void LSMTree::deserialize(const std::string& filename) {
     bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
     bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
     ioCount = treeJson["ioCount"].get<size_t>();
-    levelIoCount = treeJson["levelIoCount"].get<std::vector<size_t>>();
+    levelIoCountAndTime = std::vector<std::pair<size_t, std::chrono::microseconds>>();
+    for (size_t i = 0; i < treeJson["levelIoCountAndTime"].size(); i += 2) {
+        levelIoCountAndTime.emplace_back(treeJson["levelIoCountAndTime"][i].get<size_t>(), 
+        std::chrono::microseconds(treeJson["levelIoCountAndTime"][i + 1].get<size_t>()));
+    }
     getMisses = treeJson["getMisses"].get<size_t>();
     getHits = treeJson["getHits"].get<size_t>();
     rangeMisses = treeJson["rangeMisses"].get<size_t>();
@@ -681,7 +703,7 @@ void LSMTree::deserialize(const std::string& filename) {
     levels.clear();
     for (const auto& levelJson : treeJson["levels"]) {
         levels.emplace_back();
-        levels.back().deserialize(levelJson);
+        levels.back().deserialize(levelJson, this);
     }
     infile.close();
 
@@ -781,12 +803,18 @@ void LSMTree::monkeyOptimizeBloomFilters() {
 
 size_t LSMTree::getLevelIoCount(int levelNum) {
     // No mutex needed because each thread has a different levelNum
-    return levelIoCount[levelNum-1];
+    return levelIoCountAndTime[levelNum-1].first;
 }
 
-void LSMTree::incrementLevelIoCount(int levelNum) { 
+std::chrono::microseconds LSMTree::getLevelIoTime(int levelNum) {
     // No mutex needed because each thread has a different levelNum
-    levelIoCount[levelNum-1]++; 
+    return levelIoCountAndTime[levelNum-1].second;
+}
+
+void LSMTree::incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration) { 
+    // No mutex needed because each thread has a different levelNum
+    levelIoCountAndTime[levelNum-1].first++;
+    levelIoCountAndTime[levelNum-1].second += duration;
 }
 
 size_t LSMTree::getIoCount() { 
@@ -799,7 +827,3 @@ void LSMTree::incrementIoCount() {
     std::unique_lock<std::shared_mutex> lock(ioCountMutex);
     ioCount++;
 }
-
-
-
-

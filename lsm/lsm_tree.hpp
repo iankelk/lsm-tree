@@ -38,9 +38,10 @@ public:
     void monkeyOptimizeBloomFilters();
     void printHitsMissesStats();
     size_t getNumThreads() { return threadPool.getNumThreads(); }
-    void incrementLevelIoCount(int levelNum);
+    void incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration);
     size_t getIoCount();
     size_t getLevelIoCount(int levelNum);
+    std::chrono::microseconds getLevelIoTime(int levelNum);
 
 private:
     Memtable buffer;
@@ -51,7 +52,7 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
-    std::vector<size_t> levelIoCount;
+    std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
     std::map<int, std::pair<int, int>> compactionPlan;
 
     void mergeLevels(int currentLevelNum);

@@ -54,9 +54,9 @@ void Run::closeFile() {
     fd = FILE_DESCRIPTOR_UNINITIALIZED;
 }
 
-void Run::openFile(std::string originatingFunctionError) {
+void Run::openFile(std::string originatingFunctionError, int flags) {
     if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        fd = open(tmpFile.c_str(), O_RDWR);
+        fd = open(tmpFile.c_str(), flags);
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die(originatingFunctionError);
         }
@@ -87,9 +87,6 @@ void Run::put(KEY_t key, VAL_t val) {
     if (result == -1) {
         die("Run::put: Failed to write to temporary file");
     }
-
-    lsmTree->incrementIoCount();
-    lsmTree->incrementLevelIoCount(levelOfRun);    
     size++;
 }
 
@@ -111,12 +108,12 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Calculate the start and end position of the range to search based on the page index
     size_t start = pageIndex * getpagesize();
     size_t end = (pageIndex + 1 == fencePointers.size()) ? size : (pageIndex + 1) * getpagesize();
+    
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFile("Run::get: Failed to open temporary file for Run");
-
-    lsmTree->incrementIoCount();
-    lsmTree->incrementLevelIoCount(levelOfRun);
+    openFile("Run::get: Failed to open temporary file for Run", O_RDONLY);
 
     // Perform binary search within the identified range to find the key
     auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
@@ -128,6 +125,13 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
 
     closeFile();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
+
     return std::move(val);
 }
 
@@ -179,11 +183,11 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto iterEnd = std::lower_bound(fencePointers.begin(), fencePointers.end(), end);
     searchPageEnd = std::distance(fencePointers.begin(), iterEnd);
 
-    // Open the file descriptor
-    openFile("Run::range: Failed to open temporary file for Run");
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
 
-    lsmTree->incrementIoCount();
-    lsmTree->incrementLevelIoCount(levelOfRun);
+    // Open the file descriptor
+    openFile("Run::range: Failed to open temporary file for Run", O_RDONLY);
 
     // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
     // and perform binary searches within the corresponding pages for keys within the specified range.
@@ -211,6 +215,12 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Close the file descriptor.
     closeFile();
 
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
+
     // If the last key in the range is the end key, remove it since the RANGE query is not inclusive for the end key.
     if (rangeMap.size() > 0 && rangeMap.rbegin()->first == end) {
         rangeMap.erase(rangeMap.rbegin()->first);
@@ -226,20 +236,26 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     if (lsmTree == nullptr) {
         die("Run::getMap: LSM tree is null");
     }
-    // Open the file descriptor for the temporary file
-    fd = open(tmpFile.c_str(), O_RDONLY);
-    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        die("Run::getMap: Failed to open temporary file for Run");
-    }
-    // Read all the key-value pairs from the temporary file
-    lsmTree->incrementIoCount();
-    lsmTree->incrementLevelIoCount(levelOfRun);
+
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Open the file descriptor
+    openFile("Run::getMap: Failed to open temporary file for Run", O_RDONLY);
 
     kvPair kv;
     while (read(fd, &kv, sizeof(kvPair)) > 0) {
         map[kv.key] = kv.value;
     }
     closeFile();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    // Read all the key-value pairs from the temporary file
+    lsmTree->incrementIoCount();
+    lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
+
     return map;
  }
 
