@@ -129,7 +129,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    lsmTree->incrementIoCount();
+    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
     return std::move(val);
@@ -218,7 +218,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    lsmTree->incrementIoCount();
+    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
     // If the last key in the range is the end key, remove it since the RANGE query is not inclusive for the end key.
@@ -253,7 +253,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
     // Read all the key-value pairs from the temporary file
-    lsmTree->incrementIoCount();
+    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
     return map;

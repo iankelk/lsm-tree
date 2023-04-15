@@ -47,7 +47,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    lsmTree->incrementIoCount();
+    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelNum, duration);
 
     return compactedRun;

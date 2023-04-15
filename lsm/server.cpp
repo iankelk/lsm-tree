@@ -7,7 +7,6 @@
 #include "server.hpp"
 
 volatile sig_atomic_t terminationFlag = 0;
-bool concurrent = false;
 
 Server *server_ptr = nullptr;
 
@@ -56,20 +55,30 @@ void Server::listenToStdIn() {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
                 lsmTree->printHitsMissesStats();
                 sharedLock.unlock();
-            } else if (input == "concurrent") {
-                concurrent = !concurrent;
-                std::cout << "Concurrent: " << concurrent << std::endl;
-            } else if (input == "levelIO") {
-                std::cout << "Level IO Count:" << std::endl;
+            } else if (input == "io") {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
                 std::cout << lsmTree->printLevelIoCount() << std::endl;
                 sharedLock.unlock();
+            } else if (input == "quit") {
+                // Path to data directory and JSON file for serialization
+                std::string dataDir = DATA_DIRECTORY;
+                std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
+                terminationFlag = 1;
+                close();
+            } else if (input == "qs") {
+                // Path to data directory and JSON file for serialization
+                std::string dataDir = DATA_DIRECTORY;
+                std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
+                lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
+                terminationFlag = 1;
+                close();
             } else if (input == "help") {
                 std::cout << "bloom: Print Bloom Filter summary" << std::endl;
                 std::cout << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;
                 std::cout << "misses: Print hits and misses stats" << std::endl;
-                std::cout << "concurrent: Toggle concurrent" << std::endl;
-                std::cout << "levelIO: Print level IO count" << std::endl;
+                std::cout << "io: Print level IO count" << std::endl;
+                std::cout << "quit: Quit server" << std::endl;
+                std::cout << "qs: Save server to disk and quit" << std::endl;
                 std::cout << "help: Print this help message" << std::endl;
             } else {
                 std::cout << "Invalid command. Use \"help\" for list of available commands" << std::endl;
@@ -199,7 +208,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             break;
         case 'b':
             ss >> fileName;
-            lsmTree->benchmark(fileName, verbose, concurrent);
+            lsmTree->benchmark(fileName, verbose);
             response = OK;
             break;
         case 'q':
@@ -232,7 +241,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
                 response = printDSLHelp();
                 break;
             }
-            rangePtr = concurrent ? lsmTree->cRange(start, end) : lsmTree->range(start, end);
+            rangePtr = lsmTree->range(start, end);
             if (rangePtr->size() > 0) {
                 // Iterate over the map and store the key-value pairs in results
                 for (const auto &p : *rangePtr) {
