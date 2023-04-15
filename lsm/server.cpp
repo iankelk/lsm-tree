@@ -60,10 +60,13 @@ void Server::listenToStdIn() {
                 std::cout << lsmTree->printLevelIoCount() << std::endl;
                 sharedLock.unlock();
             } else if (input == "quit") {
-                // Path to data directory and JSON file for serialization
-                std::string dataDir = DATA_DIRECTORY;
-                std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
                 terminationFlag = 1;
+                // Send SERVER_SHUTDOWN command to all connected clients
+                std::unique_lock<std::mutex> lock(connectedClientsMutex);
+                for (int clientSocket : connectedClients) {
+                    send(clientSocket, SERVER_SHUTDOWN.c_str(), SERVER_SHUTDOWN.length(), 0);
+                }
+                lock.unlock();
                 close();
             } else if (input == "qs") {
                 // Path to data directory and JSON file for serialization
@@ -90,6 +93,11 @@ void Server::listenToStdIn() {
 // Thread function to handle client connections
 void Server::handleClient(int clientSocket) {
     std::cout << "New client connected" << std::endl;
+    // Add client to connected clients set
+    {
+        std::unique_lock<std::mutex> lock(connectedClientsMutex);
+        connectedClients.insert(clientSocket);
+    }
 
     // Read commands from client
     char buffer[BUFFER_SIZE];
@@ -114,6 +122,11 @@ void Server::handleClient(int clientSocket) {
     }
     // Clean up resources
     ::close(clientSocket);
+    // Remove client from connected clients set
+    {
+        std::unique_lock<std::mutex> lock(connectedClientsMutex);
+        connectedClients.erase(clientSocket);
+    }
     std::cout << "Client disconnected" << std::endl;
 }
 

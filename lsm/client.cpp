@@ -59,37 +59,44 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // Read the response from the server in chunks of BUFFER_SIZE in a loop until END_OF_MESSAGE is reached END_OF_MESSAGE
-        // is a string appended to the end of every response from the server. The client reads the response in chunks of 
-        // BUFFER_SIZE until it sees the END_OF_MESSAGE indicator.
         std::string response;
+        bool server_shutdown = false;
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
-            // print the contents of  buffer
             response.append(buffer, n_read);
             if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
-                // Remove END_OF_MESSAGE from the response
                 response.resize(response.size() - std::strlen(END_OF_MESSAGE));
                 break;
             }
         }
 
-        if (n_read == -1) {
+        // If recv() returns 0, it means the server has disconnected
+        if (n_read == 0) {
+            server_shutdown = true;
+            std::cerr << "Server disconnected" << std::endl;
+        } else if (n_read == -1) {
             std::cerr << "Error reading response from server" << std::endl;
             close(client_socket);
             return 1;
         }
-        // If not quiet, print the response
-        if (!quiet) {           
-            // If response is empty, print a newline
+
+        if (response == SERVER_SHUTDOWN) {
+            server_shutdown = true;
+            std::cout << "Server is shutting down" << std::endl;
+        }
+
+        if (!quiet && !server_shutdown) {
             if (response == NO_VALUE) {
-                //std::cout << "NO VALUE" << std::endl;
                 std::cout << std::endl;
-            // If response is not empty and is not OK (which is just a silent acknowledgement), print the response
             } else if (response.size() > 0 && response != OK) {
                 std::cout << response << std::endl;
             }
         }
+
+        if (server_shutdown) {
+            break;
+        }
     }
+
 
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();

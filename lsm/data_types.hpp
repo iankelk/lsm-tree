@@ -70,6 +70,7 @@ typedef int32_t VAL_t;
 #define END_OF_MESSAGE "<END_OF_MESSAGE>"
 #define NO_VALUE "<NO_VALUE>"
 #define OK "<OK>"
+const std::string SERVER_SHUTDOWN = "<SERVER_SHUTDOWN>";
 
 // KEY-VALUE PAIR
 struct kvPair {

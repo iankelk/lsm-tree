@@ -2,6 +2,7 @@
 #define SERVER_HPP
 #include <thread>
 #include <netinet/in.h>
+#include <set>
 #include "lsm_tree.hpp"
 
 void printHelp();
@@ -26,6 +27,9 @@ private:
     bool verbose;
     void sendResponse(int clientSocket, const std::string &response);
     void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads);
+
+    std::set<int> connectedClients;
+    std::mutex connectedClientsMutex;
 };
 
 #endif /* SERVER_HPP */
