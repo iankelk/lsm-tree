@@ -1,8 +1,40 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <iostream>
+#include <thread>
 #include "data_types.hpp"
 #include "utils.hpp"
+
+// Listener function
+void server_listener(int client_socket, bool& server_shutdown) {
+    char buffer[BUFFER_SIZE];
+    ssize_t n_read;
+    std::string response;
+
+    while (!server_shutdown) {
+        response.clear();
+        while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+            response.append(buffer, n_read);
+            if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
+                response.resize(response.size() - std::strlen(END_OF_MESSAGE));
+                break;
+            }
+        }
+
+        if (n_read == 0) {
+            server_shutdown = true;
+            std::cerr << "Server disconnected" << std::endl;
+        } else if (n_read == -1) {
+            std::cerr << "Error reading response from server" << std::endl;
+            server_shutdown = true;
+        }
+
+        if (response == SERVER_SHUTDOWN) {
+            server_shutdown = true;
+            std::cout << "Server is shutting down" << std::endl;
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     int opt, port = DEFAULT_SERVER_PORT;
@@ -39,6 +71,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    bool server_shutdown = false;
+    std::thread listener_thread(server_listener, client_socket, std::ref(server_shutdown));
+
     // Send commands to server
     std::string command_str;
     char buffer[BUFFER_SIZE];
@@ -47,7 +82,7 @@ int main(int argc, char *argv[]) {
      // Start measuring time
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    while (std::getline(std::cin, command_str)) {
+    while (!server_shutdown && std::getline(std::cin, command_str)) {
         // If the command_str is empty, skip it
         if (command_str.size() == 0) {
             continue;
@@ -59,45 +94,40 @@ int main(int argc, char *argv[]) {
             break;
         }
 
+        // Read the response from the server in chunks of BUFFER_SIZE in a loop until END_OF_MESSAGE is reached END_OF_MESSAGE
+        // is a string appended to the end of every response from the server. The client reads the response in chunks of 
+        // BUFFER_SIZE until it sees the END_OF_MESSAGE indicator.
         std::string response;
-        bool server_shutdown = false;
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+            // print the contents of  buffer
             response.append(buffer, n_read);
             if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
+                // Remove END_OF_MESSAGE from the response
                 response.resize(response.size() - std::strlen(END_OF_MESSAGE));
                 break;
             }
         }
 
-        // If recv() returns 0, it means the server has disconnected
-        if (n_read == 0) {
-            server_shutdown = true;
-            std::cerr << "Server disconnected" << std::endl;
-        } else if (n_read == -1) {
+        if (n_read == -1) {
             std::cerr << "Error reading response from server" << std::endl;
             close(client_socket);
             return 1;
         }
-
-        if (response == SERVER_SHUTDOWN) {
-            server_shutdown = true;
-            std::cout << "Server is shutting down" << std::endl;
-        }
-
-        if (!quiet && !server_shutdown) {
+        // If not quiet, print the response
+        if (!quiet) {           
+            // If response is empty, print a newline
             if (response == NO_VALUE) {
+                //std::cout << "NO VALUE" << std::endl;
                 std::cout << std::endl;
+            // If response is not empty and is not OK (which is just a silent acknowledgement), print the response
             } else if (response.size() > 0 && response != OK) {
                 std::cout << response << std::endl;
             }
         }
-
-        if (server_shutdown) {
-            break;
-        }
     }
 
-
+    listener_thread.join();
+    
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
