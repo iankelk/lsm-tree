@@ -112,16 +112,6 @@ void LSMTree::moveRuns(int currentLevelNum) {
     }
 }
 
-// void LSMTree::executeCompactionPlan() {
-//     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-//         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-//             auto &level = levels[levelNum - 1];
-//             auto compactedRun = level.compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
-//             level.replaceSegment(segmentBounds, std::move(compactedRun));
-//         }
-//     }
-// }
-
 void LSMTree::executeCompactionPlan() {
     std::vector<std::future<void>> compactResults;
     compactResults.reserve(compactionPlan.size());
@@ -151,8 +141,7 @@ void LSMTree::mergeLevels(int currentLevelNum) {
     }
 }
 
-// Given a key, search the tree for the key. If the key is found, return the value. 
-// If the key is not found, return an empty string.
+// Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
     // if key is not within the range of the available keys, print to the server stderr and skip it
@@ -170,8 +159,6 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         if (*val == TOMBSTONE) {
             return nullptr;
         }
-        // print the key and value to the server stdout
-        //std::cout << key << std::endl;
         return val;
     }
 
@@ -187,7 +174,6 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                 if (*val == TOMBSTONE) {
                     return nullptr;
                 }
-                //std::cout << key << std::endl;
                 return val;
             }
         }
@@ -196,8 +182,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
-// Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
-// If the range is not empty, return a map of all the found pairs.
+// Given 2 keys, get a map all the keys from start inclusive to end exclusive or nullptr if range is empty.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
@@ -502,10 +487,8 @@ std::string LSMTree::printTree() {
     output.pop_back();
     return output;
 }
-// Print the I/O count for each level. Remember when printing the level to increment it by 1 because the vector is zero-indexed.
-// The first level is level 1, not level 0. Use std::string Storage::getDiskName and std::string Storage::getDiskPenaltyMultiplier to get the disk name and penalty multiplier.
-// Print the I/O count, disk name, penalty multiplier for each level.
-// On the last line, print the total I/O count.
+
+// Print the I/O count for each level and the total I/O count.
 std::string LSMTree::printLevelIoCount() {
     std::string output = "";
     for (auto it = levels.begin(); it != levels.end(); it++) {

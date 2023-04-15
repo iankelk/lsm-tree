@@ -32,7 +32,7 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         int suffixLength = 4; // Length of ".bin" suffix
         fd = mkstemps(tmpFn, suffixLength);
         if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-            die("Run::Constructor: Failed to create temporary file for Run");
+            die("Run::Constructor: Failed to create file for Run");
         }
         tmpFile = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
@@ -48,7 +48,7 @@ void Run::deleteFile() {
     remove(tmpFile.c_str());
 }
 
-// Close the file descriptor for the temporary file for when we are performing point or range queries
+// Close the file descriptor for the Run file for when we are performing point or range queries
 void Run::closeFile() {
     close(fd);
     fd = FILE_DESCRIPTOR_UNINITIALIZED;
@@ -82,10 +82,10 @@ void Run::put(KEY_t key, VAL_t val) {
         maxKey = key;
     }
 
-    // Write the key-value pair to the temporary file
+    // Write the key-value pair to the Run file
     result = write(fd, &kv, sizeof(kvPair));
     if (result == -1) {
-        die("Run::put: Failed to write to temporary file");
+        die("Run::put: Failed to write to Run file");
     }
     size++;
 }
@@ -113,7 +113,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFile("Run::get: Failed to open temporary file for Run", O_RDONLY);
+    openFile("Run::get: Failed to open file for Run", O_RDONLY);
 
     // Perform binary search within the identified range to find the key
     auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
@@ -187,7 +187,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFile("Run::range: Failed to open temporary file for Run", O_RDONLY);
+    openFile("Run::range: Failed to open file for Run", O_RDONLY);
 
     // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
     // and perform binary searches within the corresponding pages for keys within the specified range.
@@ -241,7 +241,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFile("Run::getMap: Failed to open temporary file for Run", O_RDONLY);
+    openFile("Run::getMap: Failed to open file for Run", O_RDONLY);
 
     kvPair kv;
     while (read(fd, &kv, sizeof(kvPair)) > 0) {
@@ -251,11 +251,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-    // Read all the key-value pairs from the temporary file
-    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
-
     return map;
  }
 
@@ -325,12 +321,10 @@ void Run::populateBloomFilter() {
     if (size == 0) {
         return;
     }
-    // Open the file descriptor for the temporary file
-    fd = open(tmpFile.c_str(), O_RDONLY);
-    if (fd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        die("Run::populateBloomFilter: Failed to open temporary file for Run");
-    }
-    // Read all the key-value pairs from the temporary file and add the keys to the bloom filter
+    // Open the file descriptor
+    openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
+
+    // Read all the key-value pairs from the Run file and add the keys to the bloom filter
     kvPair kv;
     while (read(fd, &kv, sizeof(kvPair)) > 0) {
         bloomFilter.add(kv.key);
