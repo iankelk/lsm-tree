@@ -130,17 +130,6 @@ void Server::handleClient(int clientSocket) {
     std::cout << "Client disconnected" << std::endl;
 }
 
-// Send a response to the client in chunks of BUFFER_SIZE bytes
-// void Server::sendResponse(int clientSocket, const std::string &response) {
-//     for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
-//         char chunk[BUFFER_SIZE] = {};
-//         std::strncat(chunk, response.c_str() + i, BUFFER_SIZE);
-//         send(clientSocket, chunk, strlen(chunk), 0);
-//     }
-//     // Send the end of message indicator
-//     send(clientSocket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
-// }
-
 void Server::sendResponse(int clientSocket, const std::string &response) {
     for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
         char chunk[BUFFER_SIZE] = {};
@@ -292,27 +281,52 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
 }
 
 void Server::run() {
-    // Accept incoming connections
-    while (!terminationFlag) {
-        sockaddr_in clientAddress;
-        socklen_t clientAddressSize = sizeof(clientAddress);
-        int clientSocket = accept(serverSocket, (sockaddr *)&clientAddress, &clientAddressSize);
-        if (clientSocket == -1) {
-            std::cerr << "Error accepting incoming connection" << std::endl;
-            continue;
-        }
+    // Prepare for select
+    fd_set readfds;
+    struct timeval timeout;
 
-        // Spawn thread to handle client connection
-        std::thread clientThread(&Server::handleClient, this, clientSocket);
-        clientThread.detach();
+    while (!terminationFlag) {
+        // Clear the set and add serverSocket to it
+        FD_ZERO(&readfds);
+        FD_SET(serverSocket, &readfds);
+
+        // Set timeout to 0, so select won't block and will allow checking terminationFlag
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000; // 100ms
+
+        // Use select to check if serverSocket has an incoming connection
+        int activity = select(serverSocket + 1, &readfds, nullptr, nullptr, &timeout);
+
+        if (activity > 0 && FD_ISSET(serverSocket, &readfds)) {
+            sockaddr_in clientAddress;
+            socklen_t clientAddressSize = sizeof(clientAddress);
+            int clientSocket = accept(serverSocket, (sockaddr *)&clientAddress, &clientAddressSize);
+            if (clientSocket == -1) {
+                std::cerr << "Error accepting incoming connection" << std::endl;
+                continue;
+            }
+
+            // Spawn thread to handle client connection
+            std::thread clientThread(&Server::handleClient, this, clientSocket);
+            clientThread.detach();
+        }
     }
 }
+
 
 Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
     // Create server socket
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
         std::cerr << "Error creating server socket" << std::endl;
+        exit(1);
+    }
+
+    // Set the SO_REUSEADDR option
+    int enableReuse = 1;
+    if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &enableReuse, sizeof(enableReuse)) == -1) {
+        std::cerr << "Error setting SO_REUSEADDR option" << std::endl;
+        close();
         exit(1);
     }
 
@@ -334,6 +348,7 @@ Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
     }
     std::cout << "\nServer started, listening on port " << port << std::endl;
 }
+
 
 void Server::close() {
     terminationFlag = 1;
