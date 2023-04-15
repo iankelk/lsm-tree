@@ -16,7 +16,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 {
     // Create the first level
     levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
-    levelIoCount.push_back(0);
+    levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
 
 // Calculate whether an std::vector<Level>::iterator is pointing to the last level
@@ -38,6 +38,9 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if (!levels.front().willBufferFit()) {
         mergeLevels(FIRST_LEVEL_NUM);
     }
+
+    // Start the timer for the query
+    auto start_time = std::chrono::high_resolution_clock::now();
     
     // Create a new run and add a unique pointer to it to the first level
     levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, 1, this));
@@ -50,6 +53,12 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Close the run's file
     levels.front().runs.front()->closeFile();
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    //incrementIoCount();
+    incrementLevelIoCountAndTime(FIRST_LEVEL_NUM, duration);
 
     // Clear the buffer and add the key-value pair to it
     buffer.clear();
@@ -67,7 +76,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else {
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-            levelIoCount.push_back(0);
+            levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
             it = levels.end() - 2;
             next = levels.end() - 1;
         } else {
@@ -190,71 +199,6 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
 // If the range is not empty, return a map of all the found pairs.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
-    
-    // if either start or end is not within the range of the available keys, print to the server stderr and skip it
-    if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
-        std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
-        return nullptr;
-    }
-    // If the start key is greater than the end key, swap them
-    if (start > end) {
-        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
-        KEY_t temp = start;
-        start = end;
-        end = temp;
-    }
-
-    // If the start key is equal to the end key, return nullptr
-    if (start == end) {
-        return nullptr;
-    }
-
-    int allPossibleKeys = end - start;
-
-    // Search the buffer for the key range and return the range map as a unique_ptr
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
-
-    // If the range has the size of the entire range, return the range
-    if (rangeMap->size() == allPossibleKeys) {
-        // Remove all the TOMBSTONES from the range map
-        removeTombstones(rangeMap);
-        rangeHits++;
-        return rangeMap;
-    }
-
-    // If all of the keys are not found in the buffer, search the levels
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        // Iterate through the runs in the level and check if the range is in the run
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
-            // If keys from the range are found in the run, add them to the range map
-            if (tempMap.size() != 0) {
-                for (const auto &kv : tempMap) {
-                    // Only add the key/value pair if the key is not already in the range map
-                    rangeMap->try_emplace(kv.first, kv.second);
-                }
-            } 
-            // If the range map has the size of the entire range, return the range
-            if (rangeMap->size() == allPossibleKeys) {
-                removeTombstones(rangeMap);
-                rangeHits++;
-                return rangeMap;
-            }
-        }
-    }
-    if (rangeMap->size() == 0) {
-        rangeMisses++;
-    } else {
-        rangeHits++;
-    }
-    // Remove all the TOMBSTONES from the range map
-    removeTombstones(rangeMap);
-    return rangeMap;
-}
-
-// Given 2 keys, get a map all the keys from start inclusive to end exclusive. If the range is completely empty then return a nullptr. 
-// If the range is not empty, return a map of all the found pairs.
-std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::cRange(KEY_t start, KEY_t end) {
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
@@ -334,7 +278,7 @@ void LSMTree::printHitsMissesStats() {
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
-void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurrent) {
+void LSMTree::benchmark(const std::string& filename, bool verbose) {
     int count = 0;
     std::ifstream file(filename);
 
@@ -347,9 +291,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurre
     ss << file.rdbuf();
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Benchmark: loaded \"" << filename << "\" and concurrent is " << concurrent << std::endl;
-    // TODO: delete this
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
+    std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
 
     std::string line;
     while (std::getline(ss, line)) {
@@ -381,12 +323,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, bool concurre
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                
-                rangePtr = concurrent ? cRange(start, end) : range(start, end);
-                // Print the size of the range map
-                if (rangePtr != nullptr) {
-                    std::cout << rangePtr->size() << std::endl;
-                }
+                range(start, end);
                 break;
             }
             default: {
@@ -572,11 +509,12 @@ std::string LSMTree::printTree() {
 std::string LSMTree::printLevelIoCount() {
     std::string output = "";
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", disk name: " + it->getDiskName() + ", disk penalty multiplier: " + std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", Microseconds: " + 
+                   std::to_string(getLevelIoTime(it->getLevelNum()).count()) + ", Disk name: " + it->getDiskName() + ", Disk penalty multiplier: " + 
+                   std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
     }
-    output += "\nTotal I/O count: " + addCommas(std::to_string(getIoCount())) + "\n";
     // Add up all the I/O counts for each level
-    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(std::accumulate(levelIoCount.begin(), levelIoCount.end(), 0))) + "\n";
+    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(getIoCount())) + "\n";
     output.pop_back();
     return output;
 }
@@ -629,12 +567,15 @@ json LSMTree::serialize() const {
     j["levels"] = json::array();
     j["bfFalsePositives"] = bfFalsePositives;
     j["bfTruePositives"] = bfTruePositives;
-    j["ioCount"] = ioCount;
     j["getMisses"] = getMisses;
     j["getHits"] = getHits;
     j["rangeMisses"] = rangeMisses;
     j["rangeHits"] = rangeHits;
-    j["levelIoCount"] = levelIoCount;
+    j["levelIoCountAndTime"] = json::array();
+    for (const auto& levelIoCountAndTime : levelIoCountAndTime) {
+        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.first);
+        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.second.count());
+    }
     for (const auto& level : levels) {
         j["levels"].push_back(level.serialize());
     }
@@ -669,8 +610,11 @@ void LSMTree::deserialize(const std::string& filename) {
     levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
     bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
     bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
-    ioCount = treeJson["ioCount"].get<size_t>();
-    levelIoCount = treeJson["levelIoCount"].get<std::vector<size_t>>();
+    levelIoCountAndTime = std::vector<std::pair<size_t, std::chrono::microseconds>>();
+    for (size_t i = 0; i < treeJson["levelIoCountAndTime"].size(); i += 2) {
+        levelIoCountAndTime.emplace_back(treeJson["levelIoCountAndTime"][i].get<size_t>(), 
+        std::chrono::microseconds(treeJson["levelIoCountAndTime"][i + 1].get<size_t>()));
+    }
     getMisses = treeJson["getMisses"].get<size_t>();
     getHits = treeJson["getHits"].get<size_t>();
     rangeMisses = treeJson["rangeMisses"].get<size_t>();
@@ -681,7 +625,7 @@ void LSMTree::deserialize(const std::string& filename) {
     levels.clear();
     for (const auto& levelJson : treeJson["levels"]) {
         levels.emplace_back();
-        levels.back().deserialize(levelJson);
+        levels.back().deserialize(levelJson, this);
     }
     infile.close();
 
@@ -781,25 +725,25 @@ void LSMTree::monkeyOptimizeBloomFilters() {
 
 size_t LSMTree::getLevelIoCount(int levelNum) {
     // No mutex needed because each thread has a different levelNum
-    return levelIoCount[levelNum-1];
+    return levelIoCountAndTime[levelNum-1].first;
 }
 
-void LSMTree::incrementLevelIoCount(int levelNum) { 
+std::chrono::microseconds LSMTree::getLevelIoTime(int levelNum) {
     // No mutex needed because each thread has a different levelNum
-    levelIoCount[levelNum-1]++; 
+    return levelIoCountAndTime[levelNum-1].second;
+}
+
+void LSMTree::incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration) { 
+    // No mutex needed because each thread has a different levelNum
+    levelIoCountAndTime[levelNum-1].first++;
+    levelIoCountAndTime[levelNum-1].second += duration;
 }
 
 size_t LSMTree::getIoCount() { 
-    std::shared_lock<std::shared_mutex> lock(ioCountMutex);
+    size_t ioCount = std::accumulate(levelIoCountAndTime.begin(), levelIoCountAndTime.end(), 0,
+    [](size_t acc, const std::pair<size_t, std::chrono::microseconds>& p) {
+        return acc + p.first;
+    });
     return ioCount;
 }
-
-void LSMTree::incrementIoCount() { 
-    // Lock the mutex
-    std::unique_lock<std::shared_mutex> lock(ioCountMutex);
-    ioCount++;
-}
-
-
-
 

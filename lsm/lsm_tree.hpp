@@ -14,9 +14,8 @@ public:
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
-    std::unique_ptr<std::map<KEY_t, VAL_t>> cRange(KEY_t start, KEY_t end);
     void del(KEY_t key);
-    void benchmark(const std::string& filename, bool verbose, bool concurrent);
+    void benchmark(const std::string& filename, bool verbose);
     void load(const std::string& filename);
     bool isLastLevel(std::vector<Level>::iterator it);
     bool isLastLevel(int levelNum);
@@ -32,15 +31,15 @@ public:
     Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
     void incrementBfTruePositives() { bfTruePositives++; }
-    void incrementIoCount();
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
     void printHitsMissesStats();
     size_t getNumThreads() { return threadPool.getNumThreads(); }
-    void incrementLevelIoCount(int levelNum);
+    void incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration);
     size_t getIoCount();
     size_t getLevelIoCount(int levelNum);
+    std::chrono::microseconds getLevelIoTime(int levelNum);
 
 private:
     Memtable buffer;
@@ -51,7 +50,7 @@ private:
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level> levels;
-    std::vector<size_t> levelIoCount;
+    std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
     std::map<int, std::pair<int, int>> compactionPlan;
 
     void mergeLevels(int currentLevelNum);
@@ -60,7 +59,6 @@ private:
 
     size_t bfFalsePositives = 0;
     size_t bfTruePositives = 0;
-    size_t ioCount = 0;
     size_t getTotalBits() const;
     double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
     double eval(size_t bits, size_t entries) const;
@@ -69,8 +67,6 @@ private:
     size_t getHits = 0;
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
-
-    std::shared_mutex ioCountMutex;
 };
 
 #endif /* LSM_TREE_HPP */

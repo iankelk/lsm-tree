@@ -17,7 +17,7 @@ public:
     std::map<KEY_t, VAL_t> getMap();
     size_t getMaxKvPairs();
     std::string getBloomFilterSummary();
-    void openFile(std::string originatingFunctionError);
+    void openFile(std::string originatingFunctionError, int flags);
     void closeFile();
     json serialize() const;
     void deserialize(const json& j);
