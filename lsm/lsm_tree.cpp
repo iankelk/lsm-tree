@@ -29,6 +29,7 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     // Try to insert the key-value pair into the buffer. If it succeeds, return.
     if(buffer.put(key, val)) {
         return;
@@ -366,6 +367,9 @@ void LSMTree::load(const std::string& filename) {
 // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
 // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
 int LSMTree::countLogicalPairs() {
+    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+        return numLogicalPairs;
+    }
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
     // Create a pointer to a map of key/value pairs
@@ -398,6 +402,7 @@ int LSMTree::countLogicalPairs() {
             keys.insert(it->first);
         }
     }
+    numLogicalPairs = keys.size();
     // Return the size of the set
     return keys.size();
 }

@@ -67,6 +67,7 @@ private:
     size_t getHits = 0;
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
+    ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
 };
 
 #endif /* LSM_TREE_HPP */
