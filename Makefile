@@ -3,27 +3,37 @@ SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level
 # Ensure bin directory exists
 $(shell mkdir -p bin)
 
+# # Add the TBB library path and include path
+# LIB_PATH = -L/path/to/tbb/lib
+# INC_PATH = -I/path/to/tbb/include
+
+# Link the TBB library
+LDLIBS = -ltbb
+
+CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include
+LDFLAGS = -L/usr/local/lib $(LDLIBS)
+
 all: server client
 
 fast: fast_server fast_client
 
 build:
-	g++ lsm/main.cpp $(SRCS) -o bin/lsm -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ lsm/main.cpp $(SRCS) -o bin/lsm $(CXXFLAGS) $(LDFLAGS)
 
 server:
-	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
 
 client:
-	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
 
 fast_server:
-	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS)
 
 fast_client:
-	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS)
 
 test:
-	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib -fsanitize=address -fno-omit-frame-pointer
+	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
 
 .PHONY: genm1
 genm1:
@@ -33,5 +43,5 @@ genm1:
 generator:
 	$(CC) generator/generator.c -o bin/generator -lgsl -lgslcblas
 
-clean:
+.PHONY: clean
 	rm bin/generator bin/lsm bin/test
