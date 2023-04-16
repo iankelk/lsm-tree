@@ -1,6 +1,7 @@
 #ifndef MEMTABLE_HPP
 #define MEMTABLE_HPP
 #include <map>
+#include <tbb/concurrent_map.h>
 #include "data_types.hpp"
 #include <nlohmann/json.hpp>
 using json = nlohmann:: json;
@@ -21,7 +22,7 @@ public:
     void deserialize(const json& j);
 private:
     long maxKvPairs;
-    std::map<KEY_t, VAL_t> table_;  
+    tbb::concurrent_map<KEY_t, VAL_t> table_;  
 };
 
 #endif /* MEMTABLE_HPP */

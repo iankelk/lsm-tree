@@ -3,18 +3,17 @@
 // Insert a key-value pair into the memtable. If the key already exists, update its value to the new value. 
 // If the key does not exist and inserting it would cause the size of table_ to exceed maxKvPairs, return false
 bool Memtable::put(KEY_t key, VAL_t value) {
-    // Check if key already exists so we can update its value and not worry about the memtable growing
     auto it = table_.find(key);
     if (it != table_.end()) {
         it->second = value;
         return true;
     }
-    // Check if inserting the new key-value pair would cause the memtable to grow too large
+
     if (table_.size() >= maxKvPairs) {
         return false;
     }
-    // Insert the new key-value pair
-    table_[key] = value;
+
+    table_.insert(std::make_pair(key, value));
     return true;
 }
 
@@ -29,18 +28,12 @@ std::unique_ptr<VAL_t> Memtable::get(KEY_t key) const {
     return val;
 }
 
-
 // Get all key-value pairs within a range, inclusive of the start and exclusive of the end key
 std::map<KEY_t, VAL_t> Memtable::range(KEY_t start, KEY_t end) const {
     std::map<KEY_t, VAL_t> range;
-    auto itStart = table_.lower_bound(start);
-    auto itEnd = table_.upper_bound(end);
-    range = std::map<KEY_t, VAL_t>(itStart, itEnd);
-    // If the last key in the range is the end key, remove it
-    if (range.size() > 0 && range.rbegin()->first == end) {
-        range.erase(range.rbegin()->first);
+    for (auto it = table_.lower_bound(start); it != table_.end() && it->first < end; ++it) {
+        range.insert(*it);
     }
-    // Return a map of key-value pairs within the range
     return range;
 }
 
@@ -53,9 +46,14 @@ void Memtable::clear() {
 int Memtable::size() const {
     return table_.size();
 }
+
 // Return a map of all key-value pairs in the memtable
 std::map<KEY_t, VAL_t> Memtable::getMap() const {
-    return table_;
+    std::map<KEY_t, VAL_t> result;
+    for (const auto& kv : table_) {
+        result.insert(kv);
+    }
+    return result;
 }
 // Return the maximum number of key-value pairs allowed in the memtable
 long Memtable::getMaxKvPairs() const {
