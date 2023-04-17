@@ -36,6 +36,8 @@ bool LSMTree::isLastLevel(int levelNum) {
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
     numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
+    bool compactionNeeded = false;
+
     // Try to insert the key-value pair into the buffer. If it succeeds, return.
     if(buffer->put(key, val)) {
         return;
@@ -43,77 +45,93 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // print the size of the buffer
     std::cout << "Buffer size: " << buffer->size() << std::endl;
-
-    std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
-
     std::cout << "Thread ID: " << std::this_thread::get_id() << " locking level 1" << std::endl;
-
-    // lock the levels.front() levelMutex with a shared_lock not using the vector
-    std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " LOCKING sharedLevel1Lock " << std::endl;
-    std::shared_lock<std::shared_mutex> sharedLevel1Lock(levels.front().levelMutex);
-    std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " LOCKING sharedLevel1Lock " << std::endl;
-
-    // Print the first level kvPairs, bufferSize, and maxKvPairs
     std::cout << "kvPairs: " << levels.front().kvPairs << " bufferSize: " << levels.front().bufferSize << " maxKvPairs: " << levels.front().maxKvPairs << std::endl;
-    // print buffer->maxKvPairs
     std::cout << "buffer->maxKvPairs: " << buffer->getMaxKvPairs() << std::endl;
 
-    bool compactionNeeded = false;
+    {
+        // lock the levels.front() levelMutex with a shared_lock not using the vector
+        std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " LOCKING sharedLevel1Lock " << std::endl;
+        std::shared_lock<std::shared_mutex> sharedLevel1Lock(levels.front().levelMutex);
+        std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " LOCKING sharedLevel1Lock " << std::endl;
+        compactionNeeded = !levels.front().willBufferFit();
+    }
 
     // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
-    if (!levels.front().willBufferFit()) {
-        compactionNeeded = true;
-        // Unlock shared level1Lock
-        std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " UNLOCKING sharedLevel1Lock " << std::endl;
-        sharedLevel1Lock.unlock();
-        std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " UNLOCKING sharedLevel1Lock " << std::endl;
+    {
+        if (compactionNeeded) {
+            std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
+            int numLevels = levels.size();
+            // Lock all the levels exclusively      
+            if (compactionNeeded) {
+                std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the lock;
 
-        // Lock all the levels exclusively
-        int i = 0;
-        for (auto it = levels.begin(); it != levels.end(); it++, i++) {
-            std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " LOCKING level " << i << std::endl;
-            levelLocks.emplace_back(it->levelMutex); // Lock the level and add the lock to the vector
-            std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " LOCKING level " << i << std::endl;
+                // Lock all the levels exclusively
+                for (auto it = levels.begin(); it != levels.end(); it++) {
+                    levelLocks.emplace_back(it->levelMutex, std::defer_lock); // Defer the lock
+                    levelLocks.back().lock(); // Lock the level after adding it to the vector
+                }
+                moveRuns(FIRST_LEVEL_NUM);
+            }
+            
+
+
+            // std::unique_lock<std::shared_mutex> uniqueLevelLock;
+            // uniqueLevelLock = std::unique_lock<std::shared_mutex>(allLevelsMutex);
+
+            // print the number of levels
+            std::cout << "Number of levels: " << levels.size() << std::endl;
+            // Lock all the levels exclusively
+            for (auto it = levels.begin(); it != levels.end(); it++) {
+                std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " << it->getLevelNum() << std::endl;
+                //levelLocks.emplace_back(it->levelMutex); // Lock the level and add the lock to the vector
+                levelLocks.emplace_back(it->levelMutex, std::defer_lock); // Defer the lock
+                levelLocks.back().lock(); // Lock the level after adding it to the vector
+                std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " C LOCKING level " << it->getLevelNum() << std::endl;
+            }
+            moveRuns(FIRST_LEVEL_NUM);
+            // print returned from moveRuns
+            std::cout << "returned from moveRuns" << std::endl;
+            // if (levels.size() > numLevels) {
+            //     // A new level was created, so lock it
+            //     std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " << i << std::endl;
+            //     levelLocks.emplace_back(levels.back().levelMutex);
+            //     std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " C LOCKING level " << i << std::endl;
+            // }
         }
-        moveRuns(FIRST_LEVEL_NUM);
-    } else {
-        // Unlock shared level1Lock
-        std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " UNLOCKING sharedLevel1Lock in the else" << std::endl;
-        sharedLevel1Lock.unlock();
-        std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " UNLOCKING sharedLevel1Lock in the else" << std::endl;
+    } 
 
-        // Lock the first level exclusively
-        std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " LOCKING level 1 in the else" << std::endl;
-        levelLocks.emplace_back(levels.front().levelMutex);
-        std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " LOCKING level 1 in the else" << std::endl;
-    }
+    //print blah
+    std::cout << "blah" << std::endl;
 
-    // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer->getMaxKvPairs(), bfErrorRate, true, 1, this));
+    {
+        std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " B LOCKING level 1 alone" << std::endl;
+        std::unique_lock<std::shared_mutex> uniqueLevel1Lock(levels.front().levelMutex);
+        std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " B LOCKING level 1 alone" << std::endl;
 
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " flushing buffer to level 1" << std::endl;
-    // Flush the buffer to level 1
-    std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
-    for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-        levels.front().runs.front()->put(it->first, it->second);
-    }
+        // Create a new run and add a unique pointer to it to the first level
+        levels.front().put(std::make_unique<Run>(buffer->getMaxKvPairs(), bfErrorRate, true, 1, this));
 
-    // Close the run's file
-    levels.front().runs.front()->closeFile();
-    
+        std::cout << "Thread ID: " << std::this_thread::get_id() << " flushing buffer to level 1" << std::endl;
+        // Flush the buffer to level 1
+        std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
+        for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+            levels.front().runs.front()->put(it->first, it->second);
+        }
+        // Close the run's file
+        levels.front().runs.front()->closeFile();
+    }    
     if (compactionNeeded) {
+        std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
         // print compactionNeeded value
         std::cout << "compactionNeeded: " << compactionNeeded << std::endl;
-        // Iterate through the compaction plan and unlock the levels won't be compacted.
-        for (const auto &entry : compactionPlan) {
-            int i = entry.first;
-            if (entry.second.first == COMPACTION_PLAN_NOT_SET) {
-                // print unlocked level i
-                std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " unlocking level " << i << std::endl;
-                levelLocks[i].unlock();
-                std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " unlocking level " << i << std::endl;
-            }
+        // Lock all the levels exclusively
+        for (auto it = levels.begin(); it != levels.end(); it++) {
+            std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " <<  it->getLevelNum() << std::endl;
+            levelLocks.emplace_back(it->levelMutex); // Lock the level and add the lock to the vector
+            std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " C LOCKING level " <<  it->getLevelNum() << std::endl;
         }
+
         executeCompactionPlan();
         for (auto &entry : compactionPlan) {
             if (entry.second.first != COMPACTION_PLAN_NOT_SET) {
@@ -127,11 +145,16 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Clear the buffer and add the key-value pair to it
     buffer->clear();
     buffer->put(key, val);
+    // print finished put
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " finished put" << std::endl;
 }
 
 void LSMTree::moveRuns(int currentLevelNum) {
     std::vector<Level>::iterator it;
     std::vector<Level>::iterator next;
+
+    // Declare uniqueLevelLock
+    std::unique_lock<std::shared_mutex> uniqueLevelLock;
 
     it = levels.begin() + currentLevelNum - 1;
 
@@ -140,6 +163,8 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else {
         if (it + 1 == levels.end()) {
             levels.emplace_back(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+            // Lock the new level using uniqueLevelLock previously declare as std::unique_lock<std::shared_mutex> uniqueLevelLock;
+            uniqueLevelLock = std::unique_lock<std::shared_mutex>(levels.back().levelMutex);
             levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
             it = levels.end() - 2;
             next = levels.end() - 1;
@@ -755,7 +780,7 @@ size_t LSMTree::getTotalBits() const {
     }
     return totalBits;
 }
-
+ 
 double LSMTree::TrySwitch(Run* run1, Run* run2, size_t delta, double R) const {
     size_t run1Bits = run1->getBloomFilterNumBits();
     size_t run2Bits = run2->getBloomFilterNumBits();

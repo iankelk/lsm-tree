@@ -73,6 +73,8 @@ private:
     bool concurrentMemtable = false;
     mutable std::shared_mutex globalMutex;
     mutable std::shared_mutex firstLevelMutex;
+    mutable std::shared_mutex allLevelsMutex;
+
 
 };
 
