@@ -3,7 +3,18 @@
 // Insert a key-value pair into the memtable. If the key already exists, update its value to the new value. 
 // If the key does not exist and inserting it would cause the size of table_ to exceed maxKvPairs, return false
 bool MemtableBlocking::put(KEY_t key, VAL_t value) {
-    std::unique_lock lock(mtx_);
+    //std::unique_lock lock(mtx_);
+
+    // if (const auto &[it, inserted] = table_.try_emplace(key, value); !inserted) {
+    //     if (table_.size() >= maxKvPairs) {
+    //         return false;
+    //     } else {
+    //         it->second = value;
+    //         return true;
+    //     }
+    // }
+    // return true;
+
     // Check if key already exists so we can update its value and not worry about the memtable growing
     auto it = table_.find(key);
     if (it != table_.end()) {
@@ -18,6 +29,15 @@ bool MemtableBlocking::put(KEY_t key, VAL_t value) {
     table_[key] = value;
     return true;
 }
+
+bool MemtableBlocking::clearAndPut(KEY_t key, VAL_t value) {
+    //std::unique_lock lock(mtx_);
+    table_.clear();
+    // Insert the new key-value pair
+    table_[key] = value;
+    return true;
+}
+
 
 // Get the value associated with a key
 std::unique_ptr<VAL_t> MemtableBlocking::get(KEY_t key) const {

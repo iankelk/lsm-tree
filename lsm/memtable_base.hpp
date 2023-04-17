@@ -19,6 +19,7 @@ public:
     virtual std::map<KEY_t, VAL_t> getMap() const = 0;
     virtual json serialize() const = 0;
     virtual void deserialize(const json& j) = 0;
+    virtual bool clearAndPut(KEY_t key, VAL_t value) = 0;
     long getMaxKvPairs() const;
 protected:
     long maxKvPairs;

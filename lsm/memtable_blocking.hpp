@@ -20,6 +20,7 @@ public:
     std::map<KEY_t, VAL_t> getMap() const;    
     json serialize() const;
     void deserialize(const json& j);
+    bool clearAndPut(KEY_t key, VAL_t value);
 private:
     std::map<KEY_t, VAL_t> table_;
     mutable std::shared_mutex mtx_;

@@ -16,6 +16,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key) const;
     std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end) const;
     void clear();
+    bool clearAndPut(KEY_t key, VAL_t value);
     int size() const;
     std::map<KEY_t, VAL_t> getMap() const;    
     json serialize() const;

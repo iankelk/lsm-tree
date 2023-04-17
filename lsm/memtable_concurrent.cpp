@@ -52,6 +52,13 @@ void MemtableConcurrent::clear() {
     table_.clear();
 }
 
+bool MemtableConcurrent::clearAndPut(KEY_t key, VAL_t value) {
+    table_.clear();
+    // Insert the new key-value pair
+    table_[key] = value;
+    return true;
+}
+
 // Return the number of key-value pairs in the memtable
 int MemtableConcurrent::size() const {
     return table_.size();
