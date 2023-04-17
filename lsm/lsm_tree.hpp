@@ -18,7 +18,7 @@ public:
     void del(KEY_t key);
     void benchmark(const std::string& filename, bool verbose);
     void load(const std::string& filename);
-    bool isLastLevel(std::vector<Level>::iterator it);
+    bool isLastLevel(std::vector<std::unique_ptr<Level>>::iterator it);
     bool isLastLevel(int levelNum);
     std::string printStats(size_t numToPrintFromEachLevel);
     std::string printTree();
@@ -51,7 +51,7 @@ private:
     Level::Policy levelPolicy;
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
-    std::vector<Level> levels;
+    std::vector<std::unique_ptr<Level>> levels;
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
     std::map<int, std::pair<int, int>> compactionPlan;
 
@@ -71,11 +71,15 @@ private:
     size_t rangeHits = 0;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     bool concurrentMemtable = false;
-    mutable std::shared_mutex globalMutex;
-    mutable std::shared_mutex firstLevelMutex;
-    mutable std::shared_mutex allLevelsMutex;
+    // mutable std::shared_mutex globalMutex;
+    // mutable std::shared_mutex firstLevelMutex;
+    // mutable std::shared_mutex allLevelsMutex;
+    mutable std::shared_mutex bufferMutex;
+    mutable std::shared_mutex moveRunsMutex;
 
 
+
+// I'm wondering if it has to do with the buffer->clear and buffer->put commands 
 };
 
 #endif /* LSM_TREE_HPP */
