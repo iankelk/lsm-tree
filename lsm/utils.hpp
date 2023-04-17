@@ -6,5 +6,6 @@
 void die(const std::string& message);
 std::string formatMicroseconds(size_t microseconds);
 std::string addCommas(std::string s);
+void printTrace();
 
 #endif /* UTILS_HPP */

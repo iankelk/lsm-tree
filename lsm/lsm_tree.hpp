@@ -1,7 +1,8 @@
 #ifndef LSM_TREE_HPP
 #define LSM_TREE_HPP
 #include <shared_mutex>
-#include "memtable.hpp"
+#include "memtable_blocking.hpp"
+#include "memtable_concurrent.hpp"
 #include "level.hpp"
 #include "run.hpp"
 #include "threadpool.hpp"
@@ -10,7 +11,7 @@ class Run;
 
 class LSMTree {
 public:
-    LSMTree(float, int, int, Level::Policy, size_t);
+    LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
@@ -26,7 +27,7 @@ public:
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
     float getBfErrorRate() const { return bfErrorRate; }
-    size_t getBufferNumPages() { return buffer.getMaxKvPairs(); }
+    size_t getBufferNumPages() { return buffer->getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives() { bfFalsePositives++; }
@@ -39,10 +40,11 @@ public:
     void incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration);
     size_t getIoCount();
     size_t getLevelIoCount(int levelNum);
+    bool getConcurrentMemtable() { return concurrentMemtable; }
     std::chrono::microseconds getLevelIoTime(int levelNum);
 
 private:
-    Memtable buffer;
+    std::unique_ptr<MemtableBase> buffer;
     ThreadPool threadPool;
     double bfErrorRate;
     int fanout;
@@ -68,6 +70,10 @@ private:
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
+    bool concurrentMemtable = false;
+    mutable std::shared_mutex globalMutex;
+    mutable std::shared_mutex firstLevelMutex;
+
 };
 
 #endif /* LSM_TREE_HPP */

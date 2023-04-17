@@ -93,6 +93,8 @@ void Server::listenToStdIn() {
 // Thread function to handle client connections
 void Server::handleClient(int clientSocket) {
     std::cout << "New client connected" << std::endl;
+        // Print thread information
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " for new client" << std::endl;
     // Add client to connected clients set
     {
         std::unique_lock<std::mutex> lock(connectedClientsMutex);
@@ -162,20 +164,20 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     std::string response;
 
     // Locks to ensure exclusive or shared access to the LSM tree
-    std::unique_lock<std::shared_mutex> exclusiveLock;
-    std::shared_lock<std::shared_mutex> sharedLock;
+    // std::unique_lock<std::shared_mutex> exclusiveLock;
+    // std::shared_lock<std::shared_mutex> sharedLock;
 
     // put, delete, load, benchmark, and quit operations are exclusive
-    if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
-        exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  
-    // get, range, printStats, and info operations are shared  
-    } else if (op == 'c' || op == 'g' || op == 'r' || op == 's' || op == 'i') {
-        sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-    } else {
-        response = printDSLHelp();
-        sendResponse(clientSocket, response);
-        return;
-    }
+    // if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
+    //     exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  
+    // // get, range, printStats, and info operations are shared  
+    // } else if (op == 'c' || op == 'g' || op == 'r' || op == 's' || op == 'i') {
+    //     sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
+    // } else {
+    //     response = printDSLHelp();
+    //     sendResponse(clientSocket, response);
+    //     return;
+    // }
     switch (op) {
         // Put, delete, load, benchmark, and quit operations are exclusive
         case 'p':
@@ -358,14 +360,14 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads) {
+void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) {
     // Path to data directory and JSON file for serialization
     std::string dataDir = DATA_DIRECTORY;
     std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads);
+    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, concurrentMemtable);
     lsmTree->deserialize(lsmTreeJsonFile);
-    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), lsmTree->getNumThreads());
+    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), lsmTree->getNumThreads(), lsmTree->getConcurrentMemtable());
 }
 
 void printHelp() {
@@ -376,19 +378,21 @@ void printHelp() {
               << "  -f <fanout>          LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <levelPolicy>     Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
+              << "  -c <concurrent>      Concurrent memtable (default: " << DEFAULT_CONCURRENT_MEMTABLE << ")\n"
               << "  -t <numThreads>      Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
               << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes.\n"
               << "  -h                   Print this help message\n" << std::endl
     ;
 }
 
-void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads) {
+void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) {
     std::cout << "LSMTree parameters:" << std::endl;
     std::cout << "  Bloom filter error rate: " << bfErrorRate << std::endl;
     std::cout << "  Number of buffer pages: " << bufferNumPages << std::endl;
     std::cout << "  LSM-tree fanout: " << fanout << std::endl;
     std::cout << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     std::cout << "  Number of threads: " << numThreads << std::endl;
+    std::cout << "  Memtable concurrency: " << (concurrentMemtable ? "concurrent map" : "blocking") << std::endl;
     std::cout << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
     std::cout << "\nLSM Tree ready and waiting for input" << std::endl;
 }
@@ -459,9 +463,10 @@ int main(int argc, char **argv) {
     Level::Policy levelPolicy = DEFAULT_LEVELING_POLICY;
     bool verbose = DEFAULT_VERBOSE_LEVEL;
     int numThreads = DEFAULT_NUM_THREADS;
+    bool concurrentMemtable = DEFAULT_CONCURRENT_MEMTABLE;
 
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:hv")) != -1) {
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:hvc")) != -1) {
         switch (opt) {
         case 'e':
             bfErrorRate = atof(optarg);
@@ -500,6 +505,9 @@ int main(int argc, char **argv) {
             // print "verbose is enabled"
             std::cout << "Verbose is enabled" << std::endl;
             break;
+        case 'c':
+            concurrentMemtable = true;
+            break;
         case 'h':
             printHelp();
             exit(0);
@@ -523,7 +531,7 @@ int main(int argc, char **argv) {
     server_ptr = &server;
 
     // Create LSM-Tree with the parsed options
-    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads);
+    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, concurrentMemtable);
     // Create a thread for listening to standard input
     std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();

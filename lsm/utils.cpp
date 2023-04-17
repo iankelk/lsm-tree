@@ -1,6 +1,9 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <execinfo.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // Given a message, print it to stderr and exit with an error code. This is used for unrecoverable errors.
 void die(const std::string& message) {
@@ -32,4 +35,15 @@ std::string addCommas(std::string s) {
         s.insert(i, ",");
     }
     return s;
+}
+
+void printTrace() {
+    void* trace[16];
+    int trace_size = backtrace(trace, 16);
+    char** messages = backtrace_symbols(trace, trace_size);
+    printf("[bt] Execution path:\n");
+    for (int i = 0; i < trace_size; i++)
+        printf("[bt] %s\n", messages[i]);
+    printf("\n");
+    free(messages);
 }

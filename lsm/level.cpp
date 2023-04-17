@@ -1,3 +1,4 @@
+#include <thread>
 #include <iostream>
 #include "level.hpp"
 #include "run.hpp"
@@ -8,6 +9,7 @@
 void Level::put(std::unique_ptr<Run> runPtr) {
     // Check if there is enough space in the level to add the run
     if (kvPairs + runPtr->getMaxKvPairs() > maxKvPairs) {
+        printTrace();
         die("Level::put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(std::move(runPtr));
@@ -17,12 +19,66 @@ void Level::put(std::unique_ptr<Run> runPtr) {
 
 // Merge the key-value pairs from the segment runs, eliminating duplicate keys and reducing the overall size of the level.
 // The compacted data is then stored in a new run, which replaces the original runs in the segment.
+// std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
+//     std::map<KEY_t, VAL_t> mergedMap;
+//     size_t newMaxKvPairs = 0;
+
+//     // Lock the level
+//     std::unique_lock lock(levelMutex);
+
+//     // Iterate through the runs in the segment and merge the data
+//     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
+//         std::map<KEY_t, VAL_t> runMap = runs[idx]->getMap();
+//         for (const auto &kv : runMap) {
+//             if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
+//                 it->second = kv.second;
+//             }
+//         }
+//         newMaxKvPairs += runs[idx]->getMaxKvPairs();
+//     }
+
+//     // Start the timer for the query
+//     auto start_time = std::chrono::high_resolution_clock::now();
+
+//     // Create a new run with the merged data
+//     auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, levelNum, lsmTree);
+//     for (const auto &kv : mergedMap) {
+//         if (!(isLastLevel && kv.second == TOMBSTONE)) {
+//             compactedRun->put(kv.first, kv.second);
+//         }
+//     }
+//     compactedRun->closeFile();
+
+//     lock.unlock();
+
+//     auto end_time = std::chrono::high_resolution_clock::now();
+//     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+//     //lsmTree->incrementIoCount();
+//     lsmTree->incrementLevelIoCountAndTime(levelNum, duration);
+
+//     return compactedRun;
+// }
+
 std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
     std::map<KEY_t, VAL_t> mergedMap;
     size_t newMaxKvPairs = 0;
 
+    // Print thread information
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " entering compactSegment()" << std::endl;
+
+    // Lock the level
+    // std::unique_lock lock(levelMutex);
+
+    // Print thread information
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " got past mutex in compactSegment()" << std::endl;
+
     // Iterate through the runs in the segment and merge the data
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
+        // print the size of runs, idx, and the size of the run
+        std::cout << "Thread ID: " << std::this_thread::get_id() << " runs.size(): " << runs.size() << " idx: " << idx << std::endl;
+        // print the segment bounds
+        std::cout << "Thread ID: " << std::this_thread::get_id() << " segmentBounds.first: " << segmentBounds.first << " segmentBounds.second: " << segmentBounds.second << std::endl;
         std::map<KEY_t, VAL_t> runMap = runs[idx]->getMap();
         for (const auto &kv : runMap) {
             if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
@@ -44,16 +100,24 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
     }
     compactedRun->closeFile();
 
+    // lock.unlock();
+
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
     //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelNum, duration);
 
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " completed compactSegment()" << std::endl;
+
     return compactedRun;
 }
 
+
 void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {
+    // Lock the level
+    // std::unique_lock lock(levelMutex);
+
     // Close and delete files for old runs in the segment
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
         runs[idx]->closeFile();
@@ -83,6 +147,11 @@ size_t Level::getLevelSize(int levelNum) {
 // Iterate through the runs of the level, calculating the difference between the last key of a run and the first
 // key of the next run. Return the start and end indices of the segment with the minimum key difference.
 std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
+
+    // Print thread information
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " entering findBestSegmentToCompact()" << std::endl;
+    // Lock the level
+    // std::shared_lock lock(levelMutex);
     size_t bestStartIdx = 0;
     size_t bestEndIdx = 1;
     long best_diff = LONG_MAX;
@@ -95,6 +164,8 @@ std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
             bestEndIdx = idx + 1;
         }
     }
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " exiting findBestSegmentToCompact()" << std::endl;
+
     return {bestStartIdx, bestEndIdx};
 }
 
