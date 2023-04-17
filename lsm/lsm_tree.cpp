@@ -77,37 +77,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
                     levelLocks.emplace_back((*it)->levelMutex);
                 }
                 moveRuns(FIRST_LEVEL_NUM);
-                
-                // std::unique_lock<std::shared_mutex> uniqueLevelLock;
-                // uniqueLevelLock = std::unique_lock<std::shared_mutex>(allLevelsMutex);
-
-                // print the number of levels
-                // std::cout << "Number of levels: " << levels.size() << std::endl;
-                // // Lock all the levels exclusively
-                // for (auto it = levels.begin(); it != levels.end(); it++) {
-                //     std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " << (*it)->getLevelNum() << std::endl;
-                //     //levelLocks.emplace_back(it->levelMutex); // Lock the level and add the lock to the vector
-                //     levelLocks.emplace_back((*it)->levelMutex);
-
-                //     // levelLocks.emplace_back((*it)->levelMutex, std::defer_lock); // Defer the lock
-                //     // levelLocks.back().lock(); // Lock the level after adding it to the vector
-                //     std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " C LOCKING level " << (*it)->getLevelNum() << std::endl;
-                // }
-                // print returned from moveRuns
-                std::cout << "returned from moveRuns" << std::endl;
-                // if (levels.size() > numLevels) {
-                //     // A new level was created, so lock it
-                //     std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " << i << std::endl;
-                //     levelLocks.emplace_back(levels.back().levelMutex);
-                //     std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " C LOCKING level " << i << std::endl;
-                // }
             }
-        } 
-
-        {
-            // std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " B LOCKING level 1 alone" << std::endl;
-            // std::unique_lock<std::shared_mutex> uniqueLevel1Lock(levels.front()->levelMutex);
-            // std::cout << "Thread ID: AFTER: " << std::this_thread::get_id() << " B LOCKING level 1 alone" << std::endl;
 
             // Create a new run and add a unique pointer to it to the first level
             levels.front()->put(std::make_unique<Run>(buffer->getMaxKvPairs(), bfErrorRate, true, 1, this));
@@ -120,20 +90,14 @@ void LSMTree::put(KEY_t key, VAL_t val) {
             }
             // Close the run's file
             levels.front()->runs.front()->closeFile();
-        }    
+        } 
     }
-    
-    std::cout << "buffer size prior to clearing: " << buffer->size() << std::endl;
-    buffer->clear();
-    buffer->put(key, val);
-    // print finished put
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " finished put" << std::endl;
 
     if (compactionNeeded) {
         std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
         // print compactionNeeded value
         std::cout << "compactionNeeded: " << compactionNeeded << std::endl;
-        // Lock all the levels exclusively
+        // Lock all the levels exclusively if they're in the compaction plan
         for (auto it = levels.begin(); it != levels.end(); it++) {
             std::cout << "Thread ID: BEFORE: " << std::this_thread::get_id() << " C LOCKING level " <<  (*it)->getLevelNum() << std::endl;
             levelLocks.emplace_back((*it)->levelMutex); // Lock the level and add the lock to the vector
@@ -168,7 +132,11 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     //     std::cout << "Thread ID: " << std::this_thread::get_id() << " finished put" << std::endl;
     // }
     // print the size of the buffer prior to being cleared
-
+    std::cout << "buffer size prior to clearing: " << buffer->size() << std::endl;
+    buffer->clear();
+    buffer->put(key, val);
+    // print finished put
+    std::cout << "Thread ID: " << std::this_thread::get_id() << " finished put" << std::endl;
 
 }
 
