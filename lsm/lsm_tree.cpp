@@ -5,21 +5,23 @@
 #include <unistd.h>
 #include <numeric>
 #include <shared_mutex>
-
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/lock_algorithms.hpp>
 #include "lsm_tree.hpp"
 #include "run.hpp"
 #include "utils.hpp"
 
-class LSMTreeLevelLockGuard {
-public:
-    LSMTreeLevelLockGuard(const std::vector<std::unique_ptr<Level>>& levels) {
-        for (const auto& level : levels) {
-            levelLocks.emplace_back(level->levelMutex);
-        }
-    }
-private:
-    std::vector<std::shared_lock<std::shared_mutex>> levelLocks;
-};
+// class LSMTreeLevelLockGuard {
+// public:
+//     LSMTreeLevelLockGuard(const std::vector<std::unique_ptr<Level>>& levels) {
+//         for (const auto& level : levels) {
+//             levelLocks.emplace_back(level->levelMutex);
+//         }
+//     }
+// private:
+//     std::vector<boost::shared_lock<boost::upgrade_mutex>> levelLocks;
+// };
 
 LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
@@ -48,7 +50,7 @@ bool LSMTree::isLastLevel(int levelNum) {
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
     {
-        std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
     bool compactionNeeded = false;
@@ -63,14 +65,20 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     buffer->clearAndPut(key, val);
     lock.unlock();
 
-    std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
-    // lock the first level
-    levelLocks.emplace_back(levels.front()->levelMutex);
+    // Create a vector to store the upgrade locks
+    std::vector<boost::upgrade_lock<boost::upgrade_mutex>> levelUpgradeLocks;
+    levelUpgradeLocks.reserve(levels.size());
+
+    // Lock the levels with an in shared mode with an upgrade lock
+    for (auto &level : levels) {
+        levelUpgradeLocks.emplace_back(level->levelMutex);
+    }
+
     if (!levels.front()->willBufferFit()) {
         compactionNeeded = true;
-        // Lock the rest of the levels exclusively
-        for (auto it = levels.begin() + 1; it != levels.end(); it++) {
-            levelLocks.emplace_back((*it)->levelMutex);
+        // Upgrade the locks in the levelUpgradeLocks to unique locks
+        for (auto &upgradeLock : levelUpgradeLocks) {
+            boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(upgradeLock);
         }
         moveRuns(FIRST_LEVEL_NUM);
     }
@@ -90,7 +98,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
             // Lock the levels in the compaction plan
             if (entry.first == COMPACTION_PLAN_NOT_SET) {
                 int levelNumber = entry.first;
-                levelLocks[levelNumber-1].unlock();
+                levelUpgradeLocks[levelNumber-1].unlock();
             }
         }
         executeCompactionPlan();
@@ -107,7 +115,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     std::vector<std::unique_ptr<Level>>::iterator next;
 
     // Declare uniqueLevelLock
-    std::unique_lock<std::shared_mutex> uniqueLevelLock;
+    boost::unique_lock<boost::upgrade_mutex> uniqueLevelLock;
 
     it = levels.begin() + currentLevelNum - 1;
 
@@ -119,7 +127,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
             levels.emplace_back(std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this));
 
             // Lock the new level using uniqueLevelLock previously declare as std::unique_lock<std::shared_mutex> uniqueLevelLock;
-            uniqueLevelLock = std::unique_lock<std::shared_mutex>(levels.back()->levelMutex);
+            uniqueLevelLock = boost::unique_lock<boost::upgrade_mutex>(levels.back()->levelMutex);
             levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
             it = levels.end() - 2;
             next = levels.end() - 1;
@@ -200,12 +208,13 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
     // }
 
-    std::vector<std::shared_lock<std::shared_mutex>> levelLocks;
+    std::vector<boost::shared_lock<boost::upgrade_mutex>> levelLocks;
     levelLocks.reserve(levels.size());
 
     for (auto &level : levels) {
         levelLocks.emplace_back(level->levelMutex);
     }
+
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
@@ -308,7 +317,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
 
     for (auto level = levels.begin(); level != levels.end(); level++) {
         // Lock the level with a shared lock
-        std::shared_lock lock((*level)->levelMutex);
+        boost::shared_lock<boost::upgrade_mutex> lock((*level)->levelMutex);
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
             // Enqueue task for searching in the run
             futures.push_back(threadPool.enqueue([&, run] {

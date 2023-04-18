@@ -1,6 +1,9 @@
 #ifndef LSM_TREE_HPP
 #define LSM_TREE_HPP
 #include <shared_mutex>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/lock_algorithms.hpp>
 #include "memtable_blocking.hpp"
 #include "memtable_concurrent.hpp"
 #include "level.hpp"

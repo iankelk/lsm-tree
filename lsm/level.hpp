@@ -3,6 +3,9 @@
 #include <queue>
 #include <cmath>
 #include <shared_mutex>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/lock_algorithms.hpp>
 #include "run.hpp"
 #include "storage.hpp"
 
@@ -42,8 +45,8 @@ public:
     void replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun);
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
-    
-    mutable std::shared_mutex levelMutex;
+
+    mutable boost::upgrade_mutex levelMutex;
 
     static std::string policyToString(Policy policy) {
         switch (policy) {

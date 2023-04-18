@@ -3,15 +3,11 @@ SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable_base.cpp lsm/memtable_blo
 # Ensure bin directory exists
 $(shell mkdir -p bin)
 
-# # Add the TBB library path and include path
-# LIB_PATH = -L/path/to/tbb/lib
-# INC_PATH = -I/path/to/tbb/include
-
 # Link the TBB library
-LDLIBS = -ltbb
+LDLIBS = -ltbb -lboost_thread-mt -lboost_system-mt
 
-CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include
-LDFLAGS = -L/usr/local/lib $(LDLIBS)
+CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
+LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
 
 all: server client
 
@@ -45,6 +41,7 @@ generator:
 
 .PHONY: clean
 	rm bin/generator bin/lsm bin/test
+
 
 # server:
 # 	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
