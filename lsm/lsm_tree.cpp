@@ -47,7 +47,10 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
-    numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
+    {
+        std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
+    }
     bool compactionNeeded = false;
 
     std::unique_lock<std::shared_mutex> lock(bufferMutex);
@@ -176,36 +179,42 @@ void LSMTree::executeCompactionPlan() {
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
+
     // if key is not within the range of the available keys, print to the server stderr and skip it
     if (key < KEY_MIN || key > KEY_MAX) {
-        std::cerr << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
+        SyncedCerr() << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
         return nullptr;
     }
-    
-    
-    {
-        std::cout << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for buffer" << std::endl;
-        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        std::cout << "Thread ID " << std::this_thread::get_id() << ": got shared lock for buffer" << std::endl;
-        val = buffer->get(key);
-        if (val != nullptr) {
-            getHits++;
-            if (*val == TOMBSTONE) {
-                return nullptr;
-            }
-            return val;
-        }
-        std::cout << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
+    // {
+    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for buffer" << std::endl;
+    //     std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": got shared lock for buffer" << std::endl;
+    //     val = buffer->get(key);
+    //     if (val != nullptr) {
+    //         getHits++;
+    //         if (*val == TOMBSTONE) {
+    //             return nullptr;
+    //         }
+    //         return val;
+    //     }
+    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
+    // }
+
+    std::vector<std::shared_lock<std::shared_mutex>> levelLocks;
+    levelLocks.reserve(levels.size());
+
+    for (auto &level : levels) {
+        levelLocks.emplace_back(level->levelMutex);
     }
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
         // Lock the level with a shared lock
         {
-            // Print "Thread ID x: getting shared lock for level number x"
-            std::cout << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
-            std::shared_lock lock((*level)->levelMutex);
-            std::cout << "Thread ID " << std::this_thread::get_id() << ": got shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
+            // // Print "Thread ID x: getting shared lock for level number x"
+            // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
+            // std::shared_lock lock((*level)->levelMutex);
+            // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": got shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
             // Iterate through the runs in the level and check if the key is in the run
             for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
                 val = (*run)->get(key);
@@ -214,11 +223,14 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                     break;
                 }
             }
-            std::cout << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
+            SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
         }
         // If the key is found in any run within the level, break from the outer loop
         if (val != nullptr) {
-            getHits++;
+            {
+                std::unique_lock<std::shared_mutex> lock(getHitsMutex);
+                getHits++;
+            }
             // Check that val is not the TOMBSTONE
             if (*val == TOMBSTONE) {
                 return nullptr;
@@ -226,7 +238,10 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             return val;
         }
     }
-    getMisses++;
+    {
+        std::unique_lock<std::shared_mutex> lock(getMissesMutex);
+        getMisses++;
+    }
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
@@ -260,12 +275,12 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
-        std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
+        SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
         return nullptr;
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
-        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
+        SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
         KEY_t temp = start;
         start = end;
         end = temp;
@@ -332,10 +347,10 @@ void LSMTree::del(KEY_t key) {
 
 // Print out getMisses and rangeMisses stats
 void LSMTree::printHitsMissesStats() {
-    std::cout << "getHits: " << getHits << std::endl;
-    std::cout << "getMisses: " << getMisses << std::endl;
-    std::cout << "rangeHits: " << rangeHits << std::endl;
-    std::cout << "rangeMisses: " << rangeMisses << std::endl;
+    SyncedCout() << "getHits: " << getHits << std::endl;
+    SyncedCout() << "getMisses: " << getMisses << std::endl;
+    SyncedCout() << "rangeHits: " << rangeHits << std::endl;
+    SyncedCout() << "rangeMisses: " << rangeMisses << std::endl;
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
@@ -344,7 +359,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
     std::ifstream file(filename);
 
     if (!file) {
-        std::cerr << "Unable to open file " << filename << std::endl;
+        SyncedCerr() << "Unable to open file " << filename << std::endl;
         return;
     }
 
@@ -352,7 +367,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
     ss << file.rdbuf();
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
+    SyncedCout() << "Benchmark: loaded \"" << filename << "\"" << std::endl;
 
     std::string line;
     while (std::getline(ss, line)) {
@@ -388,7 +403,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
                 break;
             }
             default: {
-                std::cerr << "Invalid command code: " << command_code << std::endl;
+                SyncedCerr() << "Invalid command code: " << command_code << std::endl;
                 break;
             }
         }
@@ -398,15 +413,15 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
             if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
                 auto end_time = std::chrono::high_resolution_clock::now();
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                std::cout << "Benchmark: " << count << " commands executed" << std::endl;
-                std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
+                SyncedCout() << "Benchmark: " << count << " commands executed" << std::endl;
+                SyncedCout() << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
             }
         }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
+    SyncedCout() << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
             << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
@@ -418,14 +433,14 @@ void LSMTree::load(const std::string& filename) {
 
     // Check that the file exists
     if (!file) {
-        std::cerr << "Unable to open file " << filename << std::endl;
+        SyncedCerr() << "Unable to open file " << filename << std::endl;
         return;
     }
     // Read the file into the vector of kvPair structs.
     while (file.read((char*)&kv, sizeof(kvPair))) {
         kvPairs.push_back(kv);
     }
-    std::cout << "Loaded: " << filename << std::endl;
+    SyncedCout() << "Loaded: " << filename << std::endl;
     // Start measuring time. This way we only measure the time it takes put() to insert the key/value pairs
     auto start_time = std::chrono::high_resolution_clock::now();
     // Iterate through the vector and call put() on each key/value pair
@@ -435,15 +450,18 @@ void LSMTree::load(const std::string& filename) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Processing " << filename << " file took " << duration.count() << " microseconds ("
+    SyncedCout() << "Processing " << filename << " file took " << duration.count() << " microseconds ("
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
 // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
 // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
 int LSMTree::countLogicalPairs() {
-    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+    {
+        std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
         return numLogicalPairs;
+    }
     }
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
@@ -477,7 +495,10 @@ int LSMTree::countLogicalPairs() {
             keys.insert(it->first);
         }
     }
-    numLogicalPairs = keys.size();
+    {
+        std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        numLogicalPairs = keys.size();
+    }
     // Return the size of the set
     return keys.size();
 }
@@ -598,6 +619,8 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap
 }
 
 float LSMTree::getBfFalsePositiveRate() {
+    std::shared_lock<std::shared_mutex> lockF(bfFalsePositivesMutex);
+    std::shared_lock<std::shared_mutex> lockT(bfTruePositivesMutex);
     size_t total = bfFalsePositives + bfTruePositives;
     if (total > 0) {
         return (float)bfFalsePositives / total;
@@ -646,24 +669,24 @@ json LSMTree::serialize() const {
 }
 
 void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
-    std::cout << "Writing LSMTree to file: " << filename << std::endl;
+    SyncedCout() << "Writing LSMTree to file: " << filename << std::endl;
     // Serialize the LSMTree to JSON
     json treeJson = serialize();
     // Write the JSON to file
     std::ofstream outfile(filename);
     outfile << treeJson.dump();
     outfile.close();
-    std::cout << "Finished writing LSMTree to file: " << filename << std::endl;
+    SyncedCout() << "Finished writing LSMTree to file: " << filename << std::endl;
 }
 
 void LSMTree::deserialize(const std::string& filename) {
     std::ifstream infile(filename);
     if (!infile) {
-        std::cerr << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
+        SyncedCerr() << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
         return;
     }
 
-    std::cout << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
+    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
 
     json treeJson;
     infile >> treeJson;
@@ -698,8 +721,8 @@ void LSMTree::deserialize(const std::string& filename) {
             run->setLSMTree(this);
         }
     }
-    std::cout << "Finished!\n" << std::endl;
-    std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
+    SyncedCout() << "Finished!\n" << std::endl;
+    SyncedCout() << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
 
 // Get the total amount of bits currently used by all runs in the LSMTree
@@ -773,17 +796,17 @@ double LSMTree::AutotuneFilters(size_t mFilters) {
 
 void LSMTree::monkeyOptimizeBloomFilters() {
     size_t totalBits = getTotalBits();
-    std::cout << "Total bits: " << totalBits << std::endl;
+    SyncedCout() << "Total bits: " << totalBits << std::endl;
     double R = AutotuneFilters(totalBits);
-    std::cout << "Total cost R: " << R << std::endl;
+    SyncedCout() << "Total cost R: " << R << std::endl;
     for (auto it = levels.begin(); it != levels.end(); it++) {
         for (auto run = (*it)->runs.begin(); run != (*it)->runs.end(); run++) {
             (*run)->resizeBloomFilterBitset((*run)->getBloomFilterNumBits());
             (*run)->populateBloomFilter();
         }
     }
-    std::cout << "\nNew Bloom Filter summaries:" << std::endl;
-    std::cout << getBloomFilterSummary() << std::endl;
+    SyncedCout() << "\nNew Bloom Filter summaries:" << std::endl;
+    SyncedCout() << getBloomFilterSummary() << std::endl;
 }
 
 size_t LSMTree::getLevelIoCount(int levelNum) {
@@ -808,4 +831,13 @@ size_t LSMTree::getIoCount() {
         return acc + p.first;
     });
     return ioCount;
+}
+
+void LSMTree::incrementBfFalsePositives() { 
+    std::unique_lock<std::shared_mutex> lock(bfFalsePositivesMutex);
+    bfFalsePositives++;
+}
+void LSMTree::incrementBfTruePositives() {
+    std::unique_lock<std::shared_mutex> lock(bfTruePositivesMutex);
+    bfTruePositives++; 
 }

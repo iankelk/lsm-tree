@@ -30,8 +30,8 @@ public:
     size_t getBufferNumPages() { return buffer->getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return levelPolicy; }
-    void incrementBfFalsePositives() { bfFalsePositives++; }
-    void incrementBfTruePositives() { bfTruePositives++; }
+    void incrementBfFalsePositives();
+    void incrementBfTruePositives();
     float getBfFalsePositiveRate();
     std::string getBloomFilterSummary();
     void monkeyOptimizeBloomFilters();
@@ -69,7 +69,18 @@ private:
     size_t getHits = 0;
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
+
+    mutable std::shared_mutex numLogicalPairsMutex;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
+
+    mutable std::shared_mutex getHitsMutex;
+    mutable std::shared_mutex getMissesMutex;
+    mutable std::shared_mutex rangeHitsMutex;
+    mutable std::shared_mutex rangeMissesMutex;
+    mutable std::shared_mutex bfFalsePositivesMutex;
+    mutable std::shared_mutex bfTruePositivesMutex;
+    mutable std::shared_mutex levelIoCountAndTimeMutex;
+
     bool concurrentMemtable = false;
     mutable std::shared_mutex bufferMutex;
 
