@@ -4,6 +4,10 @@
 #include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "utils.hpp"
+
+std::mutex SyncedCout::_coutMutex;
+std::mutex SyncedCerr::_cerrMutex;
 
 // Given a message, print it to stderr and exit with an error code. This is used for unrecoverable errors.
 void die(const std::string& message) {

@@ -30,6 +30,8 @@ private:
 
     std::set<int> connectedClients;
     std::mutex connectedClientsMutex;
+    std::mutex coutMutex;
+
 };
 
 #endif /* SERVER_HPP */

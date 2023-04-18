@@ -23,7 +23,7 @@ bool command_processed = true;
 bool is_stdin_connected_to_file() {
     struct stat stdin_stat;
     if (fstat(fileno(stdin), &stdin_stat) < 0) {
-        std::cerr << "Failed to check if stdin is connected to a file" << std::endl;
+        SyncedCerr() << "Failed to check if stdin is connected to a file" << std::endl;
         exit(1);
     }
     return S_ISREG(stdin_stat.st_mode);
@@ -48,17 +48,17 @@ void listenToServer(int client_socket, bool quiet) {
 
         // Check if the client is still running before printing the error message
         if (n_read == -1 && running) {
-            std::cerr << "Error reading response from server" << std::endl;
+            SyncedCerr() << "Error reading response from server" << std::endl;
             close(client_socket);
-            exit(1);
+            return;
         }
 
         // If not quiet, print the response
         if (!quiet) {
             if (response == NO_VALUE) {
-                std::cout << std::endl;
+                SyncedCout() << std::endl;
             } else if (response.size() > 0 && response != OK && response != SERVER_SHUTDOWN) {
-                std::cout << response << std::endl;
+                SyncedCout() << response << std::endl;
             }
         }
 
@@ -66,8 +66,8 @@ void listenToServer(int client_socket, bool quiet) {
             std::unique_lock<std::mutex> lock(mtx);
             running = false;
             lock.unlock();
-            std::cout << "Server shutdown detected. Exiting..." << std::endl;
-            exit(0);
+            SyncedCout() << "Server shutdown detected. Exiting..." << std::endl;
+            return;
         }
         {
             std::unique_lock<std::mutex> lock(mtx);
@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
                 quiet = true;
                 break;
             default:
-                std::cerr << "Usage: " << argv[0] << " [-p port] [-q <quiet mode>]" << std::endl;
+                SyncedCerr() << "Usage: " << argv[0] << " [-p port] [-q <quiet mode>]" << std::endl;
                 return 1;
         }
     }
@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
     // Connect to server
     int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket == -1) {
-        std::cerr << "Error creating client socket" << std::endl;
+        SyncedCerr() << "Error creating client socket" << std::endl;
         return 1;
     }
 
@@ -159,7 +159,7 @@ int main(int argc, char *argv[]) {
     server_address.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &server_address.sin_addr);
     if (connect(client_socket, (sockaddr *)&server_address, sizeof(server_address)) == -1) {
-        std::cerr << "Error connecting to server" << std::endl;
+        SyncedCerr() << "Error connecting to server" << std::endl;
         close(client_socket);
         return 1;
     }
@@ -168,7 +168,7 @@ int main(int argc, char *argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     std::thread server_listener(listenToServer, client_socket, quiet);
-    server_listener.detach();
+    //server_listener.detach();
 
     std::thread command_sender(sendCommandsToServer, client_socket, quiet, is_stdin_connected_to_file);
     command_sender.join();
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Processing the workload took " << duration.count() << " microseconds (" << formatMicroseconds(duration.count()) + ")" << std::endl;
+    SyncedCout() << "Processing the workload took " << duration.count() << " microseconds (" << formatMicroseconds(duration.count()) + ")" << std::endl;
 
     // Clean up resources
     {
@@ -184,5 +184,6 @@ int main(int argc, char *argv[]) {
         running = false;
     }
     close(client_socket);
+    server_listener.join(); // Add this line
     return 0;
 }

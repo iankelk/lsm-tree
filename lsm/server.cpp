@@ -4,14 +4,16 @@
 #include <unistd.h>
 #include <shared_mutex>
 #include <sys/select.h>
+#include <atomic>
 #include "server.hpp"
+#include "utils.hpp"
 
-volatile sig_atomic_t terminationFlag = 0;
+std::atomic<sig_atomic_t> terminationFlag{0};
 
 Server *server_ptr = nullptr;
 
 void sigintHandler(int signal) {
-    terminationFlag = 1;
+    terminationFlag.store(1, std::memory_order_release);
     if (server_ptr) {
         server_ptr->close();
     }
@@ -26,7 +28,7 @@ void Server::listenToStdIn() {
     fd_set readfds;
     struct timeval timeout;
 
-    while (!terminationFlag)
+    while (!terminationFlag.load(std::memory_order_acquire))
     {
         // Clear the set and add standard input (0) to it
         FD_ZERO(&readfds);
@@ -43,13 +45,13 @@ void Server::listenToStdIn() {
             std::getline(std::cin, input);
             if (input == "bloom") {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-                std::cout << lsmTree->getBloomFilterSummary() << std::endl;
+                SyncedCout() << lsmTree->getBloomFilterSummary() << std::endl;
                 sharedLock.unlock();
             } else if (input == "monkey") {
                 exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  // Lock the LSM Tree during monkey optimization
-                std::cout << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
+                SyncedCout() << "\nMONKEY Bloom Filter optimization starting...\n" << std::endl;
                 lsmTree->monkeyOptimizeBloomFilters();
-                std::cout << "MONKEY Bloom Filter optimization complete" << std::endl;
+                SyncedCout() << "MONKEY Bloom Filter optimization complete" << std::endl;
                 exclusiveLock.unlock();
             } else if (input == "misses") {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
@@ -57,10 +59,10 @@ void Server::listenToStdIn() {
                 sharedLock.unlock();
             } else if (input == "io") {
                 sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-                std::cout << lsmTree->printLevelIoCount() << std::endl;
+                SyncedCout() << lsmTree->printLevelIoCount() << std::endl;
                 sharedLock.unlock();
             } else if (input == "quit") {
-                terminationFlag = 1;
+                terminationFlag.store(1, std::memory_order_release);
                 // Send SERVER_SHUTDOWN command to all connected clients
                 std::unique_lock<std::mutex> lock(connectedClientsMutex);
                 for (int clientSocket : connectedClients) {
@@ -73,18 +75,18 @@ void Server::listenToStdIn() {
                 std::string dataDir = DATA_DIRECTORY;
                 std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
                 lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
-                terminationFlag = 1;
+                terminationFlag.store(1, std::memory_order_release);
                 close();
             } else if (input == "help") {
-                std::cout << "bloom: Print Bloom Filter summary" << std::endl;
-                std::cout << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;
-                std::cout << "misses: Print hits and misses stats" << std::endl;
-                std::cout << "io: Print level IO count" << std::endl;
-                std::cout << "quit: Quit server" << std::endl;
-                std::cout << "qs: Save server to disk and quit" << std::endl;
-                std::cout << "help: Print this help message" << std::endl;
+                SyncedCout() << "bloom: Print Bloom Filter summary" << std::endl;
+                SyncedCout() << "monkey: Optimize Bloom Filters using MONKEY" << std::endl;
+                SyncedCout() << "misses: Print hits and misses stats" << std::endl;
+                SyncedCout() << "io: Print level IO count" << std::endl;
+                SyncedCout() << "quit: Quit server" << std::endl;
+                SyncedCout() << "qs: Save server to disk and quit" << std::endl;
+                SyncedCout() << "help: Print this help message" << std::endl;
             } else {
-                std::cout << "Invalid command. Use \"help\" for list of available commands" << std::endl;
+                SyncedCout() << "Invalid command. Use \"help\" for list of available commands" << std::endl;
             }
         }
     }
@@ -92,9 +94,8 @@ void Server::listenToStdIn() {
 
 // Thread function to handle client connections
 void Server::handleClient(int clientSocket) {
-    std::cout << "New client connected" << std::endl;
-        // Print thread information
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " for new client" << std::endl;
+    SyncedCout() << "New client connected with Thread ID: " << std::this_thread::get_id() << std::endl;
+    
     // Add client to connected clients set
     {
         std::unique_lock<std::mutex> lock(connectedClientsMutex);
@@ -104,16 +105,16 @@ void Server::handleClient(int clientSocket) {
     // Read commands from client
     char buffer[BUFFER_SIZE];
     // Check if client is still connected
-    while (!terminationFlag)
+    while (!terminationFlag.load(std::memory_order_acquire))
     {
         // Receive command
         ssize_t n_read = recv(clientSocket, buffer, sizeof(buffer), 0);
         if (n_read == -1) {
-            std::cerr << "Error receiving data from client" << std::endl;
+            SyncedCerr() << "Error receiving data from client" << std::endl;
             break;
         }
         else if (n_read == 0) {
-            std::cout << "Client disconnected" << std::endl;
+            SyncedCerr() << "Client disconnected" << std::endl;
             return;
         }
         std::string command(buffer, n_read);
@@ -129,7 +130,7 @@ void Server::handleClient(int clientSocket) {
         std::unique_lock<std::mutex> lock(connectedClientsMutex);
         connectedClients.erase(clientSocket);
     }
-    std::cout << "Client disconnected" << std::endl;
+    SyncedCout() << "Client disconnected with Thread ID: " << std::this_thread::get_id() << std::endl;
 }
 
 void Server::sendResponse(int clientSocket, const std::string &response) {
@@ -219,7 +220,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
             response = OK;
             sendResponse(clientSocket, response);
-            terminationFlag = 1;
+            terminationFlag.store(1, std::memory_order_release);
             close();
             break;
         // Get, range, printStats, and info operations are shared
@@ -287,7 +288,7 @@ void Server::run() {
     fd_set readfds;
     struct timeval timeout;
 
-    while (!terminationFlag) {
+    while (!terminationFlag.load(std::memory_order_acquire)) {
         // Clear the set and add serverSocket to it
         FD_ZERO(&readfds);
         FD_SET(serverSocket, &readfds);
@@ -348,12 +349,12 @@ Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
         close();
         exit(1);
     }
-    std::cout << "\nServer started, listening on port " << port << std::endl;
+    SyncedCout() << "\nServer started, listening on port " << port << std::endl;
 }
 
 
 void Server::close() {
-    terminationFlag = 1;
+    terminationFlag.store(1, std::memory_order_release);
     if (serverSocket != -1) {
         shutdown(serverSocket, SHUT_RDWR);
         ::close(serverSocket);
@@ -371,7 +372,7 @@ void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Le
 }
 
 void printHelp() {
-    std::cout << "Usage: ./server [OPTIONS]\n"
+    SyncedCout() << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
               << "  -e <errorRate>       Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
               << "  -n <numPages>        Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
@@ -386,15 +387,15 @@ void printHelp() {
 }
 
 void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) {
-    std::cout << "LSMTree parameters:" << std::endl;
-    std::cout << "  Bloom filter error rate: " << bfErrorRate << std::endl;
-    std::cout << "  Number of buffer pages: " << bufferNumPages << std::endl;
-    std::cout << "  LSM-tree fanout: " << fanout << std::endl;
-    std::cout << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
-    std::cout << "  Number of threads: " << numThreads << std::endl;
-    std::cout << "  Memtable concurrency: " << (concurrentMemtable ? "concurrent map" : "blocking") << std::endl;
-    std::cout << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
-    std::cout << "\nLSM Tree ready and waiting for input" << std::endl;
+    SyncedCout() << "LSMTree parameters:" << std::endl;
+    SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;
+    SyncedCout() << "  Number of buffer pages: " << bufferNumPages << std::endl;
+    SyncedCout() << "  LSM-tree fanout: " << fanout << std::endl;
+    SyncedCout() << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
+    SyncedCout() << "  Number of threads: " << numThreads << std::endl;
+    SyncedCout() << "  Memtable concurrency: " << (concurrentMemtable ? "concurrent map" : "blocking") << std::endl;
+    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
+    SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
 std::string Server::printDSLHelp() {
@@ -503,7 +504,7 @@ int main(int argc, char **argv) {
         case 'v':
             verbose = true;
             // print "verbose is enabled"
-            std::cout << "Verbose is enabled" << std::endl;
+            SyncedCout() << "Verbose is enabled" << std::endl;
             break;
         case 'c':
             concurrentMemtable = true;

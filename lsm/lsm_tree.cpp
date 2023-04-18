@@ -182,8 +182,11 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         return nullptr;
     }
     
+    
     {
+        std::cout << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for buffer" << std::endl;
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        std::cout << "Thread ID " << std::this_thread::get_id() << ": got shared lock for buffer" << std::endl;
         val = buffer->get(key);
         if (val != nullptr) {
             getHits++;
@@ -192,13 +195,17 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             }
             return val;
         }
+        std::cout << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
     }
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
         // Lock the level with a shared lock
         {
+            // Print "Thread ID x: getting shared lock for level number x"
+            std::cout << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
             std::shared_lock lock((*level)->levelMutex);
+            std::cout << "Thread ID " << std::this_thread::get_id() << ": got shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
             // Iterate through the runs in the level and check if the key is in the run
             for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
                 val = (*run)->get(key);
@@ -207,6 +214,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                     break;
                 }
             }
+            std::cout << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
         }
         // If the key is found in any run within the level, break from the outer loop
         if (val != nullptr) {
