@@ -64,6 +64,10 @@ int MemtableConcurrent::size() const {
     return table_.size();
 }
 
+bool MemtableConcurrent::contains(KEY_t key) const {
+    return table_.find(key) != table_.end();
+}
+
 // Serialize the memtable to a JSON object
 json MemtableConcurrent::serialize() const {
     json j;

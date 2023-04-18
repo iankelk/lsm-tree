@@ -21,6 +21,7 @@ public:
     json serialize() const;
     void deserialize(const json& j);
     bool clearAndPut(KEY_t key, VAL_t value);
+    bool contains(KEY_t key) const;
 private:
     std::map<KEY_t, VAL_t> table_;
     mutable std::shared_mutex mtx_;

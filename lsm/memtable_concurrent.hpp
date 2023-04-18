@@ -18,7 +18,8 @@ public:
     void clear();
     bool clearAndPut(KEY_t key, VAL_t value);
     int size() const;
-    std::map<KEY_t, VAL_t> getMap() const;    
+    std::map<KEY_t, VAL_t> getMap() const;  
+    bool contains(KEY_t key) const;
     json serialize() const;
     void deserialize(const json& j);
 private:

@@ -20,6 +20,7 @@ public:
     virtual json serialize() const = 0;
     virtual void deserialize(const json& j) = 0;
     virtual bool clearAndPut(KEY_t key, VAL_t value) = 0;
+    virtual bool contains(KEY_t key) const = 0;
     long getMaxKvPairs() const;
 protected:
     long maxKvPairs;

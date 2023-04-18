@@ -74,8 +74,11 @@ private:
     // mutable std::shared_mutex globalMutex;
     // mutable std::shared_mutex firstLevelMutex;
     // mutable std::shared_mutex allLevelsMutex;
-    mutable std::shared_mutex bufferMutex;
+    mutable std::mutex bufferMutex;
     mutable std::shared_mutex moveRunsMutex;
+    int putCounter = 0;
+    int flushCounter = 0;
+
 
 
 

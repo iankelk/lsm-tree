@@ -3,35 +3,22 @@
 // Insert a key-value pair into the memtable. If the key already exists, update its value to the new value. 
 // If the key does not exist and inserting it would cause the size of table_ to exceed maxKvPairs, return false
 bool MemtableBlocking::put(KEY_t key, VAL_t value) {
-    //std::unique_lock lock(mtx_);
+    std::unique_lock lock(mtx_);
 
-    // if (const auto &[it, inserted] = table_.try_emplace(key, value); !inserted) {
-    //     if (table_.size() >= maxKvPairs) {
-    //         return false;
-    //     } else {
-    //         it->second = value;
-    //         return true;
-    //     }
-    // }
-    // return true;
-
-    // Check if key already exists so we can update its value and not worry about the memtable growing
     auto it = table_.find(key);
     if (it != table_.end()) {
         it->second = value;
         return true;
+    } else if (table_.size() < maxKvPairs) {
+        table_.emplace(key, value);
+        return true;
     }
-    // Check if inserting the new key-value pair would cause the memtable to grow too large
-    if (table_.size() >= maxKvPairs) {
-        return false;
-    }
-    // Insert the new key-value pair
-    table_[key] = value;
-    return true;
+    
+    return false;
 }
 
 bool MemtableBlocking::clearAndPut(KEY_t key, VAL_t value) {
-    //std::unique_lock lock(mtx_);
+    std::unique_lock lock(mtx_);
     table_.clear();
     // Insert the new key-value pair
     table_[key] = value;
@@ -83,6 +70,11 @@ void MemtableBlocking::clear() {
 int MemtableBlocking::size() const {
     std::shared_lock lock(mtx_);
     return table_.size();
+}
+
+bool MemtableBlocking::contains(KEY_t key) const {
+    std::shared_lock lock(mtx_);
+    return table_.find(key) != table_.end();
 }
 
 // Serialize the memtable to a JSON object
