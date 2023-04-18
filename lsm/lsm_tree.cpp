@@ -39,74 +39,53 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     bool compactionNeeded = false;
 
-
     std::unique_lock<std::mutex> lock(bufferMutex);
     if(buffer->put(key, val)) {
         return;
     }
-
-    putCounter++;
-    // print putCounter
-    if (putCounter % 100000 == 0) {
-        std::cout << "putCounter: " << putCounter << std::endl;
-    }
-
-    //bufferMutex.unlock();
-    flushCounter++;
-    // print flushCounter
-    std::cout << "flushCounter: " << flushCounter << std::endl;
-
-    {
-        std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
-        // lock the first level
-        levelLocks.emplace_back(levels.front()->levelMutex);
-        if (!levels.front()->willBufferFit()) {
-            compactionNeeded = true;
-            // Lock the rest of the levels exclusively
-            for (auto it = levels.begin() + 1; it != levels.end(); it++) {
-                levelLocks.emplace_back((*it)->levelMutex);
-            }
-            moveRuns(FIRST_LEVEL_NUM);
-        }
-
-        // Create a new run and add a unique pointer to it to the first level
-        levels.front()->put(std::make_unique<Run>(buffer->getMaxKvPairs(), bfErrorRate, true, 1, this));
-
-        std::cout << "Thread ID: " << std::this_thread::get_id() << " flushing buffer to level 1" << std::endl;
-        // Flush the buffer to level 1
-        std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
-        for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-            levels.front()->runs.front()->put(it->first, it->second);
-        }
-        // Close the run's file
-        levels.front()->runs.front()->closeFile();
-
-        if (compactionNeeded) {
-            // Unlock the levels if they're set to COMPACTION_PLAN_NOT_SET.
-            for (auto &entry : compactionPlan) {
-                // Lock the levels in the compaction plan
-                if (entry.first == COMPACTION_PLAN_NOT_SET) {
-                    int levelNumber = entry.first;
-                    // print the levelNumber
-                    std::cout << "levelNumber: " << levelNumber << std::endl;
-                    levelLocks[levelNumber-1].unlock();
-                    //levelLocks.emplace_back(levels[levelNumber-1]->levelMutex);
-                }
-            }
-            executeCompactionPlan();
-            for (auto &entry : compactionPlan) {
-                if (entry.second.first != COMPACTION_PLAN_NOT_SET) {
-                    entry.second = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
-                }
-            }
-        }
-    } 
-
-    std::cout << "buffer size prior to clearing: " << buffer->size() << std::endl;
-
+    // Get a map of the buffer
+    std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
+    size_t bufferMaxKvPairs = buffer->getMaxKvPairs();
     buffer->clearAndPut(key, val);
-    //buffer->put(key, val);
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " finished put" << std::endl;
+    lock.unlock();
+
+    std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
+    // lock the first level
+    levelLocks.emplace_back(levels.front()->levelMutex);
+    if (!levels.front()->willBufferFit()) {
+        compactionNeeded = true;
+        // Lock the rest of the levels exclusively
+        for (auto it = levels.begin() + 1; it != levels.end(); it++) {
+            levelLocks.emplace_back((*it)->levelMutex);
+        }
+        moveRuns(FIRST_LEVEL_NUM);
+    }
+    // Create a new run and add a unique pointer to it to the first level
+    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
+
+    // Flush the buffer to level 1
+    for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+        levels.front()->runs.front()->put(it->first, it->second);
+    }
+    // Close the run's file
+    levels.front()->runs.front()->closeFile();
+
+    if (compactionNeeded) {
+        // Unlock the levels if they're set to COMPACTION_PLAN_NOT_SET.
+        for (auto &entry : compactionPlan) {
+            // Lock the levels in the compaction plan
+            if (entry.first == COMPACTION_PLAN_NOT_SET) {
+                int levelNumber = entry.first;
+                levelLocks[levelNumber-1].unlock();
+            }
+        }
+        executeCompactionPlan();
+        for (auto &entry : compactionPlan) {
+            if (entry.second.first != COMPACTION_PLAN_NOT_SET) {
+                entry.second = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
+            }
+        }
+    }
 }
 
 void LSMTree::moveRuns(int currentLevelNum) {
@@ -164,82 +143,23 @@ void LSMTree::moveRuns(int currentLevelNum) {
 }
 
 void LSMTree::executeCompactionPlan() {
+    std::vector<std::future<void>> compactResults;
+    compactResults.reserve(compactionPlan.size());
+
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
+            int first = segmentBounds.first;
+            int second = segmentBounds.second;
             auto &level = levels[levelNum - 1];
-            auto compactedRun = level->compactSegment(bfErrorRate, segmentBounds, isLastLevel(levelNum));
-            level->replaceSegment(segmentBounds, std::move(compactedRun));
+            auto task = [this, &level, first, second] {
+                auto compactedRun = level->compactSegment(bfErrorRate, {first, second}, isLastLevel(level->getLevelNum()));
+                level->replaceSegment({first, second}, std::move(compactedRun));
+            };
+            compactResults.push_back(threadPool.enqueue(task));
         }
     }
-}
-
-
-// void LSMTree::executeCompactionPlan() {
-//     std::vector<std::future<void>> compactResults;
-//     compactResults.reserve(compactionPlan.size());
-
-//     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-//         if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-//             int first = segmentBounds.first;
-//             int second = segmentBounds.second;
-//             auto &level = levels[levelNum - 1];
-//             auto task = [this, &level, first, second] {
-//                 auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
-//                 level.replaceSegment({first, second}, std::move(compactedRun));
-//             };
-//             compactResults.push_back(threadPool.enqueue(task));
-//         }
-//     }
-//     // Wait for all compacting tasks to complete
-//     threadPool.waitForAllTasks();
-// }
-
-void LSMTree::mergeLevels(int currentLevelNum) {
-    // Lock everything while the runs are moved around in memory
-    // THREAD STUCK HERE
-    std::cout << "Thread ID: " << std::this_thread::get_id() << "mergeLevels: Locking the start" << std::endl;
-
-    // std::unique_lock lock(globalMutex); 
-
-    // Iterate through the levels vector and lock all the levels except for the first level which is already locked
-    std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
-    for (int i = 2; i < levels.size(); i++) {
-        levelLocks.emplace_back(levels[i]->levelMutex); // Create and store the lock in the vector
-    }
-   
-    moveRuns(currentLevelNum);
-
-    // Iterate through the compaction plan and unlock the levels that don't need to be compacted. The -2 is to keep the first level locked
-    for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-        if (segmentBounds.first == COMPACTION_PLAN_NOT_SET) {
-            levelLocks[levelNum - 2].unlock();
-        }
-    }
-
-    for (int i = 1; i < compactionPlan.size(); i++) {
-        if (compactionPlan[i].first != COMPACTION_PLAN_NOT_SET) {
-            compactionPlan[i] = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
-        }
-    }
-    // std::vector<std::unique_lock<std::shared_mutex>> levelLocks; // Create a vector to store the locks
-    // for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-    //     if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-    //         levelLocks.emplace_back(levels[levelNum - 1].levelMutex); // Create and store the lock in the vector
-    //     }
-    // }
-    // Unlock everything
-    // std::cout << "Thread ID: " << std::this_thread::get_id() << "mergeLevels: Unlocking" << std::endl;
-    // lock.unlock();
-
-    executeCompactionPlan();
-
-    // Iterate through the compaction plan and set the levels that were compacted to COMPACTION_PLAN_NOT_SET 
-    // Skip the first level
-    for (int i = 1; i < compactionPlan.size(); i++) {
-        if (compactionPlan[i].first != COMPACTION_PLAN_NOT_SET) {
-            compactionPlan[i] = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
-        }
-    }
+    // Wait for all compacting tasks to complete
+    threadPool.waitForAllTasks();
 }
 
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 

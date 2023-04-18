@@ -153,7 +153,6 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
             end = mid - 1;
         }
     }
-
     return std::make_pair(0, nullptr);
 }
 
@@ -232,9 +231,6 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
  std::map<KEY_t, VAL_t> Run::getMap() {
     std::map<KEY_t, VAL_t> map;
 
-    // Print thread information
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " entering getMap()" << std::endl;
-
     if (lsmTree == nullptr) {
         die("Run::getMap: LSM tree is null");
     }
@@ -254,8 +250,6 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
-    std::cout << "Thread ID: " << std::this_thread::get_id() << " exiting getMap()" << std::endl;
-
     return map;
  }
 
