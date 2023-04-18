@@ -42,12 +42,7 @@ public:
     void replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun);
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
-
-    // TODO make these private
-    long kvPairs; // the number of key-value pairs in the level 
-    long maxKvPairs; // the maximum number of key-value pairs that can be in the level
-    long bufferSize; // Memtable size
-
+    
     mutable std::shared_mutex levelMutex;
 
     static std::string policyToString(Policy policy) {
@@ -102,8 +97,9 @@ public:
     }
 private:
     int levelNum;
-
-
+    long kvPairs; // the number of key-value pairs in the level 
+    long maxKvPairs; // the maximum number of key-value pairs that can be in the level
+    long bufferSize; // Memtable size
     Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
     int fanout;
     std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup

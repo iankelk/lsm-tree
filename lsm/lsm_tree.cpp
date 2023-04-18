@@ -10,6 +10,17 @@
 #include "run.hpp"
 #include "utils.hpp"
 
+class LSMTreeLevelLockGuard {
+public:
+    LSMTreeLevelLockGuard(const std::vector<std::unique_ptr<Level>>& levels) {
+        for (const auto& level : levels) {
+            levelLocks.emplace_back(level->levelMutex);
+        }
+    }
+private:
+    std::vector<std::shared_lock<std::shared_mutex>> levelLocks;
+};
+
 LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
     threadPool(numThreads), concurrentMemtable(concurrentMemtable)
@@ -39,7 +50,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     bool compactionNeeded = false;
 
-    std::unique_lock<std::mutex> lock(bufferMutex);
+    std::unique_lock<std::shared_mutex> lock(bufferMutex);
     if(buffer->put(key, val)) {
         return;
     }
@@ -171,6 +182,8 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         return nullptr;
     }
     
+    // First, lock the bufferMutex
+    std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
     // Search the buffer for the key
     val = buffer->get(key);
     // If the key is found in the buffer, return the value
@@ -182,28 +195,62 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         }
         return val;
     }
+    // Release the bufferMutex lock
+    bufferLock.unlock();
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
         // Lock the level with a shared lock
-        std::shared_lock lock((*level)->levelMutex);
-        // Iterate through the runs in the level and check if the key is in the run
-        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            val = (*run)->get(key);
-            // If the key is found in the run, return the value
-            if (val != nullptr) {
-                getHits++;
-                // Check that val is not the TOMBSTONE
-                if (*val == TOMBSTONE) {
-                    return nullptr;
+        {
+            std::shared_lock lock((*level)->levelMutex);
+            // Iterate through the runs in the level and check if the key is in the run
+            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+                val = (*run)->get(key);
+                // If the key is found in the run, break from the inner loop
+                if (val != nullptr) {
+                    break;
                 }
-                return val;
             }
+        }
+        // If the key is found in any run within the level, break from the outer loop
+        if (val != nullptr) {
+            getHits++;
+            // Check that val is not the TOMBSTONE
+            if (*val == TOMBSTONE) {
+                return nullptr;
+            }
+            return val;
         }
     }
     getMisses++;
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
+
+
+//     // LSMTreeLevelLockGuard lockGuard(levels);
+
+//     // If the key is not found in the buffer, search the levels
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         // Lock the level with a shared lock and release it at the end of this scope
+//         std::shared_lock lock((*level)->levelMutex);
+//         // Iterate through the runs in the level and check if the key is in the run
+//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+//             val = (*run)->get(key);
+//             // If the key is found in the run, return the value
+//             if (val != nullptr) {
+//                 getHits++;
+//                 // Check that val is not the TOMBSTONE
+//                 if (*val == TOMBSTONE) {
+//                     return nullptr;
+//                 }
+//                 return val;
+//             }
+//         }
+//         lock.unlock();
+//     }
+//     getMisses++;
+//     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
+// }
 
 // Given 2 keys, get a map all the keys from start inclusive to end exclusive or nullptr if range is empty.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {

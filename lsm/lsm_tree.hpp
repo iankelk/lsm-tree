@@ -71,7 +71,7 @@ private:
     size_t rangeHits = 0;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     bool concurrentMemtable = false;
-    mutable std::mutex bufferMutex;
+    mutable std::shared_mutex bufferMutex;
 
 
 
