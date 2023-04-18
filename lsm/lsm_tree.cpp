@@ -182,21 +182,17 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         return nullptr;
     }
     
-    // First, lock the bufferMutex
-    std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-    // Search the buffer for the key
-    val = buffer->get(key);
-    // If the key is found in the buffer, return the value
-    if (val != nullptr) {
-        getHits++;
-        // Check that val is not the TOMBSTONE
-        if (*val == TOMBSTONE) {
-            return nullptr;
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        val = buffer->get(key);
+        if (val != nullptr) {
+            getHits++;
+            if (*val == TOMBSTONE) {
+                return nullptr;
+            }
+            return val;
         }
-        return val;
     }
-    // Release the bufferMutex lock
-    bufferLock.unlock();
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
