@@ -47,6 +47,7 @@ public:
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
 
     mutable boost::upgrade_mutex levelMutex;
+    mutable boost::upgrade_mutex runsMutex;
 
     static std::string policyToString(Policy policy) {
         switch (policy) {

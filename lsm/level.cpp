@@ -7,6 +7,7 @@
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> runPtr) {
+    // boost::unique_lock<boost::upgrade_mutex> lock(levelMutex);
     // Check if there is enough space in the level to add the run
     if (kvPairs + runPtr->getMaxKvPairs() > maxKvPairs) {
         printTrace();

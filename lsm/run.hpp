@@ -30,6 +30,8 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
     std::string getRunFilePath() { return runFilePath; }
+    mutable std::shared_mutex fileReadMutex;
+
 private:
     std::pair<size_t, std::unique_ptr<VAL_t>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
     KEY_t maxKey;
@@ -45,7 +47,24 @@ private:
     size_t falsePositives = 0;
     size_t truePositives = 0;
     size_t levelOfRun;
-    mutable std::shared_mutex fileReadMutex;
+    mutable std::shared_mutex falsePositivesMutex;
+    mutable std::shared_mutex truePositivesMutex;
+    mutable std::shared_mutex sizeMutex;
+    mutable std::shared_mutex maxKeyMutex;
+    mutable std::shared_mutex fencePointersMutex;
+    mutable std::shared_mutex bloomFilterMutex;
+    void incrementSize();
+    void setMaxKey(KEY_t key);
+    KEY_t getMaxKey();
+    void addFencePointer(KEY_t key);
+    std::vector<KEY_t> getFencePointers();
+    void addToBloomFilter(KEY_t key);
+
+
+    void incrementFalsePositives();
+    size_t getFalsePositives();
+    void incrementTruePositives();
+    size_t getTruePositives();
 
 };
 

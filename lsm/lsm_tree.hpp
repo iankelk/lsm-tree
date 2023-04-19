@@ -58,6 +58,9 @@ private:
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
     std::map<int, std::pair<int, int>> compactionPlan;
 
+    void incrementGetMisses();
+    void incrementGetHits();
+
     void mergeLevels(int currentLevelNum);
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
@@ -94,12 +97,6 @@ private:
 
 
     bool concurrentMemtable = false;
-
-
-
-
-
-// I'm wondering if it has to do with the buffer->clear and buffer->put commands 
 };
 
 #endif /* LSM_TREE_HPP */
