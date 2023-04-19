@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <shared_mutex>
 #include "bloom_filter.hpp"
 
 class LSMTree;
@@ -44,6 +45,8 @@ private:
     size_t falsePositives = 0;
     size_t truePositives = 0;
     size_t levelOfRun;
+    mutable std::shared_mutex fileReadMutex;
+
 };
 
 #endif /* LSM_RUN_HPP */

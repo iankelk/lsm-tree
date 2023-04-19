@@ -112,12 +112,15 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Open the file descriptor
-    openFile("Run::get: Failed to open file for Run", O_RDONLY);
+    std::unique_ptr<VAL_t> val;
+    {
+        std::unique_lock<std::shared_mutex> lock(fileReadMutex);
+        // Open the file descriptor
+        openFile("Run::get: Failed to open file for Run", O_RDONLY);
 
-    // Perform binary search within the identified range to find the key
-    auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
-
+        // Perform binary search within the identified range to find the key
+        auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
+    }
     if (val == nullptr) {
         // If the key was not found, increment the false positive count
         lsmTree->incrementBfFalsePositives();

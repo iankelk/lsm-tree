@@ -67,13 +67,16 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // Create a vector to store the upgrade locks
     std::vector<boost::upgrade_lock<boost::upgrade_mutex>> levelUpgradeLocks;
-    levelUpgradeLocks.reserve(levels.size());
 
-    // Lock the levels with an in shared mode with an upgrade lock
-    for (auto &level : levels) {
-        levelUpgradeLocks.emplace_back(level->levelMutex);
+    {
+        std::unique_lock<std::shared_mutex> lock(mutexVectorMutex);
+        levelUpgradeLocks.reserve(levels.size());
+
+        // Lock the levels in shared mode with an upgrade lock to read the buffer
+        for (auto &level : levels) {
+            levelUpgradeLocks.emplace_back(level->levelMutex);
+        }
     }
-
     if (!levels.front()->willBufferFit()) {
         compactionNeeded = true;
         // Upgrade the locks in the levelUpgradeLocks to unique locks
@@ -123,12 +126,21 @@ void LSMTree::moveRuns(int currentLevelNum) {
         return;
     } else {
         if (it + 1 == levels.end()) {
-            // levels.emplace_back(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-            levels.emplace_back(std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this));
-
-            // Lock the new level using uniqueLevelLock previously declare as std::unique_lock<std::shared_mutex> uniqueLevelLock;
-            uniqueLevelLock = boost::unique_lock<boost::upgrade_mutex>(levels.back()->levelMutex);
-            levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
+            // Create a new level
+            std::unique_ptr<Level> newLevel;
+            {
+                std::shared_lock<std::shared_mutex> lock(bufferMutex);
+                newLevel = std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+            }
+            uniqueLevelLock = boost::unique_lock<boost::upgrade_mutex>(newLevel->levelMutex);
+            {
+                std::unique_lock<std::shared_mutex> lock(levelsMutex);
+                levels.push_back(std::move(newLevel));
+            }
+            {
+                std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
+                levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
+            }
             it = levels.end() - 2;
             next = levels.end() - 1;
         } else {
@@ -143,8 +155,10 @@ void LSMTree::moveRuns(int currentLevelNum) {
     if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED move the whole level to the next level
         int numRuns = (*it)->runs.size();
         if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
             compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, numRuns - 1);
         } else if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
             compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, (*next)->runs.size() + numRuns - 1);
         } 
         (*next)->runs.insert((*next)->runs.begin(), std::make_move_iterator((*it)->runs.begin()), std::make_move_iterator((*it)->runs.end()));
@@ -153,12 +167,16 @@ void LSMTree::moveRuns(int currentLevelNum) {
     } else { // PARTIAL moves the best segment of 2 runs to the next level
         auto segmentBounds = (*it)->findBestSegmentToCompact();
         if (!(*it)->willLowerLevelFit()) {
-            compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
+            {
+                std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+                compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
+            }
             (*next)->runs.insert((*next)->runs.begin(), std::make_move_iterator((*it)->runs.begin() + segmentBounds.first), std::make_move_iterator((*it)->runs.begin() + segmentBounds.second + 1));
             (*it)->runs.erase((*it)->runs.begin() + segmentBounds.first, (*it)->runs.begin() + segmentBounds.second + 1);
             (*it)->setKvPairs((*it)->addUpKVPairsInLevel());
             (*next)->setKvPairs((*next)->addUpKVPairsInLevel());
         } else {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
             compactionPlan[currentLevelNum] = segmentBounds;
         }
     }
@@ -193,28 +211,34 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         SyncedCerr() << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
         return nullptr;
     }
-    // {
-    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for buffer" << std::endl;
-    //     std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": got shared lock for buffer" << std::endl;
-    //     val = buffer->get(key);
-    //     if (val != nullptr) {
-    //         getHits++;
-    //         if (*val == TOMBSTONE) {
-    //             return nullptr;
-    //         }
-    //         return val;
-    //     }
-    //     SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
-    // }
-
-    std::vector<boost::shared_lock<boost::upgrade_mutex>> levelLocks;
-    levelLocks.reserve(levels.size());
-
-    for (auto &level : levels) {
-        levelLocks.emplace_back(level->levelMutex);
+    {
+        // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for buffer" << std::endl;
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": got shared lock for buffer" << std::endl;
+        val = buffer->get(key);
+        if (val != nullptr) {
+            {
+                std::unique_lock<std::shared_mutex> lock(getHitsMutex);
+                getHits++;
+            }
+            if (*val == TOMBSTONE) {
+                return nullptr;
+            }
+            return val;
+        }
+        // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
     }
 
+    std::vector<boost::unique_lock<boost::upgrade_mutex>> levelLocks;
+    {
+        std::unique_lock<std::shared_mutex> lock(mutexVectorMutex);
+        levelLocks.reserve(levels.size());
+
+        for (auto &level : levels) {
+            levelLocks.emplace_back(level->levelMutex);
+        }
+    }
+    std::shared_lock<std::shared_mutex> lock(levelsMutex);
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
@@ -232,7 +256,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                     break;
                 }
             }
-            SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
+            // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
         }
         // If the key is found in any run within the level, break from the outer loop
         if (val != nullptr) {
@@ -819,22 +843,23 @@ void LSMTree::monkeyOptimizeBloomFilters() {
 }
 
 size_t LSMTree::getLevelIoCount(int levelNum) {
-    // No mutex needed because each thread has a different levelNum
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     return levelIoCountAndTime[levelNum-1].first;
 }
 
 std::chrono::microseconds LSMTree::getLevelIoTime(int levelNum) {
-    // No mutex needed because each thread has a different levelNum
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     return levelIoCountAndTime[levelNum-1].second;
 }
 
 void LSMTree::incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration) { 
-    // No mutex needed because each thread has a different levelNum
+    std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     levelIoCountAndTime[levelNum-1].first++;
     levelIoCountAndTime[levelNum-1].second += duration;
 }
 
 size_t LSMTree::getIoCount() { 
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     size_t ioCount = std::accumulate(levelIoCountAndTime.begin(), levelIoCountAndTime.end(), 0,
     [](size_t acc, const std::pair<size_t, std::chrono::microseconds>& p) {
         return acc + p.first;

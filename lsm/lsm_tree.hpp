@@ -83,9 +83,14 @@ private:
     mutable std::shared_mutex bfFalsePositivesMutex;
     mutable std::shared_mutex bfTruePositivesMutex;
     mutable std::shared_mutex levelIoCountAndTimeMutex;
+    mutable std::shared_mutex compactionPlanMutex;
+    mutable std::shared_mutex levelsMutex;
+    mutable std::shared_mutex bufferMutex;
+
+    mutable std::shared_mutex mutexVectorMutex;
+
 
     bool concurrentMemtable = false;
-    mutable std::shared_mutex bufferMutex;
 
 
 
