@@ -11,6 +11,8 @@
 #include "lsm_tree.hpp"
 #include "run.hpp"
 #include "utils.hpp"
+#include "idempotent_mutex.hpp"
+
 
 // class LSMTreeLevelLockGuard {
 // public:
@@ -65,26 +67,19 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     buffer->clearAndPut(key, val);
     lock.unlock();
 
-    // Create a vector to store the upgrade locks
-    std::vector<boost::upgrade_lock<boost::upgrade_mutex>> levelUpgradeLocks;
+    // Lock the first level
+    boost::upgrade_lock<boost::upgrade_mutex> firstLevelLock(levels.front()->levelMutex);
 
     {
-        std::unique_lock<std::shared_mutex> lock(mutexVectorMutex);
-        levelUpgradeLocks.reserve(levels.size());
+        if (!levels.front()->willBufferFit()) {
+            compactionNeeded = true;
+            std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
+            SyncedCout() << "moveRuns from put starting" << std::endl;
+            moveRuns(FIRST_LEVEL_NUM);
+            SyncedCout() << "moveRuns from put finished" << std::endl;
+        }
+    }
 
-        // Lock the levels in shared mode with an upgrade lock to read the buffer
-        for (auto &level : levels) {
-            levelUpgradeLocks.emplace_back(level->levelMutex);
-        }
-    }
-    if (!levels.front()->willBufferFit()) {
-        compactionNeeded = true;
-        // Upgrade the locks in the levelUpgradeLocks to unique locks
-        for (auto &upgradeLock : levelUpgradeLocks) {
-            boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(upgradeLock);
-        }
-        moveRuns(FIRST_LEVEL_NUM);
-    }
     // Create a new run and add a unique pointer to it to the first level
     levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
 
@@ -96,15 +91,21 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     levels.front()->runs.front()->closeFile();
 
     if (compactionNeeded) {
-        // Unlock the levels if they're set to COMPACTION_PLAN_NOT_SET.
+
+        // Create a vector to store the upgrade locks
+        std::vector<boost::unique_lock<boost::upgrade_mutex>> compactionLocks;
+        // Lock the levels if they're not set to COMPACTION_PLAN_NOT_SET.
         for (auto &entry : compactionPlan) {
             // Lock the levels in the compaction plan
-            if (entry.first == COMPACTION_PLAN_NOT_SET) {
+            if (entry.first != COMPACTION_PLAN_NOT_SET) {
                 int levelNumber = entry.first;
-                levelUpgradeLocks[levelNumber-1].unlock();
+                compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
             }
         }
+        // print "executing compaction plan"
+        SyncedCout() << "Executing compaction plan" << std::endl;
         executeCompactionPlan();
+        std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
         for (auto &entry : compactionPlan) {
             if (entry.second.first != COMPACTION_PLAN_NOT_SET) {
                 entry.second = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
@@ -113,45 +114,71 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     }
 }
 
+// Move runs until the first level has space. Precondition: the currentLevelNum is exclusively locked.
 void LSMTree::moveRuns(int currentLevelNum) {
     std::vector<std::unique_ptr<Level>>::iterator it;
     std::vector<std::unique_ptr<Level>>::iterator next;
 
-    // Declare uniqueLevelLock
-    boost::unique_lock<boost::upgrade_mutex> uniqueLevelLock;
+    // Locks for the specific levels
+    boost::unique_lock<boost::upgrade_mutex> currentLevelLock;  // Lock for the current level
+    boost::unique_lock<boost::upgrade_mutex> nextLevelLock; // Lock for the next level
+
+    boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock;
+
+    // Locks for the level vector
+    SyncedCout() << "moveRuns: locking levelsMutex" << std::endl;
+    if (currentLevelNum == FIRST_LEVEL_NUM) {
+        boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex); // Lock for reading the vector. Only lock it once.
+    }
+    boost::unique_lock<boost::upgrade_mutex> uniqueLevelVectorLock; // Lock for the vector for adding a level
+
+    // The first level was already locked as a precondition of this function. Only lock the current level if it is not the first.
+    // if (currentLevelNum > 1) {
+    //     currentLevelLock = boost::unique_lock<boost::upgrade_mutex>(levels[currentLevelNum - 1]->levelMutex);
+    // } 
 
     it = levels.begin() + currentLevelNum - 1;
 
+    // If the current level has space, we're done
     if ((*it)->willLowerLevelFit()) {
         return;
-    } else {
-        if (it + 1 == levels.end()) {
-            // Create a new level
-            std::unique_ptr<Level> newLevel;
-            {
-                std::shared_lock<std::shared_mutex> lock(bufferMutex);
-                newLevel = std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-            }
-            uniqueLevelLock = boost::unique_lock<boost::upgrade_mutex>(newLevel->levelMutex);
-            {
-                std::unique_lock<std::shared_mutex> lock(levelsMutex);
-                levels.push_back(std::move(newLevel));
-            }
-            {
-                std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
-                levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
-            }
-            it = levels.end() - 2;
-            next = levels.end() - 1;
-        } else {
-            next = it + 1;
-            if (!(*next)->willLowerLevelFit()) {
-                moveRuns(currentLevelNum + 1);
-                it = levels.begin() + currentLevelNum - 1;
-                next = levels.begin() + currentLevelNum;
-            }
-        }
     }
+
+    // If currentLevelNum is not the last level
+    if (it + 1 != levels.end()) {
+        SyncedCout() << "moveRuns: currentLevelNum is not the last level" << std::endl;
+        nextLevelLock = boost::unique_lock<boost::upgrade_mutex>(levels[currentLevelNum]->levelMutex);
+        SyncedCout() << "moveRuns: currentLevelNum is not the last level: nextLevelLock acquired" << std::endl;
+        next = it + 1;
+        if (!(*next)->willLowerLevelFit()) {
+            SyncedCout() << "moveRuns: currentLevelNum is not the last level: next level does not have space" << std::endl;
+            moveRuns(currentLevelNum + 1);
+            it = levels.begin() + currentLevelNum - 1;
+            next = levels.begin() + currentLevelNum;
+        }
+        SyncedCout() << "moveRuns: currentLevelNum is not the last level: nextLevelLock released" << std::endl;
+    } else {
+        SyncedCout() << "moveRuns: currentLevelNum is the last level" << std::endl;
+        // Upgrade the levelVectorLock to exclusive using boost::upgrade_to_unique_lock
+        boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLevelVectorLock(levelVectorLock);
+        // Create a new level
+        std::unique_ptr<Level> newLevel;
+        {
+            std::shared_lock<std::shared_mutex> lock(bufferMutex);
+            newLevel = std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+        }
+        nextLevelLock = boost::unique_lock<boost::upgrade_mutex>(newLevel->levelMutex);
+        levels.push_back(std::move(newLevel));
+        {
+            std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
+            levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
+        }
+        it = levels.end() - 2;
+        next = levels.end() - 1;
+    } 
+
+    SyncedCout() << "Moving runs from level " << (*it)->getLevelNum() << " to level " << (*next)->getLevelNum() << std::endl;
+
     if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED move the whole level to the next level
         int numRuns = (*it)->runs.size();
         if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
@@ -180,9 +207,12 @@ void LSMTree::moveRuns(int currentLevelNum) {
             compactionPlan[currentLevelNum] = segmentBounds;
         }
     }
+
+    SyncedCout() << "Finished moving runs. Level " << (*it)->getLevelNum() << " has " << (*it)->runs.size() << " runs and " << (*it)->getKvPairs() << " key-value pairs" << std::endl;
 }
 
 void LSMTree::executeCompactionPlan() {
+    std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
     std::vector<std::future<void>> compactResults;
     compactResults.reserve(compactionPlan.size());
 
@@ -200,6 +230,7 @@ void LSMTree::executeCompactionPlan() {
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
+    SyncedCout() << "Compaction plan executed" << std::endl;
 }
 
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
@@ -229,16 +260,18 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for buffer" << std::endl;
     }
 
-    std::vector<boost::unique_lock<boost::upgrade_mutex>> levelLocks;
-    {
-        std::unique_lock<std::shared_mutex> lock(mutexVectorMutex);
-        levelLocks.reserve(levels.size());
+    // std::vector<boost::unique_lock<boost::upgrade_mutex>> levelLocks;
+    // {
+    //     std::unique_lock<std::shared_mutex> lock(mutexVectorMutex);
+    //     levelLocks.reserve(levels.size());
 
-        for (auto &level : levels) {
-            levelLocks.emplace_back(level->levelMutex);
-        }
-    }
-    std::shared_lock<std::shared_mutex> lock(levelsMutex);
+    //     for (auto &level : levels) {
+    //         levelLocks.emplace_back(level->levelMutex);
+    //     }
+    // }
+
+    // TODO
+    //std::shared_lock<std::shared_mutex> lock(levelsMutex);
 
     // If the key is not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
@@ -246,7 +279,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
         {
             // // Print "Thread ID x: getting shared lock for level number x"
             // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": getting shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
-            // std::shared_lock lock((*level)->levelMutex);
+            std::shared_lock lock((*level)->levelMutex);
             // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": got shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
             // Iterate through the runs in the level and check if the key is in the run
             for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
@@ -256,6 +289,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
                     break;
                 }
             }
+            lock.unlock();
             // SyncedCout() << "Thread ID " << std::this_thread::get_id() << ": releasing shared lock for level number [" << (*level)->getLevelNum() << "]" << std::endl;
         }
         // If the key is found in any run within the level, break from the outer loop
