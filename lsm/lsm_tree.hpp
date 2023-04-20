@@ -94,7 +94,7 @@ private:
 
     // Tricky ones
     mutable std::shared_mutex compactionPlanMutex;
-    boost::upgrade_mutex levelsMutex;
+    mutable boost::upgrade_mutex levelsMutex;
     mutable std::shared_mutex bufferMutex;
     mutable std::shared_mutex moveRunsMutex;
 
