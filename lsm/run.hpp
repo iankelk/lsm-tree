@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <shared_mutex>
+#include <thread>
 #include "bloom_filter.hpp"
 
 class LSMTree;
@@ -34,6 +35,9 @@ public:
 
 private:
     std::pair<size_t, std::unique_ptr<VAL_t>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
+    int getLocalFileDescriptorWithLock(std::thread::id tid);
+    int getLocalFileDescriptorNoLock(std::thread::id tid);
+
     KEY_t maxKey;
     size_t maxKvPairs;
     double bfErrorRate;
@@ -41,7 +45,6 @@ private:
     std::vector<KEY_t> fencePointers;
     std::string runFilePath;
     size_t size;
-    int fd;
     LSMTree* lsmTree;
     float getBfFalsePositiveRate();
     size_t falsePositives = 0;
@@ -60,6 +63,10 @@ private:
     std::vector<KEY_t> getFencePointers();
     void addToBloomFilter(KEY_t key);
 
+
+    std::thread::id fdThreadOwner;
+    std::map<std::thread::id, int> localFileDescriptors;
+    std::mutex localFileDescriptorsMutex;
 
     void incrementFalsePositives();
     size_t getFalsePositives();
