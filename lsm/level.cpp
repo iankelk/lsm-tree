@@ -55,9 +55,6 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
 
 void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {
-    // Lock the level
-    // std::unique_lock lock(levelMutex);
-
     // Close and delete files for old runs in the segment
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
         runs[idx]->closeFile();

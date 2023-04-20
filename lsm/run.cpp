@@ -138,6 +138,10 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
         // If the key was not found, increment the false positive count
         lsmTree->incrementBfFalsePositives();
         incrementFalsePositives();
+    } else {
+        // If the key was found, increment the true positive count
+        lsmTree->incrementBfTruePositives();
+        incrementTruePositives();
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
