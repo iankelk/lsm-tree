@@ -75,30 +75,36 @@ public:
     // copy constructor
     Level(Level&& other) noexcept
         : levelNum(other.levelNum),
-          fanout(other.fanout),
-          maxKvPairs(other.maxKvPairs),
-          bufferSize(other.bufferSize),
-          levelPolicy(other.levelPolicy),
-          kvPairs(other.kvPairs),
-          lsmTree(other.lsmTree),
-          diskName(other.diskName),
-          diskPenaltyMultiplier(other.diskPenaltyMultiplier),
-          runs(std::move(other.runs)) {
+        fanout(other.fanout),
+        maxKvPairs(other.maxKvPairs),
+        bufferSize(other.bufferSize),
+        levelPolicy(other.levelPolicy),
+        kvPairs(other.kvPairs),
+        lsmTree(other.lsmTree),
+        diskName(other.diskName),
+        diskPenaltyMultiplier(other.diskPenaltyMultiplier),
+        runs(std::move(other.runs)),
+        levelMutex(), // Mutex is default constructed
+        runsMutex()   // Mutex is default constructed
+    {
     }
-    // copy assignment operator 
+    // copy assignment operator
     Level& operator=(Level&& other) noexcept {
-        levelNum = other.levelNum;
-        fanout = other.fanout;
-        maxKvPairs = other.maxKvPairs;
-        bufferSize = other.bufferSize;
-        levelPolicy = other.levelPolicy;
-        kvPairs = other.kvPairs;
-        lsmTree = other.lsmTree;
-        diskName = other.diskName;
-        diskPenaltyMultiplier = other.diskPenaltyMultiplier;
-        runs = std::move(other.runs);
+        if (this != &other) {
+            levelNum = other.levelNum;
+            fanout = other.fanout;
+            maxKvPairs = other.maxKvPairs;
+            bufferSize = other.bufferSize;
+            levelPolicy = other.levelPolicy;
+            kvPairs = other.kvPairs;
+            lsmTree = other.lsmTree;
+            diskName = other.diskName;
+            diskPenaltyMultiplier = other.diskPenaltyMultiplier;
+            runs = std::move(other.runs);            
+        }
         return *this;
     }
+
 private:
     int levelNum;
     long kvPairs; // the number of key-value pairs in the level 
