@@ -220,6 +220,8 @@ void LSMTree::executeCompactionPlan() {
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
+    std::vector<Level*> localLevelsCopy;
+
 
     // if key is not within the range of the available keys, print to the server stderr and skip it
     if (key < KEY_MIN || key > KEY_MAX) {
@@ -237,22 +239,27 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             return val;
         }
     }
-    boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+    {
+        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+        // Create a copy of raw pointers to the levels
+        localLevelsCopy.reserve(levels.size());
+        for (const auto &level : levels) {
+            localLevelsCopy.push_back(level.get());
+        }
+    }
 
     // If the key is not found in the buffer, search the levels
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        {
-            // Lock the level with a shared lock
-            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
-            // Iterate through the runs in the level and check if the key is in the run
-            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-                val = (*run)->get(key);
-                // If the key is found in the run, break from the inner loop
-                if (val != nullptr) {
-                    break;
-                }
+    for (Level* level : localLevelsCopy) {
+        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
+        // Iterate through the runs in the level and check if the key is in the run
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            val = (*run)->get(key);
+            // If the key is found in the run, break from the inner loop
+            if (val != nullptr) {
+                break;
             }
         }
+        
         // If the key is found in any run within the level, break from the outer loop
         if (val != nullptr) {
             incrementGetHits();
