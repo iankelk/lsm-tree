@@ -93,6 +93,8 @@ void Run::put(KEY_t key, VAL_t val) {
     incrementSize();
 }
 
+
+
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     int runSize;
     {
@@ -123,12 +125,13 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     std::unique_ptr<VAL_t> val;
+    std::size_t keyPos;
     {
         std::unique_lock<std::shared_mutex> lock(fileReadMutex);
         // Open the file descriptor
         openFile("Run::get: Failed to open file for Run", O_RDONLY);
         // Perform binary search within the identified range to find the key
-        auto[keyPos, val] = binarySearchInRange(fd, start, end, key);
+        std::tie(keyPos, val) = binarySearchInRange(fd, start, end, key);
         closeFile();
     }
     if (val == nullptr) {
