@@ -19,7 +19,7 @@ public:
     std::map<KEY_t, VAL_t> getMap();
     size_t getMaxKvPairs();
     std::string getBloomFilterSummary();
-    void openFile(std::string originatingFunctionError, int flags);
+    int openFile(std::string originatingFunctionError, int flags);
     void closeFile();
     json serialize() const;
     void deserialize(const json& j);
@@ -63,10 +63,10 @@ private:
     std::vector<KEY_t> getFencePointers();
     void addToBloomFilter(KEY_t key);
 
-
     std::thread::id fdThreadOwner;
     std::map<std::thread::id, int> localFileDescriptors;
-    std::mutex localFileDescriptorsMutex;
+
+    mutable std::shared_mutex localFileDescriptorsMutex;
 
     void incrementFalsePositives();
     size_t getFalsePositives();

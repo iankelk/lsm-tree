@@ -50,8 +50,8 @@ void Run::deleteFile() {
     remove(runFilePath.c_str());
 }
 
-void Run::openFile(std::string originatingFunctionError, int flags) {
-    std::lock_guard<std::mutex> lock(localFileDescriptorsMutex);
+int Run::openFile(std::string originatingFunctionError, int flags) {
+    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
     std::thread::id tid = std::this_thread::get_id();
     int localFd = getLocalFileDescriptorNoLock(tid);
 
@@ -62,10 +62,11 @@ void Run::openFile(std::string originatingFunctionError, int flags) {
         }
         localFileDescriptors[tid] = localFd;
     }
+    return localFd;
 }
 
 void Run::closeFile() {
-    std::lock_guard<std::mutex> lock(localFileDescriptorsMutex);
+    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
     std::thread::id tid = std::this_thread::get_id();
     int localFd = getLocalFileDescriptorNoLock(tid);
 
@@ -76,7 +77,7 @@ void Run::closeFile() {
 }
 
 int Run::getLocalFileDescriptorWithLock(std::thread::id tid) {
-    std::lock_guard<std::mutex> lock(localFileDescriptorsMutex);
+    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
     return getLocalFileDescriptorNoLock(tid);
 }
 
@@ -156,8 +157,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     {
         std::shared_lock<std::shared_mutex> lock(fileReadMutex); // Keep the lock here for localFileDescriptors protection
         // Open the file descriptor
-        openFile("Run::get: Failed to open file for Run", O_RDONLY);
-        int localFd = getLocalFileDescriptorWithLock(std::this_thread::get_id());
+        int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         // Perform binary search within the identified range to find the key
         std::tie(keyPos, val) = binarySearchInRange(localFd, start, end, key);
         // Close the file descriptor
@@ -206,13 +206,12 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
 // Return a map of all the key-value pairs in the range [start, end]
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     size_t searchPageStart, searchPageEnd, runSize;
+    std::map<KEY_t, VAL_t> rangeMap;
+
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         runSize = size;
     }
-
-    // Initialize an empty map
-    std::map<KEY_t, VAL_t> rangeMap;
 
     // Check if the run is empty. If so, return an empty result set.
     if (runSize == 0) {
@@ -237,11 +236,9 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    int localFd = getLocalFileDescriptorWithLock(std::this_thread::get_id());
-
     {
-        std::unique_lock<std::shared_mutex> lock(fileReadMutex);
-        openFile("Run::get: Failed to open file for Run", O_RDONLY);
+        std::shared_lock<std::shared_mutex> lock(fileReadMutex);
+        int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
         // and perform binary searches within the corresponding pages for keys within the specified range.
         for (size_t pageIndex = searchPageStart; pageIndex <= searchPageEnd; pageIndex++) {
@@ -295,9 +292,8 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     {
         std::shared_lock<std::shared_mutex> lock(fileReadMutex);
         // Open the file descriptor
-        openFile("Run::get: Failed to open file for Run", O_RDONLY);
+        int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         kvPair kv;
-        int localFd = getLocalFileDescriptorWithLock(std::this_thread::get_id());
         while (read(localFd, &kv, sizeof(kvPair)) > 0) {
             map[kv.key] = kv.value;
         }
@@ -383,10 +379,9 @@ void Run::populateBloomFilter() {
     }
     {
         std::shared_lock<std::shared_mutex> lock(fileReadMutex);
-        openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
+        int localFd = openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
         // Read all the key-value pairs from the Run file and add the keys to the bloom filter
         kvPair kv;
-        int localFd = getLocalFileDescriptorWithLock(std::this_thread::get_id());
         while (read(localFd, &kv, sizeof(kvPair)) > 0) {
             bloomFilter.add(kv.key);
         }

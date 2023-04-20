@@ -324,6 +324,11 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     for (Level* level : localLevelsCopy) {
         std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+            // Check to see that the run exists and initialized
+            if (*run == nullptr) {
+                SyncedCerr() << "LSMTree::range: Run is null" << std::endl;
+            }
+
             // Enqueue task for searching in the run
             futures.push_back(threadPool.enqueue([&, run] {
                 return (*run)->range(start, end);
