@@ -5,6 +5,7 @@
 #include <string>
 #include <filesystem>
 #include <algorithm>
+#include <mutex>
 #include "run.hpp"
 #include "lsm_tree.hpp"
 #include "utils.hpp"
@@ -96,7 +97,7 @@ void Run::put(KEY_t key, VAL_t val) {
 
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
-    int runSize;
+    size_t runSize;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         runSize = size;
@@ -176,60 +177,66 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
 
 // Return a map of all the key-value pairs in the range [start, end]
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
-    size_t searchPageStart, searchPageEnd;
+    size_t searchPageStart, searchPageEnd, runSize;
+    {
+        std::shared_lock<std::shared_mutex> lock(sizeMutex);
+        runSize = size;
+    }
 
     // Initialize an empty map
     std::map<KEY_t, VAL_t> rangeMap;
 
     // Check if the run is empty. If so, return an empty result set.
-    if (size == 0) {
+    if (runSize == 0) {
         return rangeMap;
     }
 
+    auto fencePointersCopy = getFencePointers();
+
     // Check if the specified range is outside the range of keys in the run. If so, return an empty result set.
-    if (end < fencePointers.front() || start > maxKey) {
+    if (end < fencePointersCopy.front() || start > getMaxKey()) {
         return rangeMap;
     }
 
     // Use binary search to identify the starting fence pointer index where the start key might be located.
-    auto iterStart = std::lower_bound(fencePointers.begin(), fencePointers.end(), start);
-    searchPageStart = std::distance(fencePointers.begin(), iterStart);
+    auto iterStart = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
+    searchPageStart = std::distance(fencePointersCopy.begin(), iterStart);
 
     // Find the ending fence pointer index for the end key using binary search.
-    auto iterEnd = std::lower_bound(fencePointers.begin(), fencePointers.end(), end);
-    searchPageEnd = std::distance(fencePointers.begin(), iterEnd);
+    auto iterEnd = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), end);
+    searchPageEnd = std::distance(fencePointersCopy.begin(), iterEnd);
 
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Open the file descriptor
-    openFile("Run::range: Failed to open file for Run", O_RDONLY);
 
-    // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
-    // and perform binary searches within the corresponding pages for keys within the specified range.
-    for (size_t pageIndex = searchPageStart; pageIndex <= searchPageEnd; pageIndex++) {
-        size_t pageStart = pageIndex * getpagesize();
-        size_t pageEnd = (pageIndex + 1 == fencePointers.size()) ? size : (pageIndex + 1) * getpagesize();
-        auto startPosPair = binarySearchInRange(fd, pageStart, pageEnd, start);
+    {
+        std::unique_lock<std::shared_mutex> lock(fileReadMutex);
+        openFile("Run::get: Failed to open file for Run", O_RDONLY);
+        // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
+        // and perform binary searches within the corresponding pages for keys within the specified range.
+        for (size_t pageIndex = searchPageStart; pageIndex <= searchPageEnd; pageIndex++) {
+            size_t pageStart = pageIndex * getpagesize();
+            size_t pageEnd = (pageIndex + 1 == fencePointersCopy.size()) ? runSize : (pageIndex + 1) * getpagesize();
+            auto startPosPair = binarySearchInRange(fd, pageStart, pageEnd, start);
 
-        if (startPosPair.second != nullptr) {
-            rangeMap[startPosPair.first] = *startPosPair.second;
-        }
+            if (startPosPair.second != nullptr) {
+                rangeMap[startPosPair.first] = *startPosPair.second;
+            }
 
-        for (size_t i = startPosPair.first + 1; i < pageEnd; i++) {
-            kvPair kv;
-            pread(fd, &kv, sizeof(kvPair), i * sizeof(kvPair));
+            for (size_t i = startPosPair.first + 1; i < pageEnd; i++) {
+                kvPair kv;
+                pread(fd, &kv, sizeof(kvPair), i * sizeof(kvPair));
 
-            if (kv.key >= start && kv.key < end) {
-                rangeMap[kv.key] = kv.value;
-            } else if (kv.key >= end) {
-                break;
+                if (kv.key >= start && kv.key < end) {
+                    rangeMap[kv.key] = kv.value;
+                } else if (kv.key >= end) {
+                    break;
+                }
             }
         }
+        closeFile();
     }
-
-    // Close the file descriptor.
-    closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -256,14 +263,16 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Open the file descriptor
-    openFile("Run::getMap: Failed to open file for Run", O_RDONLY);
-
-    kvPair kv;
-    while (read(fd, &kv, sizeof(kvPair)) > 0) {
-        map[kv.key] = kv.value;
+    {
+        std::unique_lock<std::shared_mutex> lock(fileReadMutex);
+        // Open the file descriptor
+        openFile("Run::get: Failed to open file for Run", O_RDONLY);
+        kvPair kv;
+        while (read(fd, &kv, sizeof(kvPair)) > 0) {
+            map[kv.key] = kv.value;
+        }
+        closeFile();
     }
-    closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -303,8 +312,10 @@ void Run::deserialize(const json& j) {
 }
 
 float Run::getBfFalsePositiveRate() {
-    std::shared_lock<std::shared_mutex> lockFP(falsePositivesMutex);
-    std::shared_lock<std::shared_mutex> lockTP(truePositivesMutex);
+    std::shared_lock<std::shared_mutex> lockFP(falsePositivesMutex, std::defer_lock);
+    std::shared_lock<std::shared_mutex> lockTP(truePositivesMutex, std::defer_lock);
+
+    std::lock(lockFP, lockTP);
 
     int total = truePositives + falsePositives;
     if (total > 0) {
@@ -340,16 +351,16 @@ void Run::populateBloomFilter() {
     if (size == 0) {
         return;
     }
-    // Open the file descriptor
-    openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
-
-    // Read all the key-value pairs from the Run file and add the keys to the bloom filter
-    kvPair kv;
-    while (read(fd, &kv, sizeof(kvPair)) > 0) {
-        bloomFilter.add(kv.key);
+    {
+        std::unique_lock<std::shared_mutex> lock(fileReadMutex);
+        openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
+        // Read all the key-value pairs from the Run file and add the keys to the bloom filter
+        kvPair kv;
+        while (read(fd, &kv, sizeof(kvPair)) > 0) {
+            bloomFilter.add(kv.key);
+        }
+        closeFile();
     }
-    // Close the file descriptor
-    closeFile();
 }
 
 void Run::incrementFalsePositives() { 
