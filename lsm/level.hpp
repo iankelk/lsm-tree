@@ -46,7 +46,7 @@ public:
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
 
-    mutable boost::upgrade_mutex levelMutex;
+    mutable std::shared_mutex levelMutex;
     mutable boost::upgrade_mutex runsMutex;
 
     static std::string policyToString(Policy policy) {
