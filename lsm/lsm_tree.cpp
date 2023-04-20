@@ -322,6 +322,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     localLevelsCopy = getLocalLevelsCopy();
 
     for (Level* level : localLevelsCopy) {
+        // Acquire the level lock before iterating over the runs
         std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
         for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
             // Check to see that the run exists and initialized

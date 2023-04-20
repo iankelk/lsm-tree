@@ -10,6 +10,8 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
+thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
+
 Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree = nullptr) :
     maxKvPairs(maxKvPairs),
     bfErrorRate(bfErrorRate),
@@ -30,16 +32,15 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         std::strcpy(tmpFn, sstableFileTemplate.c_str());
         
         int suffixLength = 4; // Length of ".bin" suffix
-        int localFd = mkstemps(tmpFn, suffixLength);
+        localFd = mkstemps(tmpFn, suffixLength);
         if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die("Run::Constructor: Failed to create file for Run");
         }
         runFilePath = tmpFn;
-        localFileDescriptors[std::this_thread::get_id()] = localFd;
-        runFilePath = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
     }
 }
+
 
 Run::~Run() {
     closeFile();
@@ -51,44 +52,21 @@ void Run::deleteFile() {
 }
 
 int Run::openFile(std::string originatingFunctionError, int flags) {
-    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
-    std::thread::id tid = std::this_thread::get_id();
-    int localFd = getLocalFileDescriptorNoLock(tid);
-
     if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
         localFd = open(runFilePath.c_str(), flags);
         if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die(originatingFunctionError);
         }
-        localFileDescriptors[tid] = localFd;
     }
     return localFd;
 }
 
 void Run::closeFile() {
-    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
-    std::thread::id tid = std::this_thread::get_id();
-    int localFd = getLocalFileDescriptorNoLock(tid);
-
     if (localFd != FILE_DESCRIPTOR_UNINITIALIZED) {
         close(localFd);
-        localFileDescriptors.erase(tid);
+        localFd = FILE_DESCRIPTOR_UNINITIALIZED;
     }
 }
-
-int Run::getLocalFileDescriptorWithLock(std::thread::id tid) {
-    std::unique_lock<std::shared_mutex> lock(localFileDescriptorsMutex);
-    return getLocalFileDescriptorNoLock(tid);
-}
-
-int Run::getLocalFileDescriptorNoLock(std::thread::id tid) {
-    auto it = localFileDescriptors.find(tid);
-    if (it == localFileDescriptors.end()) {
-        return FILE_DESCRIPTOR_UNINITIALIZED;
-    }
-    return it->second;
-}
-
 
 void Run::put(KEY_t key, VAL_t val) {
     int result, runSize;
@@ -113,7 +91,6 @@ void Run::put(KEY_t key, VAL_t val) {
     }
 
     // Write the key-value pair to the Run file
-    int localFd = getLocalFileDescriptorWithLock(std::this_thread::get_id());
     result = write(localFd, &kv, sizeof(kvPair));
     if (result == -1) {
         die("Run::put: Failed to write to Run file");
