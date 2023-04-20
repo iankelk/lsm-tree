@@ -54,12 +54,16 @@ private:
     Level::Policy levelPolicy;
     int countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
+    std::vector<Level*> getLocalLevelsCopy();
     std::deque<std::unique_ptr<Level>> levels;
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
     std::map<int, std::pair<int, int>> compactionPlan;
 
     void incrementGetMisses();
     void incrementGetHits();
+
+    void incrementRangeMisses();
+    void incrementRangeHits();
 
     void mergeLevels(int currentLevelNum);
     void moveRuns(int currentLevelNum);
@@ -93,9 +97,6 @@ private:
     boost::upgrade_mutex levelsMutex;
     mutable std::shared_mutex bufferMutex;
     mutable std::shared_mutex moveRunsMutex;
-    mutable std::shared_mutex mutexVectorMutex;
-
-
 
     bool concurrentMemtable = false;
 };

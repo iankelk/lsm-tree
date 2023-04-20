@@ -194,7 +194,6 @@ void LSMTree::moveRuns(int currentLevelNum) {
     }
 }
 
-
 void LSMTree::executeCompactionPlan() {
     std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
     std::vector<std::future<void>> compactResults;
@@ -217,11 +216,24 @@ void LSMTree::executeCompactionPlan() {
     SyncedCout() << "Compaction plan executed" << std::endl;
 }
 
+std::vector<Level*> LSMTree::getLocalLevelsCopy() {
+    std::vector<Level*> localLevelsCopy;
+    {
+        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+        // Create a copy of raw pointers to the levels
+        localLevelsCopy.reserve(levels.size());
+        for (const auto &level : levels) {
+            localLevelsCopy.push_back(level.get());
+        }
+    }
+    return localLevelsCopy;
+}
+
+
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
     std::vector<Level*> localLevelsCopy;
-
 
     // if key is not within the range of the available keys, print to the server stderr and skip it
     if (key < KEY_MIN || key > KEY_MAX) {
@@ -239,14 +251,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             return val;
         }
     }
-    {
-        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
-        // Create a copy of raw pointers to the levels
-        localLevelsCopy.reserve(levels.size());
-        for (const auto &level : levels) {
-            localLevelsCopy.push_back(level.get());
-        }
-    }
+    localLevelsCopy = getLocalLevelsCopy();
 
     // If the key is not found in the buffer, search the levels
     for (Level* level : localLevelsCopy) {
@@ -274,7 +279,6 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
 
-// Given 2 keys, get a map all the keys from start inclusive to end exclusive or nullptr if range is empty.
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
@@ -283,7 +287,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
-        SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
+        SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;
         KEY_t temp = start;
         start = end;
         end = temp;
@@ -296,8 +300,14 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
 
     int allPossibleKeys = end - start;
 
-    // Search the buffer for the key range and return the range map as a unique_ptr
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer->range(start, end));
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
+    std::vector<Level*> localLevelsCopy;
+
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        // Search the buffer for the key range and return the range map as a unique_ptr
+        rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer->range(start, end));
+    }
 
     // If the range has the size of the entire range, return the range
     if (rangeMap->size() == allPossibleKeys) {
@@ -309,10 +319,11 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
 
     std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        // Lock the level with a shared lock
-        std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
-        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+    localLevelsCopy = getLocalLevelsCopy();
+
+    for (Level* level : localLevelsCopy) {
+        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
             // Enqueue task for searching in the run
             futures.push_back(threadPool.enqueue([&, run] {
                 return (*run)->range(start, end);
@@ -330,18 +341,89 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         }
         if (rangeMap->size() == allPossibleKeys) {
             removeTombstones(rangeMap);
-            rangeHits++;
+            incrementRangeHits();
             return rangeMap;
         }
     }
     if (rangeMap->size() == 0) {
-        rangeMisses++;
+        incrementRangeMisses();
     } else {
-        rangeHits++;
+        incrementRangeHits();
     }
     removeTombstones(rangeMap);
     return rangeMap;
 }
+
+
+
+// // Given 2 keys, get a map all the keys from start inclusive to end exclusive or nullptr if range is empty.
+// std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
+//     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
+//     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
+//         SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
+//         return nullptr;
+//     }
+//     // If the start key is greater than the end key, swap them
+//     if (start > end) {
+//         SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
+//         KEY_t temp = start;
+//         start = end;
+//         end = temp;
+//     }
+
+//     // If the start key is equal to the end key, return nullptr
+//     if (start == end) {
+//         return nullptr;
+//     }
+
+//     int allPossibleKeys = end - start;
+
+//     // Search the buffer for the key range and return the range map as a unique_ptr
+//     std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer->range(start, end));
+
+//     // If the range has the size of the entire range, return the range
+//     if (rangeMap->size() == allPossibleKeys) {
+//         // Remove all the TOMBSTONES from the range map
+//         removeTombstones(rangeMap);
+//         rangeHits++;
+//         return rangeMap;
+//     }
+
+//     std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
+
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         // Lock the level with a shared lock
+//         std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
+//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+//             // Enqueue task for searching in the run
+//             futures.push_back(threadPool.enqueue([&, run] {
+//                 return (*run)->range(start, end);
+//             }));
+//         }
+//     }
+
+//     // Wait for all tasks to finish and aggregate the results
+//     for (auto &future : futures) {
+//         std::map<KEY_t, VAL_t> tempMap = future.get();
+//         if (tempMap.size() != 0) {
+//             for (const auto &kv : tempMap) {
+//                 rangeMap->try_emplace(kv.first, kv.second);
+//             }
+//         }
+//         if (rangeMap->size() == allPossibleKeys) {
+//             removeTombstones(rangeMap);
+//             rangeHits++;
+//             return rangeMap;
+//         }
+//     }
+//     if (rangeMap->size() == 0) {
+//         rangeMisses++;
+//     } else {
+//         rangeHits++;
+//     }
+//     removeTombstones(rangeMap);
+//     return rangeMap;
+// }
 
 // Given a key, delete the key-value pair from the tree.
 void LSMTree::del(KEY_t key) {
@@ -463,16 +545,18 @@ int LSMTree::countLogicalPairs() {
     {
         std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
         if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-        return numLogicalPairs;
-    }
+            return numLogicalPairs;
+        }
     }
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
     // Create a pointer to a map of key/value pairs
     std::map<KEY_t, VAL_t> kvMap;
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
 
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+    for (Level* level : localLevelsCopy) {
+        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
+        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
             // Get the map of key/value pairs from the run
             kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
@@ -487,8 +571,12 @@ int LSMTree::countLogicalPairs() {
             }
         }  
     }
+    std::map<KEY_t, VAL_t> bufferContents;
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        bufferContents = buffer->getMap();
+    }
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-    std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (it->second == TOMBSTONE) {
             if (keys.find(it->first) != keys.end()) {
@@ -506,6 +594,56 @@ int LSMTree::countLogicalPairs() {
     return keys.size();
 }
 
+
+// // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
+// // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
+// int LSMTree::countLogicalPairs() {
+//     {
+//         std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+//         if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+//         return numLogicalPairs;
+//     }
+//     }
+//     // Create a set of all the keys in the tree
+//     std::set<KEY_t> keys;
+//     // Create a pointer to a map of key/value pairs
+//     std::map<KEY_t, VAL_t> kvMap;
+
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+//             // Get the map of key/value pairs from the run
+//             kvMap = (*run)->getMap();
+//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+//             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+//                 if (it->second == TOMBSTONE) {
+//                     if (keys.find(it->first) != keys.end()) {
+//                         keys.erase(it->first);
+//                     }
+//                 } else {
+//                     keys.insert(it->first);
+//                 }
+//             }
+//         }  
+//     }
+//     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+//     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
+//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+//         if (it->second == TOMBSTONE) {
+//             if (keys.find(it->first) != keys.end()) {
+//                 keys.erase(it->first);
+//             }
+//         } else {
+//             keys.insert(it->first);
+//         }
+//     }
+//     {
+//         std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+//         numLogicalPairs = keys.size();
+//     }
+//     // Return the size of the set
+//     return keys.size();
+// }
+
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::string output = "";
@@ -514,6 +652,9 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
     std::string treeDump = ""; // Create a string to hold the dump of the tree
 
+    // Acquire shared lock for levelsMutex
+    std::shared_lock<boost::upgrade_mutex> levelsLock(levelsMutex);
+
     // Iterate through the levels and add the number of keys in each level to the levelKeys string
     for (auto it = levels.begin(); it != levels.end(); it++) {
         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
@@ -521,6 +662,13 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     // Remove the last comma and space from the levelKeys string
     levelKeys.resize(levelKeys.size() - 2);
     levelKeys += "\n";
+
+    // Release the shared lock for levelsMutex
+    levelsLock.unlock();
+
+    // Acquire shared lock for bufferMutex
+    std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+
     // Iterate through the buffer and add the key/value pairs to the treeDump string
     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
     size_t pairsCounter = 0;
@@ -538,10 +686,18 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     if (pairsCounter > 0) {
         treeDump += "\n\n";
     }
+
+    // Release the shared lock for bufferMutex
+    bufferLock.unlock();
+
+    // Acquire shared lock for levelsMutex
+    levelsLock.lock();
+
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         pairsCounter = 0;
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex); // Acquire shared lock for levelMutex
             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
@@ -555,15 +711,80 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
                 }
             }
+            // Release the shared lock for levelMutex
+            levelLock.unlock();
         }
         if (pairsCounter > 0) {
             treeDump += "\n\n";
         }
     }
+
+    // Release the shared lock for levelsMutex
+    levelsLock.unlock();
+
     treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
     return output;
 }
+
+// // Print out a summary of the tree.
+// std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+//     std::string output = "";
+//     // Create a string to hold the number of logical key value pairs in the tree
+//     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
+//     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
+//     std::string treeDump = ""; // Create a string to hold the dump of the tree
+
+//     // Iterate through the levels and add the number of keys in each level to the levelKeys string
+//     for (auto it = levels.begin(); it != levels.end(); it++) {
+//         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
+//     }
+//     // Remove the last comma and space from the levelKeys string
+//     levelKeys.resize(levelKeys.size() - 2);
+//     levelKeys += "\n";
+//     // Iterate through the buffer and add the key/value pairs to the treeDump string
+//     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
+//     size_t pairsCounter = 0;
+//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+//         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
+//             break;
+//         }
+//         if (it->second == TOMBSTONE) {
+//             treeDump += std::to_string(it->first) + ":TOMBSTONE:L0 ";
+//         } else {
+//             treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L0 ";
+//         }
+//         pairsCounter++;
+//     }
+//     if (pairsCounter > 0) {
+//         treeDump += "\n\n";
+//     }
+//     // Iterate through the levels and add the key/value pairs to the treeDump string
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         pairsCounter = 0;
+//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+//             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
+//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
+//             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+//                 if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
+//                     break;
+//                 }
+//                 pairsCounter++;
+//                 if (it->second == TOMBSTONE) {
+//                     treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
+//                 } else {
+//                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
+//                 }
+//             }
+//         }
+//         if (pairsCounter > 0) {
+//             treeDump += "\n\n";
+//         }
+//     }
+//     treeDump.pop_back(); // Remove the last space from the treeDump string
+//     output += logicalPairs + levelKeys + treeDump;
+//     return output;
+// }
 
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.
@@ -576,9 +797,9 @@ std::string LSMTree::printTree() {
     output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer->size())) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer->getMaxKvPairs())) + "\n";
     output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer->getMaxKvPairs() * sizeof(kvPair))) + "\n";
-    output += "Number of levels: " + std::to_string(levels.size()) + "\n";
+    output += "Number of Levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Number of SSTables in level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
+        output += "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
         output += "Number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": " + addCommas(std::to_string((*it)->getKvPairs())) + "\n";
         output += "Max number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": " + addCommas(std::to_string((*it)->getMaxKvPairs())) + "\n";
     }
@@ -854,6 +1075,15 @@ void LSMTree::incrementGetHits() {
 void LSMTree::incrementGetMisses() { 
     std::unique_lock<std::shared_mutex> lock(getMissesMutex);
     getMisses++;
+}
+
+void LSMTree::incrementRangeMisses() { 
+    std::unique_lock<std::shared_mutex> lock(rangeMissesMutex);
+    rangeMisses++;
+}
+void LSMTree::incrementRangeHits() { 
+    std::unique_lock<std::shared_mutex> lock(rangeHitsMutex);
+    rangeHits++;
 }
 
 size_t LSMTree::getCompactionPlanSize() {
