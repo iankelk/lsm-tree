@@ -164,7 +164,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
-    return std::make_unique<VAL_t>(kv->value);
+    return (kv == nullptr) ? nullptr : std::make_unique<VAL_t>(kv->value);
 }
 
 // Return a pair of the position of a KvPair, and a pointer to the KvPair
