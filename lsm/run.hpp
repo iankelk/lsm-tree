@@ -36,7 +36,7 @@ public:
 
 private:
     static thread_local int localFd;
-    std::pair<size_t, std::unique_ptr<VAL_t>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
+    std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
 
     KEY_t maxKey;
     size_t maxKvPairs;

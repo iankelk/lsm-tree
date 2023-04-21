@@ -138,18 +138,18 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    std::unique_ptr<VAL_t> val;
+     std::unique_ptr<kvPair> kv;
     std::size_t keyPos;
     {
         // std::shared_lock<std::shared_mutex> lock(fileMutex); // Keep the lock here for localFileDescriptors protection
         // Open the file descriptor
         int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         // Perform binary search within the identified range to find the key
-        std::tie(keyPos, val) = binarySearchInRange(localFd, start, end, key);
+        std::tie(keyPos, kv) = binarySearchInRange(localFd, start, end, key);
         // Close the file descriptor
         closeFile();
     }
-    if (val == nullptr) {
+    if (kv == nullptr) {
         // If the key was not found, increment the false positive count
         lsmTree->incrementBfFalsePositives();
         incrementFalsePositives();
@@ -164,10 +164,11 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
-    return std::move(val);
+    return std::make_unique<VAL_t>(kv->value);
 }
 
-std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
+// Return a pair of the position of a KvPair, and a pointer to the KvPair
+std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
     std::unique_ptr<VAL_t> val;
 
     while (start <= end) {
@@ -175,18 +176,20 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
 
         // Read the key-value pair at the mid index
         kvPair kv;
-        pread(fd, &kv, sizeof(kvPair), mid * sizeof(kvPair));
-
+        ssize_t bytes_read = pread(fd, &kv, sizeof(kvPair), mid * sizeof(kvPair));
+        if (bytes_read != sizeof(kvPair)) {
+            SyncedCerr() << "ERROR: Read only " << bytes_read << " bytes from file" << std::endl;
+        }
         if (kv.key == key) {
-            val = std::make_unique<VAL_t>(kv.value);
-            return std::make_pair(mid, std::move(val));
+            std::unique_ptr<kvPair> found_kv = std::make_unique<kvPair>(kv);
+            return std::make_pair(mid, std::move(found_kv));
         } else if (kv.key < key) {
             start = mid + 1;
         } else {
             end = mid - 1;
         }
     }
-    return std::make_pair(0, nullptr);
+    return std::make_pair(start, nullptr);
 }
 
 // Return a map of all the key-value pairs in the range [start, end)
@@ -216,7 +219,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     // Use binary search to identify the starting fence pointer index where the start key might be located.
     auto iterStart = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
-    searchPageStart = std::distance(fencePointersCopy.begin(), iterStart);
+    searchPageStart = std::distance(fencePointersCopy.begin(), iterStart) - 1;
 
     {   
         // SyncedCout() << "Run::range: Getting fileWrite lock" << std::this_thread::get_id() << std::endl;
@@ -235,12 +238,20 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         // SyncedCout() << "Run::range: Getting fileRead lock" << std::this_thread::get_id() << std::endl;
         // std::shared_lock<std::shared_mutex> lock(fileMutex);
         int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
-        auto startPosPair = binarySearchInRange(localFd, pageStart, pageEnd, start);
-        if (startPosPair.second != nullptr) {
-            rangeMap[startPosPair.first] = *startPosPair.second;
+        std::pair<size_t, std::unique_ptr<kvPair>> startPosResult = binarySearchInRange(localFd, pageStart, pageEnd, start);
+        std::unique_ptr<kvPair> startPosKvPair = std::move(startPosResult.second);
+
+        size_t rangeStartIndex;
+        if (startPosKvPair != nullptr) {
+            rangeMap[startPosKvPair->key] = startPosKvPair->value;
+            // Start key was already found so don't need to read again
+            rangeStartIndex = startPosResult.first + 1;
+        } else {
+            // Start key was not found so read from beginning
+            rangeStartIndex = startPosResult.first;
         }
 
-        for (size_t i = startPosPair.first + 1; i < runSize; i++) {
+        for (size_t i = rangeStartIndex; i < runSize; i++) {
             kvPair kv;
             pread(localFd, &kv, sizeof(kvPair), i * sizeof(kvPair));
 
@@ -250,7 +261,6 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
                 break;
             }
         }
-
         closeFile();
         // SyncedCout() << "Run::range: Released fileRead lock" << std::this_thread::get_id() << std::endl;
     }
@@ -263,8 +273,6 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Return the data structure containing the key-value pairs within the specified range.
     return rangeMap;
 }
-
-
 
  std::map<KEY_t, VAL_t> Run::getMap() {
     std::map<KEY_t, VAL_t> map;
