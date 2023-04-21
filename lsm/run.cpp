@@ -24,6 +24,10 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
 {
 
     if (createFile) {
+        // Ensure that only one thread is creating a file at a time and no other thread is reading 
+        // TODO: just in case
+        //std::unique_lock<std::shared_mutex> lock(fileMutex);
+
         std::string dataDir = DATA_DIRECTORY;
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
 
@@ -125,6 +129,11 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Calculate the start and end position of the range to search based on the page index
     size_t start = pageIndex * getpagesize();
     size_t end = (pageIndex + 1 == fencePointersCopy.size()) ? runSize : (pageIndex + 1) * getpagesize();
+
+    // {   
+        // Ensure that the run file is not being written to while we are reading from it
+        // std::shared_lock<std::shared_mutex> lock(fileMutex);
+    // }
     
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -132,7 +141,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
     std::size_t keyPos;
     {
-        std::shared_lock<std::shared_mutex> lock(fileReadMutex); // Keep the lock here for localFileDescriptors protection
+        // std::shared_lock<std::shared_mutex> lock(fileMutex); // Keep the lock here for localFileDescriptors protection
         // Open the file descriptor
         int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         // Perform binary search within the identified range to find the key
@@ -180,13 +189,16 @@ std::pair<size_t, std::unique_ptr<VAL_t>> Run::binarySearchInRange(int fd, size_
     return std::make_pair(0, nullptr);
 }
 
-// Return a map of all the key-value pairs in the range [start, end]
+// Return a map of all the key-value pairs in the range [start, end)
 std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
-    size_t searchPageStart, searchPageEnd, runSize;
+    size_t searchPageStart, runSize;
     std::map<KEY_t, VAL_t> rangeMap;
 
+    // Check if the run is empty
     {
+        // SyncedCout() << "Run::range: Getting sizeMutex lock" << std::this_thread::get_id() << std::endl;
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
+        // SyncedCout() << "Run::range: Got sizeMutex lock" << std::this_thread::get_id() << std::endl;
         runSize = size;
     }
 
@@ -198,7 +210,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto fencePointersCopy = getFencePointers();
 
     // Check if the specified range is outside the range of keys in the run. If so, return an empty result set.
-    if (end < fencePointersCopy.front() || start > getMaxKey()) {
+    if (end <= fencePointersCopy.front() || start > getMaxKey()) {
         return rangeMap;
     }
 
@@ -206,39 +218,41 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto iterStart = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
     searchPageStart = std::distance(fencePointersCopy.begin(), iterStart);
 
-    // Find the ending fence pointer index for the end key using binary search.
-    auto iterEnd = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), end);
-    searchPageEnd = std::distance(fencePointersCopy.begin(), iterEnd);
+    {   
+        // SyncedCout() << "Run::range: Getting fileWrite lock" << std::this_thread::get_id() << std::endl;
+        // // Ensure that the run file is not being written to while we are reading from it
+        // std::shared_lock<std::shared_mutex> lock(fileMutex);
+        // SyncedCout() << "Run::range: Got fileWrite lock" << std::this_thread::get_id() << std::endl;
+    }
 
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    size_t pageStart = searchPageStart * getpagesize();
+    size_t pageEnd = (searchPageStart + 1 == fencePointersCopy.size()) ? runSize : (searchPageStart + 1) * getpagesize();
+
     {
-        std::shared_lock<std::shared_mutex> lock(fileReadMutex);
+        // SyncedCout() << "Run::range: Getting fileRead lock" << std::this_thread::get_id() << std::endl;
+        // std::shared_lock<std::shared_mutex> lock(fileMutex);
         int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
-        // Iterate through the fence pointers between the starting and ending fence pointer indices (inclusive),
-        // and perform binary searches within the corresponding pages for keys within the specified range.
-        for (size_t pageIndex = searchPageStart; pageIndex <= searchPageEnd; pageIndex++) {
-            size_t pageStart = pageIndex * getpagesize();
-            size_t pageEnd = (pageIndex + 1 == fencePointersCopy.size()) ? runSize : (pageIndex + 1) * getpagesize();
-            auto startPosPair = binarySearchInRange(localFd, pageStart, pageEnd, start);
+        auto startPosPair = binarySearchInRange(localFd, pageStart, pageEnd, start);
+        if (startPosPair.second != nullptr) {
+            rangeMap[startPosPair.first] = *startPosPair.second;
+        }
 
-            if (startPosPair.second != nullptr) {
-                rangeMap[startPosPair.first] = *startPosPair.second;
-            }
+        for (size_t i = startPosPair.first + 1; i < runSize; i++) {
+            kvPair kv;
+            pread(localFd, &kv, sizeof(kvPair), i * sizeof(kvPair));
 
-            for (size_t i = startPosPair.first + 1; i < pageEnd; i++) {
-                kvPair kv;
-                pread(localFd, &kv, sizeof(kvPair), i * sizeof(kvPair));
-
-                if (kv.key >= start && kv.key < end) {
-                    rangeMap[kv.key] = kv.value;
-                } else if (kv.key >= end) {
-                    break;
-                }
+            if (kv.key >= start && kv.key < end) {
+                rangeMap[kv.key] = kv.value;
+            } else if (kv.key >= end) {
+                break;
             }
         }
+
         closeFile();
+        // SyncedCout() << "Run::range: Released fileRead lock" << std::this_thread::get_id() << std::endl;
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -246,14 +260,10 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
-    // If the last key in the range is the end key, remove it since the RANGE query is not inclusive for the end key.
-    if (rangeMap.size() > 0 && rangeMap.rbegin()->first == end) {
-        rangeMap.erase(rangeMap.rbegin()->first);
-    }
-
     // Return the data structure containing the key-value pairs within the specified range.
     return rangeMap;
 }
+
 
 
  std::map<KEY_t, VAL_t> Run::getMap() {
@@ -267,7 +277,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     {
-        std::shared_lock<std::shared_mutex> lock(fileReadMutex);
+        // std::shared_lock<std::shared_mutex> lock(fileMutex);
         // Open the file descriptor
         int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
         kvPair kv;
@@ -355,7 +365,7 @@ void Run::populateBloomFilter() {
         return;
     }
     {
-        std::shared_lock<std::shared_mutex> lock(fileReadMutex);
+        // std::shared_lock<std::shared_mutex> lock(fileMutex);
         int localFd = openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
         // Read all the key-value pairs from the Run file and add the keys to the bloom filter
         kvPair kv;

@@ -465,6 +465,8 @@ int main(int argc, char **argv) {
     bool verbose = DEFAULT_VERBOSE_LEVEL;
     int numThreads = DEFAULT_NUM_THREADS;
     bool concurrentMemtable = DEFAULT_CONCURRENT_MEMTABLE;
+    int verboseLevel = BENCHMARK_REPORT_FREQUENCY;
+
 
     // Parse command line arguments
     while ((opt = getopt(argc, argv, "e:n:f:l:p:t:hvc")) != -1) {
@@ -503,8 +505,12 @@ int main(int argc, char **argv) {
             break;
         case 'v':
             verbose = true;
-            // print "verbose is enabled"
-            SyncedCout() << "Verbose is enabled" << std::endl;
+            // Check if there is an argument after -v and if it is a number
+            if (optind < argc && isdigit(argv[optind][0])) {
+                verboseLevel = atoi(argv[optind]);
+                optind++; // Move to the next argument
+            }
+            SyncedCout() << "Verbose is enabled with level " << verboseLevel << std::endl;
             break;
         case 'c':
             concurrentMemtable = true;

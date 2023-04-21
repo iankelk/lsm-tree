@@ -11,6 +11,8 @@
 #include "utils.hpp"
 
 std::mutex mtx;
+std::mutex running_mtx;
+
 std::condition_variable cv;
 bool response_received = true;
 bool running = true;
@@ -28,6 +30,18 @@ bool is_stdin_connected_to_file() {
     }
     return S_ISREG(stdin_stat.st_mode);
 }
+
+
+bool get_running() {
+    std::unique_lock<std::mutex> lock(running_mtx);
+    return running;
+}
+
+void set_running(bool value) {
+    std::unique_lock<std::mutex> lock(running_mtx);
+    running = value;
+}
+
 
 void listenToServer(int client_socket, bool quiet) {
     char buffer[BUFFER_SIZE];
@@ -47,7 +61,7 @@ void listenToServer(int client_socket, bool quiet) {
         }
 
         // Check if the client is still running before printing the error message
-        if (n_read == -1 && running) {
+        if (n_read == -1 && get_running()) {
             SyncedCerr() << "Error reading response from server" << std::endl;
             close(client_socket);
             return;
@@ -89,7 +103,7 @@ void sendCommandsToServer(int client_socket, bool quiet, bool is_stdin_file) {
     while (true) {
         {
             std::unique_lock<std::mutex> lock(mtx);
-            if (!running) {
+            if (!get_running()) {
                 break;
             }
         }

@@ -13,6 +13,31 @@
 #include "utils.hpp"
 #include "idempotent_mutex.hpp"
 
+class SharedLockWrapper {
+public:
+    SharedLockWrapper(std::shared_mutex& mutex) : lock(mutex) {}
+    ~SharedLockWrapper() { lock.unlock(); }
+
+private:
+    std::shared_lock<std::shared_mutex> lock;
+};
+
+class SharedLockWrapperPtr {
+public:
+    explicit SharedLockWrapperPtr(std::shared_ptr<SharedLockWrapper> ptr) : ptr_(ptr) {}
+    
+    void reset() {
+        if (ptr_) {
+            ptr_.reset();
+        }
+    }
+    std::shared_ptr<SharedLockWrapper> getSharedPtr() const {
+        return ptr_;
+    }
+private:
+    std::shared_ptr<SharedLockWrapper> ptr_;
+};
+
 template <typename Mutex>
 bool is_mutex_locked(Mutex& mutex) {
     bool is_locked = !mutex.try_lock();
@@ -39,7 +64,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 }
 
 // Calculate whether an std::deque<Level>::iterator is pointing to the last level
-bool LSMTree::isLastLevel(std::deque<std::unique_ptr<Level>>::iterator it) {
+bool LSMTree::isLastLevel(std::deque<std::shared_ptr<Level>>::iterator it) {
     return (std::next(it) == levels.end());
 }
 
@@ -50,13 +75,16 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    // SyncedCout() << "Entering LSMTree::put Thread: " << std::this_thread::get_id() << std::endl;
     {
         std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
     bool compactionNeeded = false;
 
+    // SyncedCout() << "put trying to lock buffer Thread: " << std::this_thread::get_id() << std::endl;
     std::unique_lock<std::shared_mutex> lock(bufferMutex);
+    // SyncedCout() << "put locked buffer Thread: " << std::this_thread::get_id() << std::endl;
     if(buffer->put(key, val)) {
         return;
     }
@@ -67,23 +95,23 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     lock.unlock();
 
     // Lock the first level
+    // SyncedCout() << "put trying to lock first level Thread: " << std::this_thread::get_id() << std::endl;
     std::unique_lock<std::shared_mutex> firstLevelLock(levels.front()->levelMutex);
+    // SyncedCout() << "put locket first level Thread: " << std::this_thread::get_id() << std::endl;
 
-    {
-        if (!levels.front()->willBufferFit()) {
-            compactionNeeded = true;
-            std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
-            SyncedCout() << "moveRuns from put starting" << std::endl;
-            moveRuns(FIRST_LEVEL_NUM);
-            SyncedCout() << "moveRuns from put finished" << std::endl;
-        }
+    if (!levels.front()->willBufferFit()) {
+        compactionNeeded = true;
+        std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
+        // SyncedCout() << "moveRuns from put starting Thread: " << std::this_thread::get_id() << std::endl;
+        moveRuns(FIRST_LEVEL_NUM);
+        // SyncedCout() << "moveRuns from put finished Thread: " << std::this_thread::get_id() << std::endl;
     }
 
     // Create a new run and add a unique pointer to it to the first level
     levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
 
     {
-        std::unique_lock<std::shared_mutex> lock(levels.front()->runs.front()->fileReadMutex);
+        //std::unique_lock<std::shared_mutex> lock(levels.front()->runs.front()->fileMutex);
         // Flush the buffer to level 1
         for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
             levels.front()->runs.front()->put(it->first, it->second);
@@ -117,8 +145,8 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
 // Move runs until the first level has space. Precondition: the currentLevelNum is exclusively locked.
 void LSMTree::moveRuns(int currentLevelNum) {
-    std::deque<std::unique_ptr<Level>>::iterator it;
-    std::deque<std::unique_ptr<Level>>::iterator next;
+    std::deque<std::shared_ptr<Level>>::iterator it;
+    std::deque<std::shared_ptr<Level>>::iterator next;
 
     // Locks for the specific levels
     std::unique_lock<std::shared_mutex> nextLevelLock; // Lock for the next level
@@ -213,7 +241,7 @@ void LSMTree::executeCompactionPlan() {
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
-    SyncedCout() << "Compaction plan executed" << std::endl;
+    // SyncedCout() << "Compaction plan executed: Thread: " << std::this_thread::get_id() << std::endl;
 }
 
 std::vector<Level*> LSMTree::getLocalLevelsCopy() {
@@ -251,20 +279,22 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
             return val;
         }
     }
-    localLevelsCopy = getLocalLevelsCopy();
+    boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
 
     // If the key is not found in the buffer, search the levels
-    for (Level* level : localLevelsCopy) {
-        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
-        // Iterate through the runs in the level and check if the key is in the run
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            val = (*run)->get(key);
-            // If the key is found in the run, break from the inner loop
-            if (val != nullptr) {
-                break;
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        {
+            // Lock the level with a shared lock
+            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+            // Iterate through the runs in the level and check if the key is in the run
+            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+                val = (*run)->get(key);
+                // If the key is found in the run, break from the inner loop
+                if (val != nullptr) {
+                    break;
+                }
             }
         }
-        
         // If the key is found in any run within the level, break from the outer loop
         if (val != nullptr) {
             incrementGetHits();
@@ -280,6 +310,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
 }
 
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
+    // SyncedCout() << "Entering LSMTree::range: Thread: " << std::this_thread::get_id() << std::endl;
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
@@ -301,10 +332,10 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     int allPossibleKeys = end - start;
 
     std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
-    std::vector<Level*> localLevelsCopy;
-
     {
+        // SyncedCout() << "Locking bufferMutex in range for thread: " << std::this_thread::get_id() << std::endl; 
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        // SyncedCout() << "Locked bufferMutex in range for thread: " << std::this_thread::get_id() << std::endl;
         // Search the buffer for the key range and return the range map as a unique_ptr
         rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer->range(start, end));
     }
@@ -313,41 +344,38 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     if (rangeMap->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
         removeTombstones(rangeMap);
-        rangeHits++;
+        incrementRangeHits();
         return rangeMap;
     }
+    // SyncedCout() << "Locking levelsMutex in range for thread: " << std::this_thread::get_id() << std::endl;
+    boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+    // SyncedCout() << "Locked levelsMutex in range for thread: " << std::this_thread::get_id() << std::endl;
 
-    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
-
-    localLevelsCopy = getLocalLevelsCopy();
-
-    for (Level* level : localLevelsCopy) {
-        // Acquire the level lock before iterating over the runs
-        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            // Check to see that the run exists and initialized
-            if (*run == nullptr) {
-                SyncedCerr() << "LSMTree::range: Run is null" << std::endl;
-            }
-
-            // Enqueue task for searching in the run
-            futures.push_back(threadPool.enqueue([&, run] {
-                return (*run)->range(start, end);
-            }));
-        }
-    }
-
-    // Wait for all tasks to finish and aggregate the results
-    for (auto &future : futures) {
-        std::map<KEY_t, VAL_t> tempMap = future.get();
-        if (tempMap.size() != 0) {
-            for (const auto &kv : tempMap) {
-                rangeMap->try_emplace(kv.first, kv.second);
+    // If all of the keys are not found in the buffer, search the levels
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        {
+            // Lock the level with a shared lock
+            // SyncedCout() << "Locking levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
+            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+            // SyncedCout() << "Locked levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
+            // SyncedCout() << "Number of levels: " << levels.size() << " for thread: " << std::this_thread::get_id() << std::endl;
+            // Iterate through the runs in the level and check if the range is in the run
+            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+                std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
+                // If keys from the range are found in the run, add them to the range map
+                if (tempMap.size() != 0) {
+                    for (const auto &kv : tempMap) {
+                        // Only add the key/value pair if the key is not already in the range map
+                        rangeMap->try_emplace(kv.first, kv.second);
+                    }
+                } 
             }
         }
+        // If the range map has the size of the entire range, return the range
         if (rangeMap->size() == allPossibleKeys) {
             removeTombstones(rangeMap);
             incrementRangeHits();
+            SyncedCout() << "Leaving range with a full belly thread: " << std::this_thread::get_id() << std::endl;
             return rangeMap;
         }
     }
@@ -357,8 +385,54 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         incrementRangeHits();
     }
     removeTombstones(rangeMap);
+    // SyncedCout() << "LSMTree::Leaving put thread: " << std::this_thread::get_id() << std::endl;
     return rangeMap;
 }
+
+    // {
+    //     boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+
+    //     for (auto level = levels.begin(); level != levels.end(); level++) {
+    //         // Capture the current level's raw pointer by value
+    //         Level* levelPtr = level->get();
+    //         for (auto run = levelPtr->runs.begin(); run != levelPtr->runs.end(); run++) {
+    //             // Enqueue task for searching in the run
+    //             futures.push_back(threadPool.enqueue([this, levelPtr, run, start, end] {
+    //                 // Create a new shared lock for the task using levelPtr
+    //                 std::shared_lock<std::shared_mutex> levelLock(levelPtr->levelMutex);
+
+    //                 // Now each task also has the lock on the levelsMutex
+    //                 boost::shared_lock<boost::upgrade_mutex> levelsLock(this->levelsMutex);
+
+    //                 return (*run)->range(start, end);
+    //             }));
+
+    //         }
+    //     }
+    // }
+
+    // Wait for all tasks to finish and aggregate the results
+//     for (auto &future : futures) {
+//         std::map<KEY_t, VAL_t> tempMap = future.get();
+//         if (tempMap.size() != 0) {
+//             for (const auto &kv : tempMap) {
+//                 rangeMap->try_emplace(kv.first, kv.second);
+//             }
+//         }
+//         if (rangeMap->size() == allPossibleKeys) {
+//             removeTombstones(rangeMap);
+//             incrementRangeHits();
+//             return rangeMap;
+//         }
+//     }
+//     if (rangeMap->size() == 0) {
+//         incrementRangeMisses();
+//     } else {
+//         incrementRangeHits();
+//     }
+//     removeTombstones(rangeMap);
+//     return rangeMap;
+// }
 
 
 
@@ -466,6 +540,8 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
         char command_code;
         line_ss >> command_code;
 
+        std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
+
         switch (command_code) {
             case 'p': {
                 KEY_t key;
@@ -490,7 +566,9 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                range(start, end);
+                rangePtr = range(start, end);
+                SyncedCout() << rangePtr->size() << std::endl;
+
                 break;
             }
             default: {
@@ -558,11 +636,12 @@ int LSMTree::countLogicalPairs() {
     std::set<KEY_t> keys;
     // Create a pointer to a map of key/value pairs
     std::map<KEY_t, VAL_t> kvMap;
-    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
 
-    for (Level* level : localLevelsCopy) {
-        std::shared_lock<std::shared_mutex> levelLock(level->levelMutex);
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+    boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+
+    for (auto level = levels.begin(); level != levels.end(); level++) {
+        std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
             // Get the map of key/value pairs from the run
             kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
@@ -577,6 +656,8 @@ int LSMTree::countLogicalPairs() {
             }
         }  
     }
+
+
     std::map<KEY_t, VAL_t> bufferContents;
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);

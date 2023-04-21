@@ -31,7 +31,8 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
     std::string getRunFilePath() { return runFilePath; }
-    mutable std::shared_mutex fileReadMutex;
+    mutable std::shared_mutex fileMutex;
+    // mutable std::shared_mutex fileWriteMutex;
 
 private:
     static thread_local int localFd;
