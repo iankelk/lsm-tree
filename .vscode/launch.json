@@ -11,7 +11,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/bin/server",
         //"args": ["-n", "128", "-f", "2", "-l", "LAZY_LEVELED", "-e", "0.00001", "-p", "1255", "-v"],
-        "args": ["-n", "1", "-f", "2", "-l", "TIERED", "-e", "0.01", "-p", "1250", "-v", "-c"],
+        "args": ["-n", "1", "-f", "2", "-l", "LEVELED", "-e", "0.01", "-p", "1250", "-v", "-c"],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],

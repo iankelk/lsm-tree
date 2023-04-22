@@ -87,6 +87,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     if(buffer->put(key, val)) {
         return;
     }
+
     // Get a map of the buffer
     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
     size_t bufferMaxKvPairs = buffer->getMaxKvPairs();
@@ -103,30 +104,32 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // SyncedCout() << "moveRuns from put starting Thread: " << std::this_thread::get_id() << std::endl;
         moveRuns(FIRST_LEVEL_NUM);
         // SyncedCout() << "moveRuns from put finished Thread: " << std::this_thread::get_id() << std::endl;
+    } else if (levels.front()->runs.size() > 0) {
+        if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+            compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
+        }
     }
-
     // Create a new run and add a unique pointer to it to the first level
     levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
-
-    {
-        //std::unique_lock<std::shared_mutex> lock(levels.front()->runs.front()->fileMutex);
-        // Flush the buffer to level 1
-        for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-            levels.front()->runs.front()->put(it->first, it->second);
-        }
-        // Close the run's file
-        levels.front()->runs.front()->closeFile();
+    // Flush the buffer to level 1
+    for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+        levels.front()->runs.front()->put(it->first, it->second);
     }
+    // Close the run's file
+    levels.front()->runs.front()->closeFile();
 
     if (getCompactionPlanSize() > 0) {
         // Create a vector to store the upgrade locks
         std::vector<std::unique_lock<std::shared_mutex>> compactionLocks;
-        // reserve space for the locks
-        compactionLocks.reserve(getCompactionPlanSize());
-        // Lock the levels if they're not set to COMPACTION_PLAN_NOT_SET.
+        // reserve space for the locks. We don't need to reserve space for the first level because it's already locked.
+        compactionLocks.reserve(getCompactionPlanSize() - 1);
+        // Lock the levels in the compaction plan
         for (auto &entry : compactionPlan) {
-            // Lock the levels in the compaction plan
             int levelNumber = entry.first;
+            if (levelNumber == FIRST_LEVEL_NUM) {
+                continue;
+            }
             compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
         }
         executeCompactionPlan();
