@@ -69,6 +69,7 @@ private:
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
     size_t getCompactionPlanSize();
+    void clearCompactionPlan();
 
     size_t bfFalsePositives = 0;
     size_t bfTruePositives = 0;

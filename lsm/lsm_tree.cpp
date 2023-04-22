@@ -80,7 +80,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
-    bool compactionNeeded = false;
 
     // SyncedCout() << "put trying to lock buffer Thread: " << std::this_thread::get_id() << std::endl;
     std::unique_lock<std::shared_mutex> lock(bufferMutex);
@@ -100,7 +99,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // SyncedCout() << "put locket first level Thread: " << std::this_thread::get_id() << std::endl;
 
     if (!levels.front()->willBufferFit()) {
-        compactionNeeded = true;
         std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
         // SyncedCout() << "moveRuns from put starting Thread: " << std::this_thread::get_id() << std::endl;
         moveRuns(FIRST_LEVEL_NUM);
@@ -120,7 +118,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         levels.front()->runs.front()->closeFile();
     }
 
-    if (compactionNeeded) {
+    if (getCompactionPlanSize() > 0) {
         // Create a vector to store the upgrade locks
         std::vector<std::unique_lock<std::shared_mutex>> compactionLocks;
         // reserve space for the locks
@@ -128,18 +126,11 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // Lock the levels if they're not set to COMPACTION_PLAN_NOT_SET.
         for (auto &entry : compactionPlan) {
             // Lock the levels in the compaction plan
-            if (entry.first != COMPACTION_PLAN_NOT_SET) {
-                int levelNumber = entry.first;
-                compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
-            }
+            int levelNumber = entry.first;
+            compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
         }
         executeCompactionPlan();
-        std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
-        for (auto &entry : compactionPlan) {
-            if (entry.second.first != COMPACTION_PLAN_NOT_SET) {
-                entry.second = std::make_pair<int, int>(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
-            }
-        }
+        clearCompactionPlan();
     }
 }
 
@@ -228,16 +219,14 @@ void LSMTree::executeCompactionPlan() {
     compactResults.reserve(compactionPlan.size());
 
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-        if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-            int first = segmentBounds.first;
-            int second = segmentBounds.second;
-            auto &level = levels[levelNum - 1];
-            auto task = [this, &level, first, second] {
-                auto compactedRun = level->compactSegment(bfErrorRate, {first, second}, isLastLevel(level->getLevelNum()));
-                level->replaceSegment({first, second}, std::move(compactedRun));
-            };
-            compactResults.push_back(threadPool.enqueue(task));
-        }
+        int first = segmentBounds.first;
+        int second = segmentBounds.second;
+        auto &level = levels[levelNum - 1];
+        auto task = [this, &level, first, second] {
+            auto compactedRun = level->compactSegment(bfErrorRate, {first, second}, isLastLevel(level->getLevelNum()));
+            level->replaceSegment({first, second}, std::move(compactedRun));
+        };
+        compactResults.push_back(threadPool.enqueue(task));
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
@@ -1175,12 +1164,10 @@ void LSMTree::incrementRangeHits() {
 
 size_t LSMTree::getCompactionPlanSize() {
     std::shared_lock<std::shared_mutex> lock(compactionPlanMutex);
-    size_t compactPlanSize = 0;
-    for (auto &entry : compactionPlan) {
-            // Lock the levels in the compaction plan
-            if (entry.first != COMPACTION_PLAN_NOT_SET) {
-                compactPlanSize++;
-            }
-        }
-    return compactPlanSize;
+    return compactionPlan.size();
+}
+
+void LSMTree::clearCompactionPlan() {
+    std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+    compactionPlan.clear();
 }

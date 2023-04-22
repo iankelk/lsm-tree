@@ -218,7 +218,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     }
 
     // Use binary search to identify the starting fence pointer index where the start key might be located.
-    auto iterStart = std::lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
+    auto iterStart = std::upper_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
     searchPageStart = std::distance(fencePointersCopy.begin(), iterStart) - 1;
 
     {   
