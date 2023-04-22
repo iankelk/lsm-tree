@@ -233,7 +233,6 @@ void LSMTree::executeCompactionPlan() {
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
-    // SyncedCout() << "Compaction plan executed: Thread: " << std::this_thread::get_id() << std::endl;
 }
 
 std::vector<Level*> LSMTree::getLocalLevelsCopy() {
@@ -342,32 +341,34 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
     // SyncedCout() << "Locking levelsMutex in range for thread: " << std::this_thread::get_id() << std::endl;
     boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
     // SyncedCout() << "Locked levelsMutex in range for thread: " << std::this_thread::get_id() << std::endl;
+    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
     // If all of the keys are not found in the buffer, search the levels
     for (auto level = levels.begin(); level != levels.end(); level++) {
-        {
-            // Lock the level with a shared lock
-            // SyncedCout() << "Locking levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
-            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
-            // SyncedCout() << "Locked levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
-            // SyncedCout() << "Number of levels: " << levels.size() << " for thread: " << std::this_thread::get_id() << std::endl;
-            // Iterate through the runs in the level and check if the range is in the run
-            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-                std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
-                // If keys from the range are found in the run, add them to the range map
-                if (tempMap.size() != 0) {
-                    for (const auto &kv : tempMap) {
-                        // Only add the key/value pair if the key is not already in the range map
-                        rangeMap->try_emplace(kv.first, kv.second);
-                    }
-                } 
+        // Lock the level with a shared lock
+        std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
+        futures.reserve((*level)->runs.size());
+
+        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+            // Enqueue task for searching in the run
+            futures.push_back(threadPool.enqueue([&, run] {
+                return (*run)->range(start, end);
+            }));
+        }
+    }
+
+    // Wait for all tasks to finish and aggregate the results
+    for (auto &future : futures) {
+        std::map<KEY_t, VAL_t> tempMap = future.get();
+        if (tempMap.size() != 0) {
+            for (const auto &kv : tempMap) {
+            	// Only add the key-value pair if the key is not already in the range map
+                rangeMap->try_emplace(kv.first, kv.second);
             }
         }
-        // If the range map has the size of the entire range, return the range
         if (rangeMap->size() == allPossibleKeys) {
             removeTombstones(rangeMap);
             incrementRangeHits();
-            SyncedCout() << "Leaving range with a full belly thread: " << std::this_thread::get_id() << std::endl;
             return rangeMap;
         }
     }
@@ -377,9 +378,83 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         incrementRangeHits();
     }
     removeTombstones(rangeMap);
-    // SyncedCout() << "LSMTree::Leaving put thread: " << std::this_thread::get_id() << std::endl;
     return rangeMap;
 }
+
+
+    // If all of the keys are not found in the buffer, search the levels
+    // for (auto level = levels.begin(); level != levels.end(); level++) {
+    //     {
+    //         // Lock the level with a shared lock
+    //         // SyncedCout() << "Locking levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
+    //         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+    //         // SyncedCout() << "Locked levelMutex in range for level " << (*level)->getLevelNum() << " for thread: " << std::this_thread::get_id() << std::endl;
+    //         // SyncedCout() << "Number of levels: " << levels.size() << " for thread: " << std::this_thread::get_id() << std::endl;
+    //         // Iterate through the runs in the level and check if the range is in the run
+    //         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+    //             std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
+    //             // If keys from the range are found in the run, add them to the range map
+    //             if (tempMap.size() != 0) {
+    //                 for (const auto &kv : tempMap) {
+    //                     // Only add the key/value pair if the key is not already in the range map
+    //                     rangeMap->try_emplace(kv.first, kv.second);
+    //                 }
+    //             } 
+    //         }
+    //     }
+    //     // If the range map has the size of the entire range, return the range
+    //     if (rangeMap->size() == allPossibleKeys) {
+    //         removeTombstones(rangeMap);
+    //         incrementRangeHits();
+    //         return rangeMap;
+    //     }
+    // }
+//     std::vector<std::future<void>> rangeResults;
+
+//     // If all of the keys are not found in the buffer, search the levels
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         // Lock the level with a shared lock
+//         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+//         rangeResults.reserve((*level)->runs.size());
+//         // Iterate through the runs in the level and check if the range is in the run
+//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+//            // auto task = [&rangeMap, start, end, run] {
+//              auto task = [&, run] {
+//                 std::map<KEY_t, VAL_t> tempMap = (*run)->range(start, end);
+//                 // If keys from the range are found in the run, add them to the range map
+//                 if (tempMap.size() != 0) {
+//                     for (const auto &kv : tempMap) {
+//                         // Only add the key/value pair if the key is not already in the range map
+//                         rangeMap->try_emplace(kv.first, kv.second);
+//                     }
+//                 }
+//             };
+
+//             rangeResults.push_back(threadPool.enqueue(task));
+//         }
+
+//         // Wait for all tasks in the current level to complete
+//         for (auto &result : rangeResults) {
+//             result.get();
+//         }
+//         rangeResults.clear();
+
+//         if (rangeMap->size() == allPossibleKeys) {
+//             removeTombstones(rangeMap);
+//             incrementRangeHits();
+//             return rangeMap;
+//         }
+//     }
+
+//     if (rangeMap->size() == 0) {
+//         incrementRangeMisses();
+//     } else {
+//         incrementRangeHits();
+//     }
+//     removeTombstones(rangeMap);
+//     // SyncedCout() << "LSMTree::Leaving put thread: " << std::this_thread::get_id() << std::endl;
+//     return rangeMap;
+// }
 
     // {
     //     boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
