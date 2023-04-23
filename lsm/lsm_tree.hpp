@@ -50,7 +50,7 @@ private:
     double bfErrorRate;
     int fanout;
     Level::Policy levelPolicy;
-    size_t countLogicalPairs();
+    std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();
     std::vector<std::shared_ptr<Level>> levels;

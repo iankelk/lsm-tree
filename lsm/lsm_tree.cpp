@@ -465,22 +465,22 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-size_t LSMTree::countLogicalPairs() {
+std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
-
-    boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
-    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-        return numLogicalPairs;
-    }
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
         bufferContents = buffer.getMap();
+    }
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+    
+    boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
+    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+        return std::make_tuple(numLogicalPairs, buffer.getMap(), getLocalLevelsCopy());
     }
 
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
     
-    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
@@ -525,7 +525,7 @@ size_t LSMTree::countLogicalPairs() {
         numLogicalPairs = keys.size();
     }
     // Return the size of the set
-    return keys.size();
+    return std::make_tuple(keys.size(), buffer.getMap(), getLocalLevelsCopy());
 }
 
 // Print out a summary of the tree.
@@ -613,30 +613,20 @@ size_t LSMTree::countLogicalPairs() {
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+    size_t numLogicalPairs;
     std::map<KEY_t, VAL_t> bufferContents;
+    std::vector<Level*> localLevelsCopy;
+
+    // Call countLogicalPairs and unpack the returned tuple
+    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
 
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
-    std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
+    std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
     std::string treeDump = "";   // Create a string to hold the dump of the tree
 
-    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-    {
-        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        bufferContents = buffer.getMap();
-    }
-
-    // Iterate through the levels and add the number of keys in each level to the levelKeys string
-    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
-        levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
-    }
-    // Remove the last comma and space from the levelKeys string
-    levelKeys.resize(levelKeys.size() - 2);
-    levelKeys += "\n";
-
     // Iterate through the buffer and add the key/value pairs to the treeDump string
-    std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     size_t pairsCounter = 0;
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
@@ -653,7 +643,9 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
         treeDump += "\n\n";
     }
     // Iterate through the levels and add the key/value pairs to the treeDump string
-    for (auto level = levels.begin(); level != levels.end(); level++) {
+    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+        std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+        levelKeys += "LVL" + std::to_string((*level)->getLevelNum()) + ": " + std::to_string((*level)->getKvPairs()) + ", ";
         pairsCounter = 0;
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
@@ -674,6 +666,11 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
             treeDump += "\n\n";
         }
     }
+
+    // Remove the last comma and space from the levelKeys string
+    levelKeys.resize(levelKeys.size() - 2);
+    levelKeys += "\n";
+
     treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
     return output;
@@ -682,9 +679,15 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.
 std::string LSMTree::printTree() {
+    size_t numLogicalPairs;
+    std::map<KEY_t, VAL_t> bufferContents;
+    std::vector<Level*> localLevelsCopy;
+
+    // Call countLogicalPairs and unpack the returned tuple
+    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
     std::string output = "";
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    output += "Number of logical key-value pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
+    output += "Number of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
     output += "Bloom filter false positive rate: " + bfStatus + "\n";
     output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
     output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
