@@ -31,7 +31,6 @@ bool is_stdin_connected_to_file() {
     return S_ISREG(stdin_stat.st_mode);
 }
 
-
 bool get_running() {
     std::unique_lock<std::mutex> lock(running_mtx);
     return running;
@@ -95,7 +94,6 @@ void listenToServer(int client_socket, bool quiet) {
         command_cv.notify_one();
     }
 }
-
 
 void sendCommandsToServer(int client_socket, bool quiet, bool is_stdin_file) {
     std::string command_str;
