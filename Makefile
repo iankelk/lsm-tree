@@ -3,15 +3,11 @@ SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level
 # Ensure bin directory exists
 $(shell mkdir -p bin)
 
-# # Add the TBB library path and include path
-# LIB_PATH = -L/path/to/tbb/lib
-# INC_PATH = -I/path/to/tbb/include
-
 # Link the TBB library
-LDLIBS = -ltbb
+LDLIBS = -ltbb -lboost_thread-mt -lboost_system-mt
 
-CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include
-LDFLAGS = -L/usr/local/lib $(LDLIBS)
+CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
+LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
 
 all: server client
 
@@ -21,10 +17,10 @@ build:
 	g++ lsm/main.cpp $(SRCS) -o bin/lsm $(CXXFLAGS) $(LDFLAGS)
 
 server:
-	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
 
 client:
-	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
 
 fast_server:
 	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS)
@@ -45,3 +41,16 @@ generator:
 
 .PHONY: clean
 	rm bin/generator bin/lsm bin/test
+
+
+# server:
+# 	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
+
+# client:
+# 	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
+
+# server:
+# 	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib
+
+# client:
+# 	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client -std=c++17 -I./lib -I/usr/local/include -L/usr/local/lib

@@ -50,7 +50,7 @@ void Memtable::clear() {
 }
 
 // Return the number of key-value pairs in the memtable
-int Memtable::size() const {
+size_t Memtable::size() const {
     return table_.size();
 }
 // Return a map of all key-value pairs in the memtable

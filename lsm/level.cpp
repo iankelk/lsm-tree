@@ -1,3 +1,4 @@
+#include <thread>
 #include <iostream>
 #include "level.hpp"
 #include "run.hpp"
@@ -6,8 +7,10 @@
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> runPtr) {
+    // boost::unique_lock<boost::upgrade_mutex> lock(levelMutex);
     // Check if there is enough space in the level to add the run
     if (kvPairs + runPtr->getMaxKvPairs() > maxKvPairs) {
+        printTrace();
         die("Level::put: Attempted to add run to level with insufficient space");
     }
     runs.emplace_front(std::move(runPtr));
@@ -15,8 +18,6 @@ void Level::put(std::unique_ptr<Run> runPtr) {
     kvPairs += runs.front()->getMaxKvPairs(); 
 }
 
-// Merge the key-value pairs from the segment runs, eliminating duplicate keys and reducing the overall size of the level.
-// The compacted data is then stored in a new run, which replaces the original runs in the segment.
 std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
     std::map<KEY_t, VAL_t> mergedMap;
     size_t newMaxKvPairs = 0;
@@ -47,11 +48,11 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    //lsmTree->incrementIoCount();
     lsmTree->incrementLevelIoCountAndTime(levelNum, duration);
 
     return compactedRun;
 }
+
 
 void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {
     // Close and delete files for old runs in the segment

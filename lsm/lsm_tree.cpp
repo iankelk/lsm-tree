@@ -5,7 +5,10 @@
 #include <unistd.h>
 #include <numeric>
 #include <shared_mutex>
-
+#include <algorithm>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/lock_algorithms.hpp>
 #include "lsm_tree.hpp"
 #include "run.hpp"
 #include "utils.hpp"
@@ -15,210 +18,292 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
     buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads)
 {
     // Create the first level
-    levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
+    levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
+    // levels.emplace_back(buffer->getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
     levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
 
-// Calculate whether an std::vector<Level>::iterator is pointing to the last level
-bool LSMTree::isLastLevel(std::vector<Level>::iterator it) {
+// Calculate whether an std::deque<Level>::iterator is pointing to the last level
+bool LSMTree::isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it) {
     return (it + 1 == levels.end());
 }
+
 bool LSMTree::isLastLevel(int levelNum) {
     return (levelNum == levels.size() - 1);
 }
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
-    numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
-    // Try to insert the key-value pair into the buffer. If it succeeds, return.
-    if(buffer.put(key, val)) {
-        return;
-    }
+    size_t bufferMaxKvPairs;
+    std::map<KEY_t, VAL_t> bufferContents;
 
-    // Buffer is full, so check to see if the first level has space for the buffer. If not, merge the levels recursively
-    if (!levels.front().willBufferFit()) {
-        mergeLevels(FIRST_LEVEL_NUM);
+    {
+        boost::unique_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
+        numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
+    {
+        std::unique_lock<std::shared_mutex> lock(bufferMutex);
+        if(buffer.put(key, val)) {
+            return;
+        }
+        // The buffer is full, so do all buffer operations while protected by the bufferMutex
+        bufferContents = buffer.getMap();
+        bufferMaxKvPairs = buffer.getMaxKvPairs();
+        buffer.clear();
+        buffer.put(key, val);
+    }
+    // Lock the first level
+    std::unique_lock<std::shared_mutex> firstLevelLock(levels.front()->levelMutex);
 
-    // Start the timer for the query
+    if (!levels.front()->willBufferFit()) {
+        std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
+        moveRuns(FIRST_LEVEL_NUM);
+    } else if (levels.front()->runs.size() > 0) {
+        if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+            compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
+        }
+    }
     auto start_time = std::chrono::high_resolution_clock::now();
-    
+
     // Create a new run and add a unique pointer to it to the first level
-    levels.front().put(std::make_unique<Run>(buffer.getMaxKvPairs(), bfErrorRate, true, 1, this));
-
+    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
     // Flush the buffer to level 1
-    std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-        levels.front().runs.front()->put(it->first, it->second);
+        levels.front()->runs.front()->put(it->first, it->second);
     }
-
     // Close the run's file
-    levels.front().runs.front()->closeFile();
+    levels.front()->runs.front()->closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
     incrementLevelIoCountAndTime(FIRST_LEVEL_NUM, duration);
 
-    // Clear the buffer and add the key-value pair to it
-    buffer.clear();
-    buffer.put(key, val);
+    if (getCompactionPlanSize() > 0) {
+        // Create a vector to store the upgrade locks
+        std::vector<std::unique_lock<std::shared_mutex>> compactionLocks;
+        // reserve space for the locks. We don't need to reserve space for the first level because it's already locked.
+        compactionLocks.reserve(getCompactionPlanSize() - 1);
+        // Lock the levels in the compaction plan
+        for (auto &entry : compactionPlan) {
+            int levelNumber = entry.first;
+            if (levelNumber == FIRST_LEVEL_NUM) {
+                continue;
+            }
+            compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
+        }
+        executeCompactionPlan();
+        clearCompactionPlan();
+    }
 }
 
+// Move runs until the first level has space. Precondition: the currentLevelNum is exclusively locked.
 void LSMTree::moveRuns(int currentLevelNum) {
-    std::vector<Level>::iterator it;
-    std::vector<Level>::iterator next;
+    std::vector<std::shared_ptr<Level>>::iterator it;
+    std::vector<std::shared_ptr<Level>>::iterator next;
 
+    // Locks for the specific levels
+    std::unique_lock<std::shared_mutex> nextLevelLock; // Lock for the next level
+
+    // Locks for the level vector
+    boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock;
+
+    if (currentLevelNum == FIRST_LEVEL_NUM) {
+        boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex); // Lock for reading the vector. Only lock it once.
+    }
     it = levels.begin() + currentLevelNum - 1;
 
-    if (it->willLowerLevelFit()) {
+    // If the current level has space, we're done
+    if ((*it)->willLowerLevelFit()) {
         return;
+    }
+
+    // If currentLevelNum is not the last level
+    if (it + 1 != levels.end()) {
+        nextLevelLock = std::unique_lock<std::shared_mutex>(levels[currentLevelNum]->levelMutex);
+        next = it + 1;
+        if (!(*next)->willLowerLevelFit()) {
+            moveRuns(currentLevelNum + 1);
+            it = levels.begin() + currentLevelNum - 1;
+            next = levels.begin() + currentLevelNum;
+        }
     } else {
-        if (it + 1 == levels.end()) {
-            levels.emplace_back(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+        // Upgrade the levelVectorLock to exclusive using boost::upgrade_to_unique_lock
+        boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLevelVectorLock(levelVectorLock);
+        // Create a new level
+        std::unique_ptr<Level> newLevel;
+        {
+            std::shared_lock<std::shared_mutex> lock(bufferMutex);
+            newLevel = std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+        }
+        nextLevelLock = std::unique_lock<std::shared_mutex>(newLevel->levelMutex);
+        levels.push_back(std::move(newLevel));
+        {
+            std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
             levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
             it = levels.end() - 2;
             next = levels.end() - 1;
-        } else {
-            next = it + 1;
-            if (!next->willLowerLevelFit()) {
-                moveRuns(currentLevelNum + 1);
-                it = levels.begin() + currentLevelNum - 1;
-                next = levels.begin() + currentLevelNum;
-            }
         }
-    }
+    } 
+
     if (levelPolicy != Level::PARTIAL) { // TIERED, LAZY_LEVELED, LEVELED move the whole level to the next level
-        int numRuns = it->runs.size();
+        int numRuns = (*it)->runs.size();
         if (levelPolicy == Level::TIERED || (levelPolicy == Level::LAZY_LEVELED && !isLastLevel(next))) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, numRuns - 1);
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+            compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, numRuns - 1);
         } else if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(next))) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, next->runs.size() + numRuns - 1);
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+            compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, (*next)->runs.size() + numRuns - 1);
         } 
-        next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin()), std::make_move_iterator(it->runs.end()));
-        it->runs.clear();
-        it->setKvPairs(0);
+        (*next)->runs.insert((*next)->runs.begin(), std::make_move_iterator((*it)->runs.begin()), std::make_move_iterator((*it)->runs.end()));
+        (*it)->runs.clear();
+        (*it)->setKvPairs(0);
     } else { // PARTIAL moves the best segment of 2 runs to the next level
-        auto segmentBounds = it->findBestSegmentToCompact();
-        if (!it->willLowerLevelFit()) {
-            compactionPlan[next->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
-            next->runs.insert(next->runs.begin(), std::make_move_iterator(it->runs.begin() + segmentBounds.first), std::make_move_iterator(it->runs.begin() + segmentBounds.second + 1));
-            it->runs.erase(it->runs.begin() + segmentBounds.first, it->runs.begin() + segmentBounds.second + 1);
-            it->setKvPairs(it->addUpKVPairsInLevel());
-            next->setKvPairs(next->addUpKVPairsInLevel());
+        auto segmentBounds = (*it)->findBestSegmentToCompact();
+        if (!(*it)->willLowerLevelFit()) {
+            {
+                std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+                compactionPlan[(*next)->getLevelNum()] = std::make_pair<int, int>(0, segmentBounds.second - segmentBounds.first);
+            }
+            (*next)->runs.insert((*next)->runs.begin(), std::make_move_iterator((*it)->runs.begin() + segmentBounds.first), std::make_move_iterator((*it)->runs.begin() + segmentBounds.second + 1));
+            (*it)->runs.erase((*it)->runs.begin() + segmentBounds.first, (*it)->runs.begin() + segmentBounds.second + 1);
+            (*it)->setKvPairs((*it)->addUpKVPairsInLevel());
+            (*next)->setKvPairs((*next)->addUpKVPairsInLevel());
         } else {
+            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
             compactionPlan[currentLevelNum] = segmentBounds;
-        }
+        } 
     }
 }
 
 void LSMTree::executeCompactionPlan() {
+    std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
     std::vector<std::future<void>> compactResults;
     compactResults.reserve(compactionPlan.size());
 
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-        if (segmentBounds.first != COMPACTION_PLAN_NOT_SET) {
-            int first = segmentBounds.first;
-            int second = segmentBounds.second;
-            auto &level = levels[levelNum - 1];
-            auto task = [this, &level, first, second] {
-                auto compactedRun = level.compactSegment(bfErrorRate, {first, second}, isLastLevel(level.getLevelNum()));
-                level.replaceSegment({first, second}, std::move(compactedRun));
-            };
-            compactResults.push_back(threadPool.enqueue(task));
-        }
+        int first = segmentBounds.first;
+        int second = segmentBounds.second;
+        auto &level = levels[levelNum - 1];
+        auto task = [this, &level, first, second] {
+            auto compactedRun = level->compactSegment(bfErrorRate, {first, second}, isLastLevel(level->getLevelNum()));
+            level->replaceSegment({first, second}, std::move(compactedRun));
+        };
+        compactResults.push_back(threadPool.enqueue(task));
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
 }
 
-void LSMTree::mergeLevels(int currentLevelNum) {
-    moveRuns(currentLevelNum);
-    executeCompactionPlan();
-    compactionPlan.clear();
-    for (const auto &level : levels) {
-        compactionPlan[level.getLevelNum()] = std::make_pair(COMPACTION_PLAN_NOT_SET, COMPACTION_PLAN_NOT_SET);
+std::vector<Level*> LSMTree::getLocalLevelsCopy() {
+    std::vector<Level*> localLevelsCopy;
+    {
+        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+        // Create a copy of raw pointers to the levels
+        localLevelsCopy.resize(levels.size());
+        std::transform(levels.begin(), levels.end(), localLevelsCopy.begin(), [](const auto &level) {
+            return level.get();
+        });
     }
+    return localLevelsCopy;
 }
 
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
+    // std::vector<Level*> localLevelsCopy;
+
     // if key is not within the range of the available keys, print to the server stderr and skip it
     if (key < KEY_MIN || key > KEY_MAX) {
-        std::cerr << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
+        SyncedCerr() << "LSMTree::get: Key " << key << " is not within the range of available keys. Skipping..." << std::endl;
         return nullptr;
     }
-    
-    // Search the buffer for the key
-    val = buffer.get(key);
-    // If the key is found in the buffer, return the value
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        val = buffer.get(key);
+    }
     if (val != nullptr) {
-        getHits++;
-        // Check that val is not the TOMBSTONE
+        incrementGetHits();
         if (*val == TOMBSTONE) {
             return nullptr;
         }
         return val;
     }
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
 
     // If the key is not found in the buffer, search the levels
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        // Iterate through the runs in the level and check if the key is in the run
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            val = (*run)->get(key);
-            // If the key is found in the run, return the value
-            if (val != nullptr) {
-                getHits++;
-                // Check that val is not the TOMBSTONE
-                if (*val == TOMBSTONE) {
-                    return nullptr;
+    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+        {
+            // Lock the level with a shared lock
+            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+            // Iterate through the runs in the level and check if the key is in the run
+            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+                val = (*run)->get(key);
+                // If the key is found in the run, break from the inner loop
+                if (val != nullptr) {
+                    break;
                 }
-                return val;
             }
         }
+        // If the key is found in any run within the level, break from the outer loop
+        if (val != nullptr) {
+            incrementGetHits();
+            // Check that val is not the TOMBSTONE
+            if (*val == TOMBSTONE) {
+                return nullptr;
+            }
+            return val;
+        }
     }
-    getMisses++;
+    incrementGetMisses();
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
-
-// Given 2 keys, get a map all the keys from start inclusive to end exclusive or nullptr if range is empty.
+// Returns a map of all the key-value pairs in the range [start, end] or an empty map if the range is invalid
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
+
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
-        std::cerr << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
-        return nullptr;
+        SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
+        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
-        std::cerr << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;    
+        SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;
         KEY_t temp = start;
         start = end;
         end = temp;
     }
 
-    // If the start key is equal to the end key, return nullptr
+    // If the start key is equal to the end key, return an empty map
     if (start == end) {
-        return nullptr;
+        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
     }
-
     int allPossibleKeys = end - start;
 
-    // Search the buffer for the key range and return the range map as a unique_ptr
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        // Search the buffer for the key range and return the range map as a unique_ptr
+        rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
+    }
 
     // If the range has the size of the entire range, return the range
     if (rangeMap->size() == allPossibleKeys) {
         // Remove all the TOMBSTONES from the range map
         removeTombstones(rangeMap);
-        rangeHits++;
+        incrementRangeHits();
         return rangeMap;
     }
-
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+    // If all of the keys are not found in the buffer, search the levels
+    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+        // Lock the level with a shared lock
+        std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
+        futures.reserve((*level)->runs.size());
+
+        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
             // Enqueue task for searching in the run
             futures.push_back(threadPool.enqueue([&, run] {
                 return (*run)->range(start, end);
@@ -231,19 +316,20 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         std::map<KEY_t, VAL_t> tempMap = future.get();
         if (tempMap.size() != 0) {
             for (const auto &kv : tempMap) {
+            	// Only add the key-value pair if the key is not already in the range map
                 rangeMap->try_emplace(kv.first, kv.second);
             }
         }
         if (rangeMap->size() == allPossibleKeys) {
             removeTombstones(rangeMap);
-            rangeHits++;
+            incrementRangeHits();
             return rangeMap;
         }
     }
     if (rangeMap->size() == 0) {
-        rangeMisses++;
+        incrementRangeMisses();
     } else {
-        rangeHits++;
+        incrementRangeHits();
     }
     removeTombstones(rangeMap);
     return rangeMap;
@@ -256,19 +342,19 @@ void LSMTree::del(KEY_t key) {
 
 // Print out getMisses and rangeMisses stats
 void LSMTree::printHitsMissesStats() {
-    std::cout << "getHits: " << getHits << std::endl;
-    std::cout << "getMisses: " << getMisses << std::endl;
-    std::cout << "rangeHits: " << rangeHits << std::endl;
-    std::cout << "rangeMisses: " << rangeMisses << std::endl;
+    SyncedCout() << "getHits: " << getGetHits() << std::endl;
+    SyncedCout() << "getMisses: " << getGetMisses() << std::endl;
+    SyncedCout() << "rangeHits: " << getRangeHits() << std::endl;
+    SyncedCout() << "rangeMisses: " << getRangeMisses() << std::endl;
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
-void LSMTree::benchmark(const std::string& filename, bool verbose) {
+void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verboseFrequency) {
     int count = 0;
     std::ifstream file(filename);
 
     if (!file) {
-        std::cerr << "Unable to open file " << filename << std::endl;
+        SyncedCerr() << "Unable to open file " << filename << std::endl;
         return;
     }
 
@@ -276,13 +362,15 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
     ss << file.rdbuf();
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    std::cout << "Benchmark: loaded \"" << filename << "\"" << std::endl;
+    SyncedCout() << "Benchmark: loaded \"" << filename << "\"" << std::endl;
 
     std::string line;
     while (std::getline(ss, line)) {
         std::stringstream line_ss(line);
         char command_code;
         line_ss >> command_code;
+
+        std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
 
         switch (command_code) {
             case 'p': {
@@ -308,29 +396,32 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                range(start, end);
+                rangePtr = range(start, end);
+                if (rangePtr->size() > 0) {
+                    SyncedCout() << rangePtr->size() << std::endl;
+                }
                 break;
             }
             default: {
-                std::cerr << "Invalid command code: " << command_code << std::endl;
+                SyncedCerr() << "Invalid command code: " << command_code << std::endl;
                 break;
             }
         }
 
         count++;
         if (verbose) {
-            if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
+            if (count % verboseFrequency == 0) {
                 auto end_time = std::chrono::high_resolution_clock::now();
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                std::cout << "Benchmark: " << count << " commands executed" << std::endl;
-                std::cout << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
+                SyncedCout() << "Benchmark: " << count << " commands executed" << std::endl;
+                SyncedCout() << "Benchmark: " << duration.count() << " microseconds elapsed" << std::endl;
             }
         }
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
+    SyncedCout() << "Benchmark: Workload " << filename << " file took " << duration.count() << " microseconds ("
             << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
@@ -342,14 +433,14 @@ void LSMTree::load(const std::string& filename) {
 
     // Check that the file exists
     if (!file) {
-        std::cerr << "Unable to open file " << filename << std::endl;
+        SyncedCerr() << "Unable to open file " << filename << std::endl;
         return;
     }
     // Read the file into the vector of kvPair structs.
     while (file.read((char*)&kv, sizeof(kvPair))) {
         kvPairs.push_back(kv);
     }
-    std::cout << "Loaded: " << filename << std::endl;
+    SyncedCout() << "Loaded: " << filename << std::endl;
     // Start measuring time. This way we only measure the time it takes put() to insert the key/value pairs
     auto start_time = std::chrono::high_resolution_clock::now();
     // Iterate through the vector and call put() on each key/value pair
@@ -359,39 +450,56 @@ void LSMTree::load(const std::string& filename) {
     // End measuring time, calculate the duration, and print it
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    std::cout << "Processing " << filename << " file took " << duration.count() << " microseconds ("
+    SyncedCout() << "Processing " << filename << " file took " << duration.count() << " microseconds ("
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-// Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
-// has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
-int LSMTree::countLogicalPairs() {
-    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-        return numLogicalPairs;
+std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLogicalPairs() {
+    std::map<KEY_t, VAL_t> bufferContents;
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        bufferContents = buffer.getMap();
     }
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+    
+    boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
+    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+        return std::make_tuple(numLogicalPairs, buffer.getMap(), getLocalLevelsCopy());
+    }
+
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
-    // Create a pointer to a map of key/value pairs
-    std::map<KEY_t, VAL_t> kvMap;
+    
+    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
-    for (auto level = levels.begin(); level != levels.end(); level++) {
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
-            // Get the map of key/value pairs from the run
-            kvMap = (*run)->getMap();
-            // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-            for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
-                if (it->second == TOMBSTONE) {
-                    if (keys.find(it->first) != keys.end()) {
-                        keys.erase(it->first);
-                    }
-                } else {
-                    keys.insert(it->first);
-                }
-            }
-        }  
+    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+        std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+        futures.reserve((*level)->runs.size());
+
+        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+            // Enqueue task for getting the map from the run
+            futures.push_back(threadPool.enqueue([&, run] {
+                return (*run)->getMap();
+            }));
+        }
     }
+
+    // Wait for all tasks to finish and aggregate the results
+    for (auto &future : futures) {
+        std::map<KEY_t, VAL_t> kvMap = future.get();
+        // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+        for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+            if (it->second == TOMBSTONE) {
+                if (keys.find(it->first) != keys.end()) {
+                    keys.erase(it->first);
+                }
+            } else {
+                keys.insert(it->first);
+            }
+        }
+    }
+
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-    std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (it->second == TOMBSTONE) {
             if (keys.find(it->first) != keys.end()) {
@@ -401,28 +509,30 @@ int LSMTree::countLogicalPairs() {
             keys.insert(it->first);
         }
     }
-    numLogicalPairs = keys.size();
+    {
+        boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(lock);
+        numLogicalPairs = keys.size();
+    }
     // Return the size of the set
-    return keys.size();
+    return std::make_tuple(keys.size(), buffer.getMap(), getLocalLevelsCopy());
 }
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+    size_t numLogicalPairs;
+    std::map<KEY_t, VAL_t> bufferContents;
+    std::vector<Level*> localLevelsCopy;
+
+    // Call countLogicalPairs and unpack the returned tuple
+    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
+
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
-    std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
+    std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
-    std::string treeDump = ""; // Create a string to hold the dump of the tree
+    std::string treeDump = "";   // Create a string to hold the dump of the tree
 
-    // Iterate through the levels and add the number of keys in each level to the levelKeys string
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        levelKeys += "LVL" + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->getKvPairs()) + ", ";
-    }
-    // Remove the last comma and space from the levelKeys string
-    levelKeys.resize(levelKeys.size() - 2);
-    levelKeys += "\n";
     // Iterate through the buffer and add the key/value pairs to the treeDump string
-    std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     size_t pairsCounter = 0;
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
@@ -439,9 +549,11 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
         treeDump += "\n\n";
     }
     // Iterate through the levels and add the key/value pairs to the treeDump string
-    for (auto level = levels.begin(); level != levels.end(); level++) {
+    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+        std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+        levelKeys += "LVL" + std::to_string((*level)->getLevelNum()) + ": " + std::to_string((*level)->getKvPairs()) + ", ";
         pairsCounter = 0;
-        for (auto run = level->runs.begin(); run != level->runs.end(); run++) {
+        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
@@ -450,9 +562,9 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
                 }
                 pairsCounter++;
                 if (it->second == TOMBSTONE) {
-                    treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string(level->getLevelNum()) + " ";
+                    treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
                 } else {
-                    treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string(level->getLevelNum()) + " ";
+                    treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
                 }
             }
         }
@@ -460,6 +572,11 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
             treeDump += "\n\n";
         }
     }
+
+    // Remove the last comma and space from the levelKeys string
+    levelKeys.resize(levelKeys.size() - 2);
+    levelKeys += "\n";
+
     treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
     return output;
@@ -468,44 +585,67 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.
 std::string LSMTree::printTree() {
+    size_t numLogicalPairs;
+    std::map<KEY_t, VAL_t> bufferContents;
+    std::vector<Level*> localLevelsCopy;
+    double percentage;
+
+    // Call countLogicalPairs and unpack the returned tuple
+    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
     std::string output = "";
+    std::string levelDiskSummary = "";
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    output += "Number of logical key-value pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
-    output += "Bloom filter false positive rate: " + bfStatus + "\n";
+    output += "\nNumber of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
+    output += "Bloom filter measured false positive rate: " + bfStatus + "\n";
     output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
-    output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
-    output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
-    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + "\n";
-    output += "Number of levels: " + std::to_string(levels.size()) + "\n";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Number of SSTables in level " + std::to_string(it->getLevelNum()) + ": " + std::to_string(it->runs.size()) + "\n";
-        output += "Number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getKvPairs())) + "\n";
-        output += "Max number of key-value pairs in level " + std::to_string(it->getLevelNum()) + ": " + addCommas(std::to_string(it->getMaxKvPairs())) + "\n";
+    percentage = (static_cast<double>(bufferContents.size()) / buffer.getMaxKvPairs()) * 100;
+    output += "Number of entries in the buffer: " + addCommas(std::to_string(bufferContents.size()))
+               + " (Max " + addCommas(std::to_string(buffer.getMaxKvPairs())) + " entries, or "
+               + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + " bytes, "
+               + std::to_string(static_cast<int>(percentage)) + "% full)\n\n";
+
+    output += "Number of Levels: " + std::to_string(localLevelsCopy.size()) + "\n\n";
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
+        std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
+        output += "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
+        percentage = (static_cast<double>((*it)->getKvPairs()) / (*it)->getMaxKvPairs()) * 100;
+        output += "Number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": "
+                   + addCommas(std::to_string((*it)->getKvPairs()))
+                   + " (Max " + addCommas(std::to_string((*it)->getMaxKvPairs())) + ", "
+                   + std::to_string(static_cast<int>(percentage)) + "% full)\n\n";
+
+        levelDiskSummary += "Level " + std::to_string((*it)->getLevelNum()) + " disk type: " + (*it)->getDiskName()
+                             + ", disk penalty multiplier: " + std::to_string((*it)->getDiskPenaltyMultiplier())
+                             + ", is it the last level? " + ((it + 1 == localLevelsCopy.end()) ? "Yes" : "No") + "\n";
     }
-    // For each level, print if it is the last level
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + " disk type: " + it->getDiskName() + ", disk penalty multiplier: " + 
-                   std::to_string(it->getDiskPenaltyMultiplier()) + ", is it the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
-    }
-    // Remove the last newline from the output string
-    output.pop_back();
+    output += levelDiskSummary;
     return output;
 }
 
 // Print the I/O count for each level and the total I/O count.
 std::string LSMTree::printLevelIoCount() {
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::string output = "";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount(it->getLevelNum()))) + ", Microseconds: " + 
-                   std::to_string(getLevelIoTime(it->getLevelNum()).count()) + ", Disk name: " + it->getDiskName() + ", Disk penalty multiplier: " + 
-                   std::to_string(it->getDiskPenaltyMultiplier()) + "\n";
+    std::string penaltyOutput = "";
+    size_t penaltyTime;
+    size_t totalPenaltyTime = 0;
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
+        output += "Level " + std::to_string((*it)->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount((*it)->getLevelNum()))) + ", Microseconds: " + 
+                   std::to_string(getLevelIoTime((*it)->getLevelNum()).count()) + " (" + formatMicroseconds(getLevelIoTime((*it)->getLevelNum()).count()) + "), Disk name: " +
+                   (*it)->getDiskName() + ", Disk penalty multiplier: " + std::to_string((*it)->getDiskPenaltyMultiplier()) + "\n";
+        penaltyTime = getLevelIoTime((*it)->getLevelNum()).count() * (*it)->getDiskPenaltyMultiplier();
+        totalPenaltyTime += penaltyTime;
+        penaltyOutput += "Level " + std::to_string((*it)->getLevelNum()) + " microseconds: " + std::to_string(getLevelIoTime((*it)->getLevelNum()).count()) + " x " + 
+                         std::to_string((*it)->getDiskPenaltyMultiplier()) + " = " + std::to_string(penaltyTime) + " (" + formatMicroseconds(penaltyTime) + ")\n"; 
     }
     // Add up all the I/O counts for each level
-    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(getIoCount())) + "\n";
-    output.pop_back();
+    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(getIoCount())) + "\n\n";
+    output + "Using the multiplier penalties to simulate slower drives for the higher levels:\n";
+    output += penaltyOutput;
+    output += "\nTotal time with penalties: " + std::to_string(totalPenaltyTime) + "microseconds (" + formatMicroseconds(totalPenaltyTime) + ")\n";
+
     return output;
 }
-
 
 // Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
 void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
@@ -522,6 +662,8 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap
 }
 
 float LSMTree::getBfFalsePositiveRate() {
+    std::shared_lock<std::shared_mutex> lockF(bfFalsePositivesMutex);
+    std::shared_lock<std::shared_mutex> lockT(bfTruePositivesMutex);
     size_t total = bfFalsePositives + bfTruePositives;
     if (total > 0) {
         return (float)bfFalsePositives / total;
@@ -532,11 +674,13 @@ float LSMTree::getBfFalsePositiveRate() {
 
 // For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
 std::string LSMTree::getBloomFilterSummary() {
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::string output = "";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string(it->getLevelNum()) + ":\n";
-        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
-            output += "Run " + std::to_string(std::distance(it->runs.begin(), run)) + ": ";
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
+        output += "Level " + std::to_string((*it)->getLevelNum()) + ":\n";
+        std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
+        for (auto run = (*it)->runs.begin(); run != (*it)->runs.end(); run++) {
+            output += "Run " + std::to_string(std::distance((*it)->runs.begin(), run)) + ": ";
             output += (*run)->getBloomFilterSummary()+ "\n";
         }
     }
@@ -564,30 +708,30 @@ json LSMTree::serialize() const {
         j["levelIoCountAndTime"].push_back(levelIoCountAndTime.second.count());
     }
     for (const auto& level : levels) {
-        j["levels"].push_back(level.serialize());
+        j["levels"].push_back(level->serialize());
     }
     return j;
 }
 
 void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
-    std::cout << "Writing LSMTree to file: " << filename << std::endl;
+    SyncedCout() << "Writing LSMTree to file: " << filename << std::endl;
     // Serialize the LSMTree to JSON
     json treeJson = serialize();
     // Write the JSON to file
     std::ofstream outfile(filename);
     outfile << treeJson.dump();
     outfile.close();
-    std::cout << "Finished writing LSMTree to file: " << filename << std::endl;
+    SyncedCout() << "Finished writing LSMTree to file: " << filename << std::endl;
 }
 
 void LSMTree::deserialize(const std::string& filename) {
     std::ifstream infile(filename);
     if (!infile) {
-        std::cerr << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
+        SyncedCerr() << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
         return;
     }
 
-    std::cout << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
+    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
 
     json treeJson;
     infile >> treeJson;
@@ -612,32 +756,32 @@ void LSMTree::deserialize(const std::string& filename) {
     levels.clear();
     for (const auto& levelJson : treeJson["levels"]) {
         levels.emplace_back();
-        levels.back().deserialize(levelJson, this);
+        levels.back()->deserialize(levelJson, this);
     }
     infile.close();
 
     // Restore lsm_tree pointers in all Runs
     for (auto& level : levels) {
-        for (auto& run : level.runs) {
+        for (auto& run : level->runs) {
             run->setLSMTree(this);
         }
     }
-    std::cout << "Finished!\n" << std::endl;
-    std::cout << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
+    SyncedCout() << "Finished!\n" << std::endl;
+    SyncedCout() << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
 
 // Get the total amount of bits currently used by all runs in the LSMTree
 size_t LSMTree::getTotalBits() const {
     size_t totalBits = 0;
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        totalBits += std::accumulate(it->runs.begin(), it->runs.end(), size_t(0),
+        totalBits += std::accumulate((*it)->runs.begin(), (*it)->runs.end(), size_t(0),
             [](size_t sum, const std::unique_ptr<Run>& run) {
                 return sum + run->getBloomFilterNumBits();
             });
     }
     return totalBits;
 }
-
+ 
 double LSMTree::TrySwitch(Run* run1, Run* run2, size_t delta, double R) const {
     size_t run1Bits = run1->getBloomFilterNumBits();
     size_t run2Bits = run2->getBloomFilterNumBits();
@@ -668,13 +812,13 @@ double LSMTree::AutotuneFilters(size_t mFilters) {
     // Flatten the tree structure into a single runs vector and zero out all the bits
     std::vector<Run*> allRuns;
     for (auto& level : levels) {
-        for (auto& runPtr : level.runs) {
+        for (auto& runPtr : level->runs) {
             runPtr->setBloomFilterNumBits(0);
             allRuns.push_back(runPtr.get());
         }
     }
-    levels.front().runs.front()->setBloomFilterNumBits(mFilters);
-    double R = allRuns.size() - 1 + eval(levels.front().runs.front()->getBloomFilterNumBits(), levels.front().runs.front()->getSize());
+    levels.front()->runs.front()->setBloomFilterNumBits(mFilters);
+    double R = allRuns.size() - 1 + eval(levels.front()->runs.front()->getBloomFilterNumBits(), levels.front()->runs.front()->getSize());
 
     while (delta >= 1) {
         double rNew = R;
@@ -697,39 +841,96 @@ double LSMTree::AutotuneFilters(size_t mFilters) {
 
 void LSMTree::monkeyOptimizeBloomFilters() {
     size_t totalBits = getTotalBits();
-    std::cout << "Total bits: " << totalBits << std::endl;
+    SyncedCout() << "Total bits: " << totalBits << std::endl;
     double R = AutotuneFilters(totalBits);
-    std::cout << "Total cost R: " << R << std::endl;
+    SyncedCout() << "Total cost R: " << R << std::endl;
     for (auto it = levels.begin(); it != levels.end(); it++) {
-        for (auto run = it->runs.begin(); run != it->runs.end(); run++) {
+        for (auto run = (*it)->runs.begin(); run != (*it)->runs.end(); run++) {
             (*run)->resizeBloomFilterBitset((*run)->getBloomFilterNumBits());
             (*run)->populateBloomFilter();
         }
     }
-    std::cout << "\nNew Bloom Filter summaries:" << std::endl;
-    std::cout << getBloomFilterSummary() << std::endl;
+    SyncedCout() << "\nNew Bloom Filter summaries:" << std::endl;
+    SyncedCout() << getBloomFilterSummary() << std::endl;
 }
 
 size_t LSMTree::getLevelIoCount(int levelNum) {
-    // No mutex needed because each thread has a different levelNum
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     return levelIoCountAndTime[levelNum-1].first;
 }
 
 std::chrono::microseconds LSMTree::getLevelIoTime(int levelNum) {
-    // No mutex needed because each thread has a different levelNum
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     return levelIoCountAndTime[levelNum-1].second;
 }
 
 void LSMTree::incrementLevelIoCountAndTime(int levelNum, std::chrono::microseconds duration) { 
-    // No mutex needed because each thread has a different levelNum
+    std::unique_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     levelIoCountAndTime[levelNum-1].first++;
     levelIoCountAndTime[levelNum-1].second += duration;
 }
 
 size_t LSMTree::getIoCount() { 
+    std::shared_lock<std::shared_mutex> lock(levelIoCountAndTimeMutex);
     size_t ioCount = std::accumulate(levelIoCountAndTime.begin(), levelIoCountAndTime.end(), 0,
     [](size_t acc, const std::pair<size_t, std::chrono::microseconds>& p) {
         return acc + p.first;
     });
     return ioCount;
 }
+
+void LSMTree::incrementBfFalsePositives() { 
+    std::unique_lock<std::shared_mutex> lock(bfFalsePositivesMutex);
+    bfFalsePositives++;
+}
+void LSMTree::incrementBfTruePositives() {
+    std::unique_lock<std::shared_mutex> lock(bfTruePositivesMutex);
+    bfTruePositives++; 
+}
+
+void LSMTree::incrementGetHits() { 
+    std::unique_lock<std::shared_mutex> lock(getHitsMutex);
+    getHits++;
+}
+
+void LSMTree::incrementGetMisses() { 
+    std::unique_lock<std::shared_mutex> lock(getMissesMutex);
+    getMisses++;
+}
+
+void LSMTree::incrementRangeMisses() { 
+    std::unique_lock<std::shared_mutex> lock(rangeMissesMutex);
+    rangeMisses++;
+}
+void LSMTree::incrementRangeHits() { 
+    std::unique_lock<std::shared_mutex> lock(rangeHitsMutex);
+    rangeHits++;
+}
+
+size_t LSMTree::getCompactionPlanSize() {
+    std::shared_lock<std::shared_mutex> lock(compactionPlanMutex);
+    return compactionPlan.size();
+}
+
+void LSMTree::clearCompactionPlan() {
+    std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+    compactionPlan.clear();
+}
+
+size_t LSMTree::getGetHits() const { 
+    std::shared_lock<std::shared_mutex> lock(getHitsMutex);
+    return getHits;
+}
+size_t LSMTree::getGetMisses() const { 
+    std::shared_lock<std::shared_mutex> lock(getMissesMutex);
+    return getMisses;
+}
+size_t LSMTree::getRangeHits() const { 
+    std::shared_lock<std::shared_mutex> lock(rangeHitsMutex);
+    return rangeHits;
+}
+size_t LSMTree::getRangeMisses() const { 
+    std::shared_lock<std::shared_mutex> lock(rangeMissesMutex);
+    return rangeMisses;
+}
+ 

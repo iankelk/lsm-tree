@@ -2,6 +2,10 @@
 #define LEVEL_HPP
 #include <queue>
 #include <cmath>
+#include <shared_mutex>
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <boost/thread/lock_algorithms.hpp>
 #include "run.hpp"
 #include "storage.hpp"
 
@@ -42,7 +46,8 @@ public:
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
 
-
+    mutable std::shared_mutex levelMutex;
+    mutable boost::upgrade_mutex runsMutex;
 
     static std::string policyToString(Policy policy) {
         switch (policy) {
@@ -70,36 +75,42 @@ public:
     // copy constructor
     Level(Level&& other) noexcept
         : levelNum(other.levelNum),
-          fanout(other.fanout),
-          maxKvPairs(other.maxKvPairs),
-          bufferSize(other.bufferSize),
-          levelPolicy(other.levelPolicy),
-          kvPairs(other.kvPairs),
-          lsmTree(other.lsmTree),
-          diskName(other.diskName),
-          diskPenaltyMultiplier(other.diskPenaltyMultiplier),
-          runs(std::move(other.runs)) {
+        fanout(other.fanout),
+        maxKvPairs(other.maxKvPairs),
+        bufferSize(other.bufferSize),
+        levelPolicy(other.levelPolicy),
+        kvPairs(other.kvPairs),
+        lsmTree(other.lsmTree),
+        diskName(other.diskName),
+        diskPenaltyMultiplier(other.diskPenaltyMultiplier),
+        runs(std::move(other.runs)),
+        levelMutex(), // Mutex is default constructed
+        runsMutex()   // Mutex is default constructed
+    {
     }
-    // copy assignment operator 
+    // copy assignment operator
     Level& operator=(Level&& other) noexcept {
-        levelNum = other.levelNum;
-        fanout = other.fanout;
-        maxKvPairs = other.maxKvPairs;
-        bufferSize = other.bufferSize;
-        levelPolicy = other.levelPolicy;
-        kvPairs = other.kvPairs;
-        lsmTree = other.lsmTree;
-        diskName = other.diskName;
-        diskPenaltyMultiplier = other.diskPenaltyMultiplier;
-        runs = std::move(other.runs);
+        if (this != &other) {
+            levelNum = other.levelNum;
+            fanout = other.fanout;
+            maxKvPairs = other.maxKvPairs;
+            bufferSize = other.bufferSize;
+            levelPolicy = other.levelPolicy;
+            kvPairs = other.kvPairs;
+            lsmTree = other.lsmTree;
+            diskName = other.diskName;
+            diskPenaltyMultiplier = other.diskPenaltyMultiplier;
+            runs = std::move(other.runs);            
+        }
         return *this;
     }
+
 private:
     int levelNum;
-    long kvPairs; // the number of key-value pairs in the level    
-    Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
+    long kvPairs; // the number of key-value pairs in the level 
     long maxKvPairs; // the maximum number of key-value pairs that can be in the level
     long bufferSize; // Memtable size
+    Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
     int fanout;
     std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup
     LSMTree* lsmTree;

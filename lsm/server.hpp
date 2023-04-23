@@ -10,7 +10,7 @@ void printHelp();
 class Server
 {
 public:
-    explicit Server(int port, bool verbose);
+    explicit Server(int port, bool verbose, size_t verboseFrequency);
     void createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads);
     void run();
     void close();
@@ -25,11 +25,14 @@ private:
     void handleCommand(std::stringstream& ss, int clientSocket);
     std::string printDSLHelp();
     bool verbose;
+    size_t verboseFrequency;
     void sendResponse(int clientSocket, const std::string &response);
     void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads);
 
     std::set<int> connectedClients;
     std::mutex connectedClientsMutex;
+    std::mutex coutMutex;
+
 };
 
 #endif /* SERVER_HPP */
