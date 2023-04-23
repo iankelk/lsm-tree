@@ -13,18 +13,12 @@
 #include "run.hpp"
 #include "utils.hpp"
 
-LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable) :
+LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
-    threadPool(numThreads), concurrentMemtable(concurrentMemtable)
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads)
 {
-    // Create the buffer
-    if (concurrentMemtable) {
-        buffer = std::make_unique<MemtableConcurrent>(buffer_num_pages * getpagesize() / sizeof(kvPair));
-    } else {
-        buffer = std::make_unique<MemtableBlocking>(buffer_num_pages * getpagesize() / sizeof(kvPair));
-    }
     // Create the first level
-    levels.emplace_back(std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
+    levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
     // levels.emplace_back(buffer->getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
     levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
@@ -53,15 +47,15 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // SyncedCout() << "put trying to lock buffer Thread: " << std::this_thread::get_id() << std::endl;
         std::unique_lock<std::shared_mutex> lock(bufferMutex);
         // SyncedCout() << "put locked buffer Thread: " << std::this_thread::get_id() << std::endl;
-        if(buffer->put(key, val)) {
+        if(buffer.put(key, val)) {
             return;
         }
 
         // Get a map of the buffer
-        bufferContents = buffer->getMap();
-        bufferMaxKvPairs = buffer->getMaxKvPairs();
-        buffer->clear();
-        buffer->put(key, val);
+        bufferContents = buffer.getMap();
+        bufferMaxKvPairs = buffer.getMaxKvPairs();
+        buffer.clear();
+        buffer.put(key, val);
     }
     // lock.unlock();
 
@@ -145,7 +139,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
         std::unique_ptr<Level> newLevel;
         {
             std::shared_lock<std::shared_mutex> lock(bufferMutex);
-            newLevel = std::make_unique<Level>(buffer->getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+            newLevel = std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
         }
         nextLevelLock = std::unique_lock<std::shared_mutex>(newLevel->levelMutex);
         levels.push_back(std::move(newLevel));
@@ -232,7 +226,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     }
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        val = buffer->get(key);
+        val = buffer.get(key);
         if (val != nullptr) {
             incrementGetHits();
             if (*val == TOMBSTONE) {
@@ -297,7 +291,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
         // SyncedCout() << "Locked bufferMutex in range for thread: " << std::this_thread::get_id() << std::endl;
         // Search the buffer for the key range and return the range map as a unique_ptr
-        rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer->range(start, end));
+        rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
     }
 
     // If the range has the size of the entire range, return the range
@@ -511,7 +505,7 @@ int LSMTree::countLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        bufferContents = buffer->getMap();
+        bufferContents = buffer.getMap();
     }
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
@@ -607,7 +601,7 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
 
     // Iterate through the buffer and add the key/value pairs to the treeDump string
-    std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
+    std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
     size_t pairsCounter = 0;
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
@@ -731,9 +725,9 @@ std::string LSMTree::printTree() {
     output += "Number of logical key-value pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     output += "Bloom filter false positive rate: " + bfStatus + "\n";
     output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
-    output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer->size())) + "\n";
-    output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer->getMaxKvPairs())) + "\n";
-    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer->getMaxKvPairs() * sizeof(kvPair))) + "\n";
+    output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
+    output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
+    output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + "\n";
     output += "Number of Levels: " + std::to_string(levels.size()) + "\n";
     for (auto it = levels.begin(); it != levels.end(); it++) {
         output += "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
@@ -807,7 +801,7 @@ std::string LSMTree::getBloomFilterSummary() {
 
 json LSMTree::serialize() const {
     json j;
-    j["buffer"] = buffer->serialize();
+    j["buffer"] = buffer.serialize();
     j["bfErrorRate"] = bfErrorRate;
     j["fanout"] = fanout;
     j["levelPolicy"] = Level::policyToString(levelPolicy);
@@ -867,7 +861,7 @@ void LSMTree::deserialize(const std::string& filename) {
     rangeMisses = treeJson["rangeMisses"].get<size_t>();
     rangeHits = treeJson["rangeHits"].get<size_t>();
 
-    buffer->deserialize(treeJson["buffer"]);
+    buffer.deserialize(treeJson["buffer"]);
 
     levels.clear();
     for (const auto& levelJson : treeJson["levels"]) {

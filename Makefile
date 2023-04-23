@@ -1,4 +1,4 @@
-SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable_base.cpp lsm/memtable_blocking.cpp lsm/memtable_concurrent.cpp lsm/run.cpp lsm/level.cpp lsm/lsm_tree.cpp lsm/storage.cpp lsm/threadpool.cpp lib/xxhash.cpp
+SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level.cpp lsm/lsm_tree.cpp lsm/storage.cpp lsm/threadpool.cpp lib/xxhash.cpp
 
 # Ensure bin directory exists
 $(shell mkdir -p bin)

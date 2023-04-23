@@ -11,7 +11,7 @@ class Server
 {
 public:
     explicit Server(int port, bool verbose);
-    void createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable);
+    void createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads);
     void run();
     void close();
     void listenToStdIn();
@@ -26,7 +26,7 @@ private:
     std::string printDSLHelp();
     bool verbose;
     void sendResponse(int clientSocket, const std::string &response);
-    void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, bool concurrentMemtable);
+    void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads);
 
     std::set<int> connectedClients;
     std::mutex connectedClientsMutex;
