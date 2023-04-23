@@ -40,7 +40,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
     // SyncedCout() << "Entering LSMTree::put Thread: " << std::this_thread::get_id() << std::endl;
     {
-        std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        boost::unique_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
     {
@@ -468,21 +468,24 @@ void LSMTree::load(const std::string& filename) {
 // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
 // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
 int LSMTree::countLogicalPairs() {
+    std::map<KEY_t, VAL_t> bufferContents;
+
+    boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
+    if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+        return numLogicalPairs;
+    } 
     {
-        std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
-        if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-            return numLogicalPairs;
-        }
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        bufferContents = buffer.getMap();
     }
+    
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
     // Create a pointer to a map of key/value pairs
     std::map<KEY_t, VAL_t> kvMap;
-
     
     // boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-
 
     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
@@ -501,12 +504,6 @@ int LSMTree::countLogicalPairs() {
             }
         }  
     }
-
-    std::map<KEY_t, VAL_t> bufferContents;
-    {
-        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        bufferContents = buffer.getMap();
-    }
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (it->second == TOMBSTONE) {
@@ -518,7 +515,7 @@ int LSMTree::countLogicalPairs() {
         }
     }
     {
-        std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+        boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(lock);
         numLogicalPairs = keys.size();
     }
     // Return the size of the set

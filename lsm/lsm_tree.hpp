@@ -80,7 +80,7 @@ private:
     size_t rangeMisses = 0;
     size_t rangeHits = 0;
 
-    mutable std::shared_mutex numLogicalPairsMutex;
+    mutable boost::upgrade_mutex numLogicalPairsMutex;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
 
     mutable std::shared_mutex getHitsMutex;
