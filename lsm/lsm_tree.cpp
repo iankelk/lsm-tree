@@ -41,24 +41,29 @@ bool LSMTree::isLastLevel(int levelNum) {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    size_t bufferMaxKvPairs;
+    std::map<KEY_t, VAL_t> bufferContents;
+
     // SyncedCout() << "Entering LSMTree::put Thread: " << std::this_thread::get_id() << std::endl;
     {
         std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
+    {
+        // SyncedCout() << "put trying to lock buffer Thread: " << std::this_thread::get_id() << std::endl;
+        std::unique_lock<std::shared_mutex> lock(bufferMutex);
+        // SyncedCout() << "put locked buffer Thread: " << std::this_thread::get_id() << std::endl;
+        if(buffer->put(key, val)) {
+            return;
+        }
 
-    // SyncedCout() << "put trying to lock buffer Thread: " << std::this_thread::get_id() << std::endl;
-    std::unique_lock<std::shared_mutex> lock(bufferMutex);
-    // SyncedCout() << "put locked buffer Thread: " << std::this_thread::get_id() << std::endl;
-    if(buffer->put(key, val)) {
-        return;
+        // Get a map of the buffer
+        bufferContents = buffer->getMap();
+        bufferMaxKvPairs = buffer->getMaxKvPairs();
+        buffer->clear();
+        buffer->put(key, val);
     }
-
-    // Get a map of the buffer
-    std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
-    size_t bufferMaxKvPairs = buffer->getMaxKvPairs();
-    buffer->clearAndPut(key, val);
-    lock.unlock();
+    // lock.unlock();
 
     // Lock the first level
     // SyncedCout() << "put trying to lock first level Thread: " << std::this_thread::get_id() << std::endl;
@@ -99,6 +104,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
             compactionLocks.emplace_back(levels[levelNumber - 1]->levelMutex);
         }
         executeCompactionPlan();
+        clearCompactionPlan();
     }
 }
 
@@ -198,8 +204,6 @@ void LSMTree::executeCompactionPlan() {
     }
     // Wait for all compacting tasks to complete
     threadPool.waitForAllTasks();
-    clearCompactionPlan();
-
 }
 
 std::vector<Level*> LSMTree::getLocalLevelsCopy() {
