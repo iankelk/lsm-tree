@@ -354,10 +354,10 @@ void LSMTree::del(KEY_t key) {
 
 // Print out getMisses and rangeMisses stats
 void LSMTree::printHitsMissesStats() {
-    SyncedCout() << "getHits: " << getHits << std::endl;
-    SyncedCout() << "getMisses: " << getMisses << std::endl;
-    SyncedCout() << "rangeHits: " << rangeHits << std::endl;
-    SyncedCout() << "rangeMisses: " << rangeMisses << std::endl;
+    SyncedCout() << "getHits: " << getGetHits() << std::endl;
+    SyncedCout() << "getMisses: " << getGetMisses() << std::endl;
+    SyncedCout() << "rangeHits: " << getRangeHits() << std::endl;
+    SyncedCout() << "rangeMisses: " << getRangeMisses() << std::endl;
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
@@ -529,89 +529,6 @@ std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLo
 }
 
 // Print out a summary of the tree.
-// std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
-//     std::string output = "";
-//     // Create a string to hold the number of logical key value pairs in the tree
-//     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
-//     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
-//     std::string treeDump = ""; // Create a string to hold the dump of the tree
-
-//     // Acquire shared lock for levelsMutex
-//     std::shared_lock<boost::upgrade_mutex> levelsLock(levelsMutex);
-
-//     // Iterate through the levels and add the number of keys in each level to the levelKeys string
-//     for (auto it = levels.begin(); it != levels.end(); it++) {
-//         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
-//     }
-//     // Remove the last comma and space from the levelKeys string
-//     levelKeys.resize(levelKeys.size() - 2);
-//     levelKeys += "\n";
-
-//     // Release the shared lock for levelsMutex
-//     levelsLock.unlock();
-
-//     // Acquire shared lock for bufferMutex
-//     std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-
-//     // Iterate through the buffer and add the key/value pairs to the treeDump string
-//     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
-//     size_t pairsCounter = 0;
-//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-//         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
-//             break;
-//         }
-//         if (it->second == TOMBSTONE) {
-//             treeDump += std::to_string(it->first) + ":TOMBSTONE:L0 ";
-//         } else {
-//             treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L0 ";
-//         }
-//         pairsCounter++;
-//     }
-//     if (pairsCounter > 0) {
-//         treeDump += "\n\n";
-//     }
-
-//     // Release the shared lock for bufferMutex
-//     bufferLock.unlock();
-
-//     // Acquire shared lock for levelsMutex
-//     levelsLock.lock();
-
-//     // Iterate through the levels and add the key/value pairs to the treeDump string
-//     for (auto level = levels.begin(); level != levels.end(); level++) {
-//         pairsCounter = 0;
-//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-//             std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex); // Acquire shared lock for levelMutex
-//             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
-//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
-//             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
-//                 if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
-//                     break;
-//                 }
-//                 pairsCounter++;
-//                 if (it->second == TOMBSTONE) {
-//                     treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
-//                 } else {
-//                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
-//                 }
-//             }
-//             // Release the shared lock for levelMutex
-//             levelLock.unlock();
-//         }
-//         if (pairsCounter > 0) {
-//             treeDump += "\n\n";
-//         }
-//     }
-
-//     // Release the shared lock for levelsMutex
-//     levelsLock.unlock();
-
-//     treeDump.pop_back(); // Remove the last space from the treeDump string
-//     output += logicalPairs + levelKeys + treeDump;
-//     return output;
-// }
-
-// Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     size_t numLogicalPairs;
     std::map<KEY_t, VAL_t> bufferContents;
@@ -686,23 +603,22 @@ std::string LSMTree::printTree() {
     // Call countLogicalPairs and unpack the returned tuple
     std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
     std::string output = "";
+    std::string levelDiskSummary = "";
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     output += "Number of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
     output += "Bloom filter false positive rate: " + bfStatus + "\n";
     output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
-    output += "Number of entries in the buffer: " + addCommas(std::to_string(buffer.size())) + "\n";
+    output += "Number of entries in the buffer: " + addCommas(std::to_string(bufferContents.size())) + "\n";
     output += "Maximum number of key-value pairs in the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs())) + "\n";
     output += "Maximum size in bytes of the buffer: " + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + "\n";
-    output += "Number of Levels: " + std::to_string(levels.size()) + "\n";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
+    output += "Number of Levels: " + std::to_string(localLevelsCopy.size()) + "\n";
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
+        std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
         output += "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
         output += "Number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": " + addCommas(std::to_string((*it)->getKvPairs())) + "\n";
         output += "Max number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": " + addCommas(std::to_string((*it)->getMaxKvPairs())) + "\n";
-    }
-    // For each level, print if it is the last level
-    for (auto it = levels.begin(); it != levels.end(); it++) {
-        output += "Level " + std::to_string((*it)->getLevelNum()) + " disk type: " + (*it)->getDiskName() + ", disk penalty multiplier: " + 
-                   std::to_string((*it)->getDiskPenaltyMultiplier()) + ", is it the last level? " + (isLastLevel(it) ? "Yes" : "No") + "\n";
+        levelDiskSummary += "Level " + std::to_string((*it)->getLevelNum()) + " disk type: " + (*it)->getDiskName() + ", disk penalty multiplier: " + 
+                            std::to_string((*it)->getDiskPenaltyMultiplier()) + ", is it the last level? " + (isLastLevel(it + 1 == localLevelsCopy.end()) ? "Yes" : "No") + "\n";
     }
     // Remove the last newline from the output string
     output.pop_back();
@@ -711,8 +627,9 @@ std::string LSMTree::printTree() {
 
 // Print the I/O count for each level and the total I/O count.
 std::string LSMTree::printLevelIoCount() {
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::string output = "";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
         output += "Level " + std::to_string((*it)->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount((*it)->getLevelNum()))) + ", Microseconds: " + 
                    std::to_string(getLevelIoTime((*it)->getLevelNum()).count()) + ", Disk name: " + (*it)->getDiskName() + ", Disk penalty multiplier: " + 
                    std::to_string((*it)->getDiskPenaltyMultiplier()) + "\n";
@@ -722,7 +639,6 @@ std::string LSMTree::printLevelIoCount() {
     output.pop_back();
     return output;
 }
-
 
 // Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
 void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
@@ -751,9 +667,11 @@ float LSMTree::getBfFalsePositiveRate() {
 
 // For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
 std::string LSMTree::getBloomFilterSummary() {
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::string output = "";
-    for (auto it = levels.begin(); it != levels.end(); it++) {
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
         output += "Level " + std::to_string((*it)->getLevelNum()) + ":\n";
+        std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
         for (auto run = (*it)->runs.begin(); run != (*it)->runs.end(); run++) {
             output += "Run " + std::to_string(std::distance((*it)->runs.begin(), run)) + ": ";
             output += (*run)->getBloomFilterSummary()+ "\n";
@@ -991,3 +909,21 @@ void LSMTree::clearCompactionPlan() {
     std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
     compactionPlan.clear();
 }
+
+size_t LSMTree::getGetHits() const { 
+    std::shared_lock<std::shared_mutex> lock(getHitsMutex);
+    return getHits;
+}
+size_t LSMTree::getGetMisses() const { 
+    std::shared_lock<std::shared_mutex> lock(getMissesMutex);
+    return getMisses;
+}
+size_t LSMTree::getRangeHits() const { 
+    std::shared_lock<std::shared_mutex> lock(rangeHitsMutex);
+    return rangeHits;
+}
+size_t LSMTree::getRangeMisses() const { 
+    std::shared_lock<std::shared_mutex> lock(rangeMissesMutex);
+    return rangeMisses;
+}
+ 

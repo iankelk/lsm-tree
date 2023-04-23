@@ -63,6 +63,11 @@ private:
     void incrementRangeMisses();
     void incrementRangeHits();
 
+    size_t getGetHits() const;
+    size_t getGetMisses() const;
+    size_t getRangeHits() const;
+    size_t getRangeMisses() const;
+
     void mergeLevels(int currentLevelNum);
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
