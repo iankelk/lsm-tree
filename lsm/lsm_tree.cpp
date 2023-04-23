@@ -361,7 +361,7 @@ void LSMTree::printHitsMissesStats() {
 }
 
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
-void LSMTree::benchmark(const std::string& filename, bool verbose) {
+void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verboseFrequency) {
     int count = 0;
     std::ifstream file(filename);
 
@@ -421,7 +421,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose) {
 
         count++;
         if (verbose) {
-            if (count % BENCHMARK_REPORT_FREQUENCY == 0) {
+            if (count % verboseFrequency == 0) {
                 auto end_time = std::chrono::high_resolution_clock::now();
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
                 SyncedCout() << "Benchmark: " << count << " commands executed" << std::endl;
@@ -465,7 +465,7 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-int LSMTree::countLogicalPairs() {
+size_t LSMTree::countLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
 
     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
@@ -528,88 +528,112 @@ int LSMTree::countLogicalPairs() {
     return keys.size();
 }
 
+// Print out a summary of the tree.
+// std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+//     std::string output = "";
+//     // Create a string to hold the number of logical key value pairs in the tree
+//     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
+//     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
+//     std::string treeDump = ""; // Create a string to hold the dump of the tree
 
-// // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
-// // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
-// int LSMTree::countLogicalPairs() {
-//     std::map<KEY_t, VAL_t> bufferContents;
+//     // Acquire shared lock for levelsMutex
+//     std::shared_lock<boost::upgrade_mutex> levelsLock(levelsMutex);
 
-//     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
-//     if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-//         return numLogicalPairs;
-//     } 
-//     {
-//         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-//         bufferContents = buffer.getMap();
+//     // Iterate through the levels and add the number of keys in each level to the levelKeys string
+//     for (auto it = levels.begin(); it != levels.end(); it++) {
+//         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
 //     }
-    
-//     // Create a set of all the keys in the tree
-//     std::set<KEY_t> keys;
-//     // Create a pointer to a map of key/value pairs
-//     std::map<KEY_t, VAL_t> kvMap;
-    
-//     // boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
-//     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+//     // Remove the last comma and space from the levelKeys string
+//     levelKeys.resize(levelKeys.size() - 2);
+//     levelKeys += "\n";
 
-//     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
-//         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+//     // Release the shared lock for levelsMutex
+//     levelsLock.unlock();
+
+//     // Acquire shared lock for bufferMutex
+//     std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+
+//     // Iterate through the buffer and add the key/value pairs to the treeDump string
+//     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
+//     size_t pairsCounter = 0;
+//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
+//         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
+//             break;
+//         }
+//         if (it->second == TOMBSTONE) {
+//             treeDump += std::to_string(it->first) + ":TOMBSTONE:L0 ";
+//         } else {
+//             treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L0 ";
+//         }
+//         pairsCounter++;
+//     }
+//     if (pairsCounter > 0) {
+//         treeDump += "\n\n";
+//     }
+
+//     // Release the shared lock for bufferMutex
+//     bufferLock.unlock();
+
+//     // Acquire shared lock for levelsMutex
+//     levelsLock.lock();
+
+//     // Iterate through the levels and add the key/value pairs to the treeDump string
+//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//         pairsCounter = 0;
 //         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-//             // Get the map of key/value pairs from the run
-//             kvMap = (*run)->getMap();
-//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+//             std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex); // Acquire shared lock for levelMutex
+//             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
+//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
 //             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+//                 if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
+//                     break;
+//                 }
+//                 pairsCounter++;
 //                 if (it->second == TOMBSTONE) {
-//                     if (keys.find(it->first) != keys.end()) {
-//                         keys.erase(it->first);
-//                     }
+//                     treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
 //                 } else {
-//                     keys.insert(it->first);
+//                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
 //                 }
 //             }
-//         }  
-//     }
-//     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-//         if (it->second == TOMBSTONE) {
-//             if (keys.find(it->first) != keys.end()) {
-//                 keys.erase(it->first);
-//             }
-//         } else {
-//             keys.insert(it->first);
+//             // Release the shared lock for levelMutex
+//             levelLock.unlock();
+//         }
+//         if (pairsCounter > 0) {
+//             treeDump += "\n\n";
 //         }
 //     }
-//     {
-//         boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(lock);
-//         numLogicalPairs = keys.size();
-//     }
-//     // Return the size of the set
-//     return keys.size();
+
+//     // Release the shared lock for levelsMutex
+//     levelsLock.unlock();
+
+//     treeDump.pop_back(); // Remove the last space from the treeDump string
+//     output += logicalPairs + levelKeys + treeDump;
+//     return output;
 // }
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+    std::map<KEY_t, VAL_t> bufferContents;
+
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
-    std::string treeDump = ""; // Create a string to hold the dump of the tree
+    std::string treeDump = "";   // Create a string to hold the dump of the tree
 
-    // Acquire shared lock for levelsMutex
-    std::shared_lock<boost::upgrade_mutex> levelsLock(levelsMutex);
+    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+    {
+        std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+        bufferContents = buffer.getMap();
+    }
 
     // Iterate through the levels and add the number of keys in each level to the levelKeys string
-    for (auto it = levels.begin(); it != levels.end(); it++) {
+    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
     }
     // Remove the last comma and space from the levelKeys string
     levelKeys.resize(levelKeys.size() - 2);
     levelKeys += "\n";
-
-    // Release the shared lock for levelsMutex
-    levelsLock.unlock();
-
-    // Acquire shared lock for bufferMutex
-    std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
 
     // Iterate through the buffer and add the key/value pairs to the treeDump string
     std::map<KEY_t, VAL_t> bufferContents = buffer.getMap();
@@ -628,18 +652,10 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     if (pairsCounter > 0) {
         treeDump += "\n\n";
     }
-
-    // Release the shared lock for bufferMutex
-    bufferLock.unlock();
-
-    // Acquire shared lock for levelsMutex
-    levelsLock.lock();
-
     // Iterate through the levels and add the key/value pairs to the treeDump string
     for (auto level = levels.begin(); level != levels.end(); level++) {
         pairsCounter = 0;
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex); // Acquire shared lock for levelMutex
             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
@@ -653,80 +669,15 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
                 }
             }
-            // Release the shared lock for levelMutex
-            levelLock.unlock();
         }
         if (pairsCounter > 0) {
             treeDump += "\n\n";
         }
     }
-
-    // Release the shared lock for levelsMutex
-    levelsLock.unlock();
-
     treeDump.pop_back(); // Remove the last space from the treeDump string
     output += logicalPairs + levelKeys + treeDump;
     return output;
 }
-
-// // Print out a summary of the tree.
-// std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
-//     std::string output = "";
-//     // Create a string to hold the number of logical key value pairs in the tree
-//     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(countLogicalPairs())) + "\n";
-//     std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
-//     std::string treeDump = ""; // Create a string to hold the dump of the tree
-
-//     // Iterate through the levels and add the number of keys in each level to the levelKeys string
-//     for (auto it = levels.begin(); it != levels.end(); it++) {
-//         levelKeys += "LVL" + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->getKvPairs()) + ", ";
-//     }
-//     // Remove the last comma and space from the levelKeys string
-//     levelKeys.resize(levelKeys.size() - 2);
-//     levelKeys += "\n";
-//     // Iterate through the buffer and add the key/value pairs to the treeDump string
-//     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
-//     size_t pairsCounter = 0;
-//     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-//         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
-//             break;
-//         }
-//         if (it->second == TOMBSTONE) {
-//             treeDump += std::to_string(it->first) + ":TOMBSTONE:L0 ";
-//         } else {
-//             treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L0 ";
-//         }
-//         pairsCounter++;
-//     }
-//     if (pairsCounter > 0) {
-//         treeDump += "\n\n";
-//     }
-//     // Iterate through the levels and add the key/value pairs to the treeDump string
-//     for (auto level = levels.begin(); level != levels.end(); level++) {
-//         pairsCounter = 0;
-//         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-//             std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
-//             // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
-//             for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
-//                 if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
-//                     break;
-//                 }
-//                 pairsCounter++;
-//                 if (it->second == TOMBSTONE) {
-//                     treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
-//                 } else {
-//                     treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
-//                 }
-//             }
-//         }
-//         if (pairsCounter > 0) {
-//             treeDump += "\n\n";
-//         }
-//     }
-//     treeDump.pop_back(); // Remove the last space from the treeDump string
-//     output += logicalPairs + levelKeys + treeDump;
-//     return output;
-// }
 
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.

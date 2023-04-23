@@ -18,7 +18,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
-    void benchmark(const std::string& filename, bool verbose);
+    void benchmark(const std::string& filename, bool verbose, size_t verboseFrequency);
     void load(const std::string& filename);
     bool isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it);
     bool isLastLevel(int levelNum);
@@ -50,7 +50,7 @@ private:
     double bfErrorRate;
     int fanout;
     Level::Policy levelPolicy;
-    int countLogicalPairs();
+    size_t countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();
     std::vector<std::shared_ptr<Level>> levels;

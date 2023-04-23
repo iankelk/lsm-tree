@@ -213,7 +213,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             break;
         case 'b':
             ss >> fileName;
-            lsmTree->benchmark(fileName, verbose);
+            lsmTree->benchmark(fileName, verbose, verboseFrequency);
             response = OK;
             break;
         case 'q':
@@ -317,7 +317,7 @@ void Server::run() {
 }
 
 
-Server::Server(int port, bool verbose) : port(port), verbose(verbose) {
+Server::Server(int port, bool verbose, size_t verboseFrequency) : port(port), verbose(verbose), verboseFrequency(verboseFrequency) {
     // Create server socket
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
@@ -374,14 +374,14 @@ void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Le
 void printHelp() {
     SyncedCout() << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
-              << "  -e <errorRate>       Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -n <numPages>        Number of buffer pages (default: " << DEFAULT_NUM_PAGES << ")\n"
-              << "  -f <fanout>          LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <levelPolicy>     Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
-              << "  -p <port>            Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
-              << "  -t <numThreads>      Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
-              << "  -v                   Verbose benchmarking. Benchmark function will print out status as it processes.\n"
-              << "  -h                   Print this help message\n" << std::endl
+              << "  -e <errorRate>             Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -n <numPages>              Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
+              << "  -f <fanout>                LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -l <levelPolicy>           Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -p <port>                  Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
+              << "  -t <numThreads>            Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
+              << "  -v <optional: frequency>   Verbose benchmarking. Benchmark function will print out status as it processes.\n"
+              << "  -h                         Print this help message\n" << std::endl
     ;
 }
 
@@ -392,7 +392,7 @@ void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int f
     SyncedCout() << "  LSM-tree fanout: " << fanout << std::endl;
     SyncedCout() << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     SyncedCout() << "  Number of threads: " << numThreads << std::endl;
-    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << std::endl;
+    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << " with frequency " << verboseFrequency << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
@@ -462,7 +462,7 @@ int main(int argc, char **argv) {
     Level::Policy levelPolicy = DEFAULT_LEVELING_POLICY;
     bool verbose = DEFAULT_VERBOSE_LEVEL;
     int numThreads = DEFAULT_NUM_THREADS;
-    int verboseLevel = BENCHMARK_REPORT_FREQUENCY;
+    size_t verboseFrequency = BENCHMARK_REPORT_FREQUENCY;
 
     // Parse command line arguments
     while ((opt = getopt(argc, argv, "e:n:f:l:p:t:hvc")) != -1) {
@@ -503,10 +503,10 @@ int main(int argc, char **argv) {
             verbose = true;
             // Check if there is an argument after -v and if it is a number
             if (optind < argc && isdigit(argv[optind][0])) {
-                verboseLevel = atoi(argv[optind]);
+                verboseFrequency = atoi(argv[optind]);
                 optind++; // Move to the next argument
             }
-            SyncedCout() << "Verbose is enabled with level " << verboseLevel << std::endl;
+            SyncedCout() << "Verbose is enabled with frequency " << verboseFrequency << std::endl;
             break;
         case 'h':
             printHelp();
@@ -525,7 +525,7 @@ int main(int argc, char **argv) {
     }
 
     // Create server instance with the specified port
-    Server server(port, verbose);
+    Server server(port, verbose, verboseFrequency);
 
     // Set the global server pointer
     server_ptr = &server;
