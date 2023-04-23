@@ -465,45 +465,51 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-// Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
-// has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
 int LSMTree::countLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
 
     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
     if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
         return numLogicalPairs;
-    } 
+    }
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
         bufferContents = buffer.getMap();
     }
-    
+
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
-    // Create a pointer to a map of key/value pairs
-    std::map<KEY_t, VAL_t> kvMap;
     
-    // boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
 
     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
+        futures.reserve((*level)->runs.size());
+
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            // Get the map of key/value pairs from the run
-            kvMap = (*run)->getMap();
-            // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-            for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
-                if (it->second == TOMBSTONE) {
-                    if (keys.find(it->first) != keys.end()) {
-                        keys.erase(it->first);
-                    }
-                } else {
-                    keys.insert(it->first);
-                }
-            }
-        }  
+            // Enqueue task for getting the map from the run
+            futures.push_back(threadPool.enqueue([&, run] {
+                return (*run)->getMap();
+            }));
+        }
     }
+
+    // Wait for all tasks to finish and aggregate the results
+    for (auto &future : futures) {
+        std::map<KEY_t, VAL_t> kvMap = future.get();
+        // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+        for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+            if (it->second == TOMBSTONE) {
+                if (keys.find(it->first) != keys.end()) {
+                    keys.erase(it->first);
+                }
+            } else {
+                keys.insert(it->first);
+            }
+        }
+    }
+
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (it->second == TOMBSTONE) {
@@ -526,18 +532,27 @@ int LSMTree::countLogicalPairs() {
 // // Create a set of all the keys in the tree. Start from the bottom level and work up. If an upper level 
 // // has a key with a TOMBSTONE, remove the key from the set. Return the size of the set.
 // int LSMTree::countLogicalPairs() {
-//     {
-//         std::shared_lock<std::shared_mutex> lock(numLogicalPairsMutex);
-//         if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
+//     std::map<KEY_t, VAL_t> bufferContents;
+
+//     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
+//     if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
 //         return numLogicalPairs;
+//     } 
+//     {
+//         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
+//         bufferContents = buffer.getMap();
 //     }
-//     }
+    
 //     // Create a set of all the keys in the tree
 //     std::set<KEY_t> keys;
 //     // Create a pointer to a map of key/value pairs
 //     std::map<KEY_t, VAL_t> kvMap;
+    
+//     // boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+//     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
 
-//     for (auto level = levels.begin(); level != levels.end(); level++) {
+//     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+//         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
 //         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
 //             // Get the map of key/value pairs from the run
 //             kvMap = (*run)->getMap();
@@ -554,7 +569,6 @@ int LSMTree::countLogicalPairs() {
 //         }  
 //     }
 //     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-//     std::map<KEY_t, VAL_t> bufferContents = buffer->getMap();
 //     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
 //         if (it->second == TOMBSTONE) {
 //             if (keys.find(it->first) != keys.end()) {
@@ -565,7 +579,7 @@ int LSMTree::countLogicalPairs() {
 //         }
 //     }
 //     {
-//         std::unique_lock<std::shared_mutex> lock(numLogicalPairsMutex);
+//         boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(lock);
 //         numLogicalPairs = keys.size();
 //     }
 //     // Return the size of the set
