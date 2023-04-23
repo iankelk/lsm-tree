@@ -47,7 +47,7 @@ void listenToServer(int client_socket, bool quiet) {
     char buffer[BUFFER_SIZE];
     ssize_t n_read;
 
-    while (true) {
+    while (get_running()) {
         std::string response;
 
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
@@ -78,7 +78,7 @@ void listenToServer(int client_socket, bool quiet) {
 
         if (response == SERVER_SHUTDOWN) {
             std::unique_lock<std::mutex> lock(mtx);
-            running = false;
+            set_running(false);
             lock.unlock();
             SyncedCout() << "Server shutdown detected. Exiting..." << std::endl;
             return;
@@ -182,7 +182,6 @@ int main(int argc, char *argv[]) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     std::thread server_listener(listenToServer, client_socket, quiet);
-    //server_listener.detach();
 
     std::thread command_sender(sendCommandsToServer, client_socket, quiet, is_stdin_connected_to_file);
     command_sender.join();
@@ -193,11 +192,8 @@ int main(int argc, char *argv[]) {
     SyncedCout() << "Processing the workload took " << duration.count() << " microseconds (" << formatMicroseconds(duration.count()) + ")" << std::endl;
 
     // Clean up resources
-    {
-        std::unique_lock<std::mutex> lock(mtx);
-        running = false;
-    }
+    set_running(false); 
     close(client_socket);
-    server_listener.join(); // Add this line
+    server_listener.join();
     return 0;
 }
