@@ -180,7 +180,6 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     //     return;
     // }
     switch (op) {
-        // Put, delete, load, benchmark, and quit operations are exclusive
         case 'p':
             ss >> key >> value;
             // Break if key or value are not numbers
@@ -223,7 +222,6 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             terminationFlag.store(1, std::memory_order_release);
             close();
             break;
-        // Get, range, printStats, and info operations are shared
         case 'g':
             ss >> key;
             // Break if key is not a number
