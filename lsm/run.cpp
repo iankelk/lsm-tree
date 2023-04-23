@@ -24,10 +24,6 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
 {
 
     if (createFile) {
-        // Ensure that only one thread is creating a file at a time and no other thread is reading 
-        // TODO: just in case
-        //std::unique_lock<std::shared_mutex> lock(fileMutex);
-
         std::string dataDir = DATA_DIRECTORY;
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
 
@@ -44,7 +40,6 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         fencePointers.reserve(maxKvPairs / getpagesize());
     }
 }
-
 
 Run::~Run() {
     closeFile();

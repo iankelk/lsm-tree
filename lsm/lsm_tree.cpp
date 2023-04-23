@@ -264,12 +264,14 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     incrementGetMisses();
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
-
+// Returns a map of all the key-value pairs in the range [start, end] or an empty map if the range is invalid
 std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
+    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
+
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
-        return nullptr;
+        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
@@ -279,13 +281,12 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         end = temp;
     }
 
-    // If the start key is equal to the end key, return nullptr
+    // If the start key is equal to the end key, return an empty map
     if (start == end) {
-        return nullptr;
+        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
     }
     int allPossibleKeys = end - start;
 
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
     {
         // SyncedCout() << "Locking bufferMutex in range for thread: " << std::this_thread::get_id() << std::endl; 
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
@@ -409,8 +410,9 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
                 KEY_t end;
                 line_ss >> start >> end;
                 rangePtr = range(start, end);
-                SyncedCout() << rangePtr->size() << std::endl;
-
+                if (rangePtr->size() > 0) {
+                    SyncedCout() << rangePtr->size() << std::endl;
+                }
                 break;
             }
             default: {
@@ -620,6 +622,7 @@ std::string LSMTree::printTree() {
         levelDiskSummary += "Level " + std::to_string((*it)->getLevelNum()) + " disk type: " + (*it)->getDiskName() + ", disk penalty multiplier: " + 
                             std::to_string((*it)->getDiskPenaltyMultiplier()) + ", is it the last level? " + (isLastLevel(it + 1 == localLevelsCopy.end()) ? "Yes" : "No") + "\n";
     }
+    output += levelDiskSummary;
     // Remove the last newline from the output string
     output.pop_back();
     return output;
