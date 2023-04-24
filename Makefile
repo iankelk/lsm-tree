@@ -4,7 +4,7 @@ SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level
 $(shell mkdir -p bin)
 
 # Link the Boost library
-LDLIBS = -lboost_thread-mt -lboost_system-mt
+LDLIBS = -lboost_thread-mt 
 
 CXXFLAGS = -std=c++17 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
 LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
