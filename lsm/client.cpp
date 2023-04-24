@@ -5,6 +5,8 @@
 #include <iostream>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
+#include <cstring>
 #include "data_types.hpp"
 #include <sys/select.h>
 
