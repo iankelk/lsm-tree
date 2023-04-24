@@ -13,7 +13,8 @@ class Run;
 
 class LSMTree {
 public:
-    LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads);
+    LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, 
+            size_t numThreads, float compactionPercentage);
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
@@ -43,6 +44,7 @@ public:
     size_t getIoCount();
     size_t getLevelIoCount(int levelNum);
     std::chrono::microseconds getLevelIoTime(int levelNum);
+    float getCompactionPercentage() const { return compactionPercentage; }
 
 private:
     Memtable buffer;
@@ -50,6 +52,7 @@ private:
     double bfErrorRate;
     int fanout;
     Level::Policy levelPolicy;
+    float compactionPercentage;
     std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();

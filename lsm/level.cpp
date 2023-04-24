@@ -7,7 +7,6 @@
 
 // Add run to the beginning of the Level runs queue 
 void Level::put(std::unique_ptr<Run> runPtr) {
-    // boost::unique_lock<boost::upgrade_mutex> lock(levelMutex);
     // Check if there is enough space in the level to add the run
     if (kvPairs + runPtr->getMaxKvPairs() > maxKvPairs) {
         printTrace();
@@ -83,17 +82,45 @@ size_t Level::getLevelSize(int levelNum) {
 }
 // Iterate through the runs of the level, calculating the difference between the last key of a run and the first
 // key of the next run. Return the start and end indices of the segment with the minimum key difference.
-std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
-    size_t bestStartIdx = 0;
-    size_t bestEndIdx = 1;
-    long best_diff = LONG_MAX;
+// std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
+//     size_t bestStartIdx = 0;
+//     size_t bestEndIdx = 1;
+//     long best_diff = LONG_MAX;
 
-    for (size_t idx = 0; idx < runs.size() - 1; ++idx) {
-        long diff = labs(runs[idx]->getMap().rbegin()->first - runs[idx + 1]->getMap().begin()->first);
+//     for (size_t idx = 0; idx < runs.size() - 1; ++idx) {
+//         long diff = labs(runs[idx]->getMap().rbegin()->first - runs[idx + 1]->getMap().begin()->first);
+//         if (diff < best_diff) {
+//             best_diff = diff;
+//             bestStartIdx = idx;
+//             bestEndIdx = idx + 1;
+//         }
+//     }
+//     return {bestStartIdx, bestEndIdx};
+// }
+
+// Calculate the sum of key differences for a range of runs
+long Level::sumOfKeyDifferences(size_t start, size_t end) {
+    long sum = 0;
+    for (size_t i = start; i < end; ++i) {
+        sum += labs(runs[i]->getMap().rbegin()->first - runs[i + 1]->getMap().begin()->first);
+    }
+    return sum;
+}
+
+// Iterate through the runs of the level, calculating the weighted sum of key differences for segments
+// Return the start and end indices of the best segment to compact
+std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
+    size_t num_runs_to_merge = std::max(2, static_cast<int>(std::round(lsmTree->getCompactionPercentage() * runs.size())));
+    size_t bestStartIdx = 0;
+    size_t bestEndIdx = num_runs_to_merge - 1;
+    long best_diff = sumOfKeyDifferences(bestStartIdx, bestEndIdx - 1);
+
+    for (size_t idx = 1; idx <= runs.size() - num_runs_to_merge; ++idx) {
+        long diff = sumOfKeyDifferences(idx, idx + num_runs_to_merge - 2);
         if (diff < best_diff) {
             best_diff = diff;
             bestStartIdx = idx;
-            bestEndIdx = idx + 1;
+            bestEndIdx = idx + num_runs_to_merge - 1;
         }
     }
     return {bestStartIdx, bestEndIdx};
@@ -178,12 +205,11 @@ void Level::deserialize(const json& j, LSMTree* lsmTreePtr) {
     std::string policy_str = j["levelPolicy"];
     levelPolicy = stringToPolicy(policy_str);
 
+    lsmTree = lsmTreePtr;
+
     for (const auto& runJson : j["runs"]) {
         std::unique_ptr<Run> run = std::make_unique<Run>(maxKvPairs, DEFAULT_ERROR_RATE, false, levelNum, lsmTree);
         run->deserialize(runJson);
         runs.emplace_back(std::move(run));
     }
-
-    // Set the lsmTree pointer for the level
-    lsmTree = lsmTreePtr;
 }

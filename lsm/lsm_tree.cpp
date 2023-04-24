@@ -13,13 +13,13 @@
 #include "run.hpp"
 #include "utils.hpp"
 
-LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads) :
+LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy,
+                 size_t numThreads, float compactionPercentage) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads)
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), compactionPercentage(compactionPercentage)
 {
     // Create the first level
     levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
-    // levels.emplace_back(buffer->getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this);
     levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
 
@@ -694,6 +694,7 @@ json LSMTree::serialize() const {
     j["buffer"] = buffer.serialize();
     j["bfErrorRate"] = bfErrorRate;
     j["fanout"] = fanout;
+    j["compactionPercentage"] = compactionPercentage;
     j["levelPolicy"] = Level::policyToString(levelPolicy);
     j["levels"] = json::array();
     j["bfFalsePositives"] = bfFalsePositives;
@@ -738,6 +739,7 @@ void LSMTree::deserialize(const std::string& filename) {
 
     bfErrorRate = treeJson["bfErrorRate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
+    compactionPercentage = treeJson["compactionPercentage"].get<float>();
     levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
     bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
     bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
@@ -755,8 +757,9 @@ void LSMTree::deserialize(const std::string& filename) {
 
     levels.clear();
     for (const auto& levelJson : treeJson["levels"]) {
-        levels.emplace_back();
-        levels.back()->deserialize(levelJson, this);
+        Level *newLevel = new Level();
+        levels.emplace_back(newLevel);
+        newLevel->deserialize(levelJson, this);
     }
     infile.close();
 

@@ -359,37 +359,40 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads) {
+void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
     // Path to data directory and JSON file for serialization
     std::string dataDir = DATA_DIRECTORY;
     std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads);
+    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage);
     lsmTree->deserialize(lsmTreeJsonFile);
-    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), lsmTree->getNumThreads());
+    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), 
+                           lsmTree->getNumThreads(), lsmTree->getCompactionPercentage());
 }
 
 void printHelp() {
     SyncedCout() << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
-              << "  -e <errorRate>             Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -n <numPages>              Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
-              << "  -f <fanout>                LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <levelPolicy>           Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
-              << "  -p <port>                  Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
-              << "  -t <numThreads>            Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
-              << "  -v <optional: frequency>   Verbose benchmarking. Benchmark function will print out status as it processes.\n"
-              << "  -h                         Print this help message\n" << std::endl
+              << "  -e <errorRate>              Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -n <numPages>               Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
+              << "  -f <fanout>                 LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -l <levelPolicy>            Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -p <port>                   Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
+              << "  -t <numThreads>             Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
+              << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
+              << "  -v <optional: frequency>    Verbose benchmarking. Reports every \"frequency\" number of commands (default: " << BENCHMARK_REPORT_FREQUENCY << ")\n"
+              << "  -h                          Print this help message\n" << std::endl
     ;
 }
 
-void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads) {
+void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
     SyncedCout() << "LSMTree parameters:" << std::endl;
     SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;
     SyncedCout() << "  Number of buffer pages: " << bufferNumPages << std::endl;
     SyncedCout() << "  LSM-tree fanout: " << fanout << std::endl;
     SyncedCout() << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     SyncedCout() << "  Number of threads: " << numThreads << std::endl;
+    SyncedCout() << "  Compaction percentage: " << compactionPercentage << std::endl;
     SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << " with frequency " << verboseFrequency << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
@@ -427,17 +430,19 @@ std::string Server::printDSLHelp() {
         "8. Summarized Tree Info\n"
         "   Syntax: i\n"
         "   Example: \n"
-        "     Number of logical key-value pairs: 4,997,014\n"
-        "     Bloom filter false positive rate: 0.042312\n"
-        "     Number of I/O operations: 4,195,277\n"
-        "     Number of entries in the buffer: 805,079\n"
+        "     Number of logical key-value pairs: 9,988,261\n"
+        "     Bloom filter measured false positive rate: 0.000042\n"
+        "     Number of I/O operations: 238,248\n"
+        "     Number of entries in the buffer: 38,207 (Max 262,144 entries, or 2,097,152 bytes, 14\% full)\n"
         "     Maximum number of key-value pairs in the buffer: 1,048,576\n"
         "     Maximum size in bytes of the buffer: 8,388,608\n"
-        "     Number of levels: 1\n"
-        "     Number of SSTables in level 1: 4\n"
-        "     Number of key-value pairs in level 1: 4,194,304\n"
-        "     Max number of key-value pairs in level 1: 10,485,760\n"
-        "     Is level 1 the last level? Yes\n"
+        "     Number of Levels: 2\n"
+        "     Number of Runs in Level 1: 8\n"
+        "     Number of key-value pairs in level 1: 2,097,152 (Max 2,621,440, 80\% full)\n"
+        "     Number of Runs in Level 2: 3\n"
+        "     Number of key-value pairs in level 2: 7,864,320 (Max 26,214,400, 30\% full)\n"
+        "     Level 1 disk type: SSD, disk penalty multiplier: 1, is it the last level? No\n"
+        "     Level 2 disk type: HDD1, disk penalty multiplier: 5, is it the last level? Yes\n\n"
         "9. Shutdown server and save the database state to disk\n"
         "   Syntax: q\n"
         "Refer to the documentation for detailed examples and explanations of each command.\n";
@@ -461,9 +466,10 @@ int main(int argc, char **argv) {
     bool verbose = DEFAULT_VERBOSE_LEVEL;
     int numThreads = DEFAULT_NUM_THREADS;
     size_t verboseFrequency = BENCHMARK_REPORT_FREQUENCY;
+    float compactionPercentage = DEFAULT_COMPACTION_PERCENTAGE;
 
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:hvc")) != -1) {
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:c:hv")) != -1) {
         switch (opt) {
         case 'e':
             bfErrorRate = atof(optarg);
@@ -497,6 +503,9 @@ int main(int argc, char **argv) {
         case 't':
             numThreads = atoi(optarg);
             break;
+        case 'c':
+            compactionPercentage = atof(optarg);
+            break;
         case 'v':
             verbose = true;
             // Check if there is an argument after -v and if it is a number
@@ -529,7 +538,7 @@ int main(int argc, char **argv) {
     server_ptr = &server;
 
     // Create LSM-Tree with the parsed options
-    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads);
+    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage);
     // Create a thread for listening to standard input
     std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();

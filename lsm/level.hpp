@@ -6,6 +6,7 @@
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/lock_algorithms.hpp>
+#include <nlohmann/json.hpp>
 #include "run.hpp"
 #include "storage.hpp"
 
@@ -21,10 +22,10 @@ public:
         PARTIAL
     };
     // constructor
-    Level(long bs, int f, Policy l, int ln, LSMTree* lsmTree) :
-    bufferSize(bs), fanout(f), levelPolicy(l), levelNum(ln),
-    kvPairs(0), maxKvPairs(pow(f, ln) * bs), lsmTree(lsmTree), 
-    diskName(Storage::getDiskName(ln)), diskPenaltyMultiplier(Storage::getDiskPenaltyMultiplier(ln)) {};
+    Level(long bufferSize, int fanout, Policy levelPolicy, int levelNum, LSMTree* lsmTree) :
+    bufferSize(bufferSize), fanout(fanout), levelPolicy(levelPolicy), levelNum(levelNum),
+    kvPairs(0), maxKvPairs(pow(fanout, levelNum) * bufferSize), lsmTree(lsmTree), 
+    diskName(Storage::getDiskName(levelNum)), diskPenaltyMultiplier(Storage::getDiskPenaltyMultiplier(levelNum)) {};
 
     Level() = default; // default constructor
     ~Level() {}; // destructor
@@ -45,6 +46,7 @@ public:
     void replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun);
     std::unique_ptr<Run> compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel);
     std::pair<size_t, size_t> findBestSegmentToCompact(); 
+    long sumOfKeyDifferences(size_t start, size_t end);
 
     mutable std::shared_mutex levelMutex;
     mutable boost::upgrade_mutex runsMutex;
@@ -84,8 +86,8 @@ public:
         diskName(other.diskName),
         diskPenaltyMultiplier(other.diskPenaltyMultiplier),
         runs(std::move(other.runs)),
-        levelMutex(), // Mutex is default constructed
-        runsMutex()   // Mutex is default constructed
+        levelMutex(), // Mutexes are default constructed
+        runsMutex()
     {
     }
     // copy assignment operator
@@ -107,9 +109,9 @@ public:
 
 private:
     int levelNum;
-    long kvPairs; // the number of key-value pairs in the level 
-    long maxKvPairs; // the maximum number of key-value pairs that can be in the level
-    long bufferSize; // Memtable size
+    size_t kvPairs; // the number of key-value pairs in the level 
+    size_t maxKvPairs; // the maximum number of key-value pairs that can be in the level
+    size_t bufferSize; // Memtable size
     Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
     int fanout;
     std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup
