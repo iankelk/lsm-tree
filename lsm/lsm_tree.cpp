@@ -594,8 +594,8 @@ std::string LSMTree::printInfo() {
     std::stringstream output;
     std::stringstream levelDiskSummary;
     std::vector<std::string> levelStrings, keyValueStrings, maxKeyValueStrings, diskNameStrings, multiplierStrings;
-    output << std::left;
-    levelDiskSummary << std::left;
+    output << std::right;
+    levelDiskSummary << std::right;
 
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     output << "\nNumber of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
@@ -664,34 +664,39 @@ std::string LSMTree::printLevelIoCount() {
     }
 
     // Find the longest strings in each container using the helper function. Additional 1 or 2 is for commas and spaces.
-    int levelWidth = getLongestStringLength(levelStrings) + 1;
-    int ioCountWidth = getLongestStringLength(ioCountStrings) + 2;
-    int timeWidth = getLongestStringLength(timeStrings);
-    int diskNameWidth = getLongestStringLength(diskNameStrings) + 2;
-    int multiplierWidth = getLongestStringLength(multiplierStrings);
+    const int levelWidth = getLongestStringLength(levelStrings) + 1;
+    const int ioCountWidth = getLongestStringLength(ioCountStrings) + 2;
+    const int timeWidth = getLongestStringLength(timeStrings);
+    const int diskNameWidth = getLongestStringLength(diskNameStrings) + 2;
+    const int multiplierWidth = getLongestStringLength(multiplierStrings);
 
     size_t penaltyTime;
+    std::vector<std::string> penaltyTimes;
     size_t totalPenaltyTime = 0;
 
-    output << std::left;
-    penaltyOutput << std::left;
+    output << std::right;
+    penaltyOutput << std::right;
 
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {
-        output << "Level " << std::setw(levelWidth) << levelStrings[i]
-               << "I/O count: " << std::setw(ioCountWidth) << ioCountStrings[i] + ", "
+        output << "Level" << std::setw(levelWidth) << levelStrings[i]
+               << " I/O count: " << std::setw(ioCountWidth) << ioCountStrings[i] + ", "
                << "Disk name: " << std::setw(diskNameWidth) << diskNameStrings[i] + ", "
                << "Disk penalty multiplier: " << std::setw(multiplierWidth) << multiplierStrings[i] + ", "
                << "Microseconds: " << std::setw(timeWidth) << timeStrings[i]
                << " (" << formatMicroseconds(std::stol(timeStrings[i])) << ")\n";
 
         penaltyTime = std::stol(timeStrings[i]) * std::stol(multiplierStrings[i]);
+        penaltyTimes.push_back(std::to_string(penaltyTime));
         totalPenaltyTime += penaltyTime;
-
-        penaltyOutput << "Level " << std::setw(levelWidth) << levelStrings[i]
-                      << "microseconds: " << std::setw(timeWidth) << timeStrings[i]
+    }
+    const int penaltyTimeWidth = getLongestStringLength(penaltyTimes);
+    
+    for (size_t i = 0; i < localLevelsCopy.size(); i++) {
+        penaltyOutput << "Level" << std::setw(levelWidth) << levelStrings[i]
+                      << " microseconds: " << std::setw(timeWidth) << timeStrings[i]
                       << " x " << std::setw(multiplierWidth) << multiplierStrings[i]
-                      << " = " << std::setw(timeWidth) << penaltyTime
-                      << " (" << formatMicroseconds(penaltyTime) << ")\n";
+                      << " = " << std::setw(penaltyTimeWidth) << penaltyTimes[i]
+                      << " (" << formatMicroseconds(std::stoul(penaltyTimes[i])) << ")\n";
     }
 
     // Add up all the I/O counts for each level
@@ -733,7 +738,7 @@ float LSMTree::getBfFalsePositiveRate() {
 std::string LSMTree::getBloomFilterSummary() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::stringstream output;
-    output << std::left;
+    output << std::right;
 
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
     output << "\nBloom filter total measured FPR: " << bfStatus << "\n\n";
