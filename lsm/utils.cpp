@@ -64,3 +64,8 @@ void printTrace() {
     printf("\n");
     free(messages);
 }
+
+// Helper function to get the length of the longest string in a vector
+int getLongestStringLength(const std::vector<std::string>& strings) {
+    return max_element(strings.begin(), strings.end(), [](const std::string &a, const std::string &b) { return a.length() < b.length(); })->length();
+}

@@ -9,6 +9,7 @@
 void die(const std::string& message);
 std::string formatMicroseconds(size_t microseconds);
 std::string addCommas(std::string s);
+int getLongestStringLength(const std::vector<std::string>& strings);
 void printTrace();
 
 class SyncedCout {
