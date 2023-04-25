@@ -4,6 +4,7 @@
 #include <execinfo.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <map>
 #include "utils.hpp"
 
 std::mutex SyncedCout::_coutMutex;
@@ -68,4 +69,20 @@ void printTrace() {
 // Helper function to get the length of the longest string in a vector
 int getLongestStringLength(const std::vector<std::string>& strings) {
     return max_element(strings.begin(), strings.end(), [](const std::string &a, const std::string &b) { return a.length() < b.length(); })->length();
+}
+
+// Helper function to return a vector of values by key from a nested map (vector<vector<map<string, string>>>)
+std::vector<std::string> getMapValuesByKey(const std::vector<std::vector<std::map<std::string, std::string>>>& maps, const std::string& key) {
+    std::vector<std::string> values;
+
+    for (const auto& level : maps) {
+        for (const auto& run : level) {
+            auto it = run.find(key);
+            if (it != run.end()) {
+                values.push_back(it->second);
+            }
+        }
+    }
+
+    return values;
 }

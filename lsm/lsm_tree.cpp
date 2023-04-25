@@ -666,7 +666,7 @@ std::string LSMTree::printLevelIoCount() {
 
     // Find the longest strings in each container using the helper function. Additional 1 or 2 is for commas and spaces.
     int levelWidth = getLongestStringLength(levelStrings) + 1;
-    int ioCountWidth = getLongestStringLength(ioCountStrings);
+    int ioCountWidth = getLongestStringLength(ioCountStrings) + 2;
     int timeWidth = getLongestStringLength(timeStrings);
     int diskNameWidth = getLongestStringLength(diskNameStrings) + 2;
     int multiplierWidth = getLongestStringLength(multiplierStrings);
@@ -680,16 +680,16 @@ std::string LSMTree::printLevelIoCount() {
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {
         output << "Level " << std::setw(levelWidth) << levelStrings[i]
                << "I/O count: " << std::setw(ioCountWidth) << ioCountStrings[i] + ", "
-               << "Microseconds: " << std::setw(timeWidth) << timeStrings[i]
-               << " (" << formatMicroseconds(std::stol(timeStrings[i])) << "), "
                << "Disk name: " << std::setw(diskNameWidth) << diskNameStrings[i] + ", "
-               << "Disk penalty multiplier: " << multiplierStrings[i] << "\n";
+               << "Disk penalty multiplier: " << std::setw(multiplierWidth) << multiplierStrings[i] + ", "
+               << "Microseconds: " << std::setw(timeWidth) << timeStrings[i]
+               << " (" << formatMicroseconds(std::stol(timeStrings[i])) << ")\n";
 
         penaltyTime = std::stol(timeStrings[i]) * std::stol(multiplierStrings[i]);
         totalPenaltyTime += penaltyTime;
 
         penaltyOutput << "Level " << std::setw(levelWidth) << levelStrings[i]
-                      << " microseconds: " << std::setw(timeWidth) << timeStrings[i]
+                      << "microseconds: " << std::setw(timeWidth) << timeStrings[i]
                       << " x " << std::setw(multiplierWidth) << multiplierStrings[i]
                       << " = " << std::setw(timeWidth) << penaltyTime
                       << " (" << formatMicroseconds(penaltyTime) << ")\n";
@@ -733,18 +733,39 @@ float LSMTree::getBfFalsePositiveRate() {
 // For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
 std::string LSMTree::getBloomFilterSummary() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-    std::string output = "";
-    for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
-        output += "Level " + std::to_string((*it)->getLevelNum()) + ":\n";
-        std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
-        for (auto run = (*it)->runs.begin(); run != (*it)->runs.end(); run++) {
-            output += "Run " + std::to_string(std::distance((*it)->runs.begin(), run)) + ": ";
-            output += (*run)->getBloomFilterSummary()+ "\n";
+    std::stringstream output;
+    output << std::left;
+
+    std::vector<std::vector<std::map<std::string, std::string>>> summaries(localLevelsCopy.size());
+    for (size_t i = 0; i < localLevelsCopy.size(); i++) {
+        std::shared_lock<std::shared_mutex> levelLock(localLevelsCopy[i]->levelMutex);
+        for (size_t j = 0; j < localLevelsCopy[i]->runs.size(); j++) {
+            summaries[i].push_back(localLevelsCopy[i]->runs[j]->getBloomFilterSummary());
         }
     }
-    // Remove the last newline from the output string
-    output.pop_back();
-    return output;
+
+    // Set the width for each field/column. Additional 1 or 2 is for commas and spaces.
+    int bloomSizeWidth = getLongestStringLength(getMapValuesByKey(summaries, "bloomFilterSize")) + 2;
+    int numHashFunctionsWidth = getLongestStringLength(getMapValuesByKey(summaries, "hashFunctions")) + 2;
+    int keysWidth = getLongestStringLength(getMapValuesByKey(summaries, "keys")) + 2;
+    int fprWidth = getLongestStringLength(getMapValuesByKey(summaries, "theoreticalFPR")) + 2;
+    int tpfpWidth = getLongestStringLength(getMapValuesByKey(summaries, "truePositives")) + 2;
+
+    for (size_t i = 0; i < localLevelsCopy.size(); i++) {
+        output << "Level " << i + 1 << ":\n";
+        for (size_t j = 0; j < summaries[i].size(); j++) {
+            output << "Run " << j << ": ";
+            output << "Bloom Filter Size: " << std::setw(bloomSizeWidth) << summaries[i][j]["bloomFilterSize"] + ", "
+            << "Hash Functions: " << std::setw(numHashFunctionsWidth) << summaries[i][j]["hashFunctions"] + ", "
+            << "Number of Keys: " << std::setw(keysWidth) << summaries[i][j]["keys"] + ", "
+            << "Theoretical FPR: " << std::setw(fprWidth) << summaries[i][j]["theoreticalFPR"] + ", "
+            << "TP: " << std::setw(tpfpWidth) << summaries[i][j]["truePositives"] + ", "
+            << "FP: " << std::setw(tpfpWidth) << summaries[i][j]["falsePositives"] + ", "
+            << "Measured FPR: " << summaries[i][j]["measuredFPR"] << "\n";
+        }
+    }
+
+    return output.str();
 }
 
 json LSMTree::serialize() const {

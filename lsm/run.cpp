@@ -326,30 +326,23 @@ void Run::setLSMTree(LSMTree* lsmTree) {
     this->lsmTree = lsmTree;
 }
 
-// Print the summary for a Run's bloom filter.
-std::string Run::getBloomFilterSummary() {
+// Get the summary for a Run's bloom filter and return a map of variable names and their values.
+std::map<std::string, std::string> Run::getBloomFilterSummary() {
+    std::map<std::string, std::string> summary;
+
     // If the bloom filter has not been used, don't print the false positive rate and just print "Unused"
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
 
-    // Set the width for each field/column
-    const int bloomSizeWidth = 12;
-    const int numHashFunctionsWidth = 3;
-    const int fprWidth = 10;
-    const int tpfpWidth = 8;
-    const int keysWidth = 24;
+    summary["bloomFilterSize"] = addCommas(std::to_string(getBloomFilterNumBits()));
+    summary["hashFunctions"] = std::to_string(bloomFilter.getNumHashes());
+    summary["keys"] = addCommas(std::to_string(size)) + " (Max " + addCommas(std::to_string(maxKvPairs)) + ")";
+    summary["theoreticalFPR"] = std::to_string(bloomFilter.theoreticalErrorRate());
+    summary["truePositives"] = addCommas(std::to_string(truePositives));
+    summary["falsePositives"] = addCommas(std::to_string(getFalsePositives()));
+    summary["measuredFPR"] = bfStatus;
 
-    std::stringstream ss;
-    ss << std::left
-       << "Bloom Filter Size: " << std::setw(bloomSizeWidth) << addCommas(std::to_string(getBloomFilterNumBits())) + ", "
-       << "Hash Functions: " << std::setw(numHashFunctionsWidth) << std::to_string(bloomFilter.getNumHashes()) + ", "
-       << "Number of Keys: " << std::setw(keysWidth) << addCommas(std::to_string(size)) + " (Max " + addCommas(std::to_string(maxKvPairs)) + "), "
-       << "Theoretical FPR: " << std::setw(fprWidth) << std::to_string(bloomFilter.theoreticalErrorRate()) + ", "
-       << "TP: " << std::setw(tpfpWidth) << addCommas(std::to_string(truePositives)) + ", "
-       << "FP: " << std::setw(tpfpWidth) << addCommas(std::to_string(getFalsePositives())) + ", "
-       << "Measured FPR: " << std::setw(fprWidth) << bfStatus;
-    return ss.str();
+    return summary;
 }
-
 
 void Run::resizeBloomFilterBitset(size_t numBits) {
     bloomFilter.resize(bloomFilter.getNumBits());
