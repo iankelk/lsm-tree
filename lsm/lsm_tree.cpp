@@ -23,11 +23,11 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
     levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
 }
 
-// Calculate whether an std::deque<Level>::iterator is pointing to the last level
+// Check whether an iterator is at the last level
 bool LSMTree::isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it) {
     return (it + 1 == levels.end());
 }
-
+// Check if a level number is the last level
 bool LSMTree::isLastLevel(int levelNum) {
     return (levelNum == levels.size() - 1);
 }
@@ -72,7 +72,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         levels.front()->runs.front()->put(it->first, it->second);
     }
-    // Close the run's file
     levels.front()->runs.front()->closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -584,7 +583,7 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
 
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.
-std::string LSMTree::printTree() {
+std::string LSMTree::printInfo() {
     size_t numLogicalPairs;
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
@@ -735,6 +734,9 @@ std::string LSMTree::getBloomFilterSummary() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     std::stringstream output;
     output << std::left;
+
+    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
+    output << "\nBloom filter total measured FPR: " << bfStatus << "\n\n";
 
     std::vector<std::vector<std::map<std::string, std::string>>> summaries(localLevelsCopy.size());
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {

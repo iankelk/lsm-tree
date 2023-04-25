@@ -24,7 +24,7 @@ public:
     bool isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it);
     bool isLastLevel(int levelNum);
     std::string printStats(size_t numToPrintFromEachLevel);
-    std::string printTree();
+    std::string printInfo();
     std::string printLevelIoCount();
     json serialize() const;
     void serializeLSMTreeToFile(const std::string& filename);

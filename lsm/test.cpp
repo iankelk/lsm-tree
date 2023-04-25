@@ -377,7 +377,7 @@ int testTree() {
     //         tree.put(i, i);
     //     }
     //     // Print the tree
-    //     tree.printTree();
+    //     tree.printInfo();
     // }
 
 

@@ -273,7 +273,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             }
             break;
         case 'i':
-            response = lsmTree->printTree();
+            response = lsmTree->printInfo();
             break;
         default:
             response = printDSLHelp();
