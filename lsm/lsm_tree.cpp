@@ -181,12 +181,12 @@ void LSMTree::executeCompactionPlan() {
     compactResults.reserve(compactionPlan.size());
 
     for (const auto &[levelNum, segmentBounds] : compactionPlan) {
-        int first = segmentBounds.first;
-        int second = segmentBounds.second;
+        int start, end;
+        std::tie(start, end) = segmentBounds;
         auto &level = levels[levelNum - 1];
-        auto task = [this, &level, first, second] {
-            auto compactedRun = level->compactSegment(bfErrorRate, {first, second}, isLastLevel(level->getLevelNum()));
-            level->replaceSegment({first, second}, std::move(compactedRun));
+        auto task = [this, &level, start, end] {
+            auto compactedRun = level->compactSegment(bfErrorRate, {start, end}, isLastLevel(level->getLevelNum()));
+            level->replaceSegment({start, end}, std::move(compactedRun));
         };
         compactResults.push_back(threadPool.enqueue(task));
     }
@@ -620,7 +620,7 @@ std::string LSMTree::printInfo() {
         multiplierStrings.push_back(std::to_string((*it)->getDiskPenaltyMultiplier()));
     }
 
-    // Find the longest strings in each container using the helper function. Additional 2 is for commas and spaces.
+    // Find the longest strings in each container using the helper function. Additional +2 is for commas and spaces.
     const int levelWidth = getLongestStringLength(levelStrings);
     const int keyValueWidth = getLongestStringLength(keyValueStrings);
     const int maxKeyValueWidth = getLongestStringLength(maxKeyValueStrings) + 2;
@@ -741,7 +741,7 @@ std::string LSMTree::getBloomFilterSummary() {
     output << std::right;
 
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    output << "\nBloom filter total measured FPR: " << bfStatus << "\n\n";
+    output << "\nBloom filter total measured FPR: " << bfStatus << "\n";
 
     std::vector<std::vector<std::map<std::string, std::string>>> summaries(localLevelsCopy.size());
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {
@@ -751,17 +751,18 @@ std::string LSMTree::getBloomFilterSummary() {
         }
     }
 
-    // Set the width for each field/column. Additional 1 or 2 is for commas and spaces.
-    int bloomSizeWidth = getLongestStringLength(getMapValuesByKey(summaries, "bloomFilterSize")) + 2;
-    int numHashFunctionsWidth = getLongestStringLength(getMapValuesByKey(summaries, "hashFunctions")) + 2;
-    int keysWidth = getLongestStringLength(getMapValuesByKey(summaries, "keys")) + 2;
-    int fprWidth = getLongestStringLength(getMapValuesByKey(summaries, "theoreticalFPR")) + 2;
-    int tpfpWidth = getLongestStringLength(getMapValuesByKey(summaries, "truePositives")) + 2;
+    // Set the width for each field/column. Additional + 2 is for commas and spaces.
+    const int runWidth = std::to_string(getLongestVectorLength(summaries)).length();
+    const int bloomSizeWidth = getLongestStringLength(getMapValuesByKey(summaries, "bloomFilterSize")) + 2;
+    const int numHashFunctionsWidth = getLongestStringLength(getMapValuesByKey(summaries, "hashFunctions")) + 2;
+    const int keysWidth = getLongestStringLength(getMapValuesByKey(summaries, "keys")) + 2;
+    const int fprWidth = getLongestStringLength(getMapValuesByKey(summaries, "theoreticalFPR")) + 2;
+    const int tpfpWidth = getLongestStringLength(getMapValuesByKey(summaries, "truePositives")) + 2;
 
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {
-        output << "Level " << i + 1 << ":\n";
+        output << "\nLevel " << i + 1 << ":\n";
         for (size_t j = 0; j < summaries[i].size(); j++) {
-            output << "Run " << j << ": ";
+            output << "Run " << std::setw(runWidth) << j << ": ";
             output << "Bloom Filter Size: " << std::setw(bloomSizeWidth) << summaries[i][j]["bloomFilterSize"] + ", "
             << "Hash Functions: " << std::setw(numHashFunctionsWidth) << summaries[i][j]["hashFunctions"] + ", "
             << "Number of Keys: " << std::setw(keysWidth) << summaries[i][j]["keys"] + ", "

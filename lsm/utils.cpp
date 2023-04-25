@@ -71,10 +71,20 @@ int getLongestStringLength(const std::vector<std::string>& strings) {
     return max_element(strings.begin(), strings.end(), [](const std::string &a, const std::string &b) { return a.length() < b.length(); })->length();
 }
 
+// Function to get the length of the longest vector in a nested map (vector<vector<map<string, string>>>)
+size_t getLongestVectorLength(const std::vector<std::vector<std::map<std::string, std::string>>>& maps) {
+    size_t maxLength = 0;
+    for (const auto& level : maps) {
+        if (level.size() > maxLength) {
+            maxLength = level.size();
+        }
+    }
+    return maxLength;
+}
+
 // Helper function to return a vector of values by key from a nested map (vector<vector<map<string, string>>>)
 std::vector<std::string> getMapValuesByKey(const std::vector<std::vector<std::map<std::string, std::string>>>& maps, const std::string& key) {
     std::vector<std::string> values;
-
     for (const auto& level : maps) {
         for (const auto& run : level) {
             auto it = run.find(key);
@@ -83,6 +93,5 @@ std::vector<std::string> getMapValuesByKey(const std::vector<std::vector<std::ma
             }
         }
     }
-
     return values;
 }

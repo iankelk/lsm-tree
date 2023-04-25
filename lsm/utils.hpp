@@ -12,6 +12,7 @@ std::string formatMicroseconds(size_t microseconds);
 std::string addCommas(std::string s);
 int getLongestStringLength(const std::vector<std::string>& strings);
 std::vector<std::string> getMapValuesByKey(const std::vector<std::vector<std::map<std::string, std::string>>>& maps, const std::string& key);
+size_t getLongestVectorLength(const std::vector<std::vector<std::map<std::string, std::string>>>& maps);
 void printTrace();
 
 class SyncedCout {
