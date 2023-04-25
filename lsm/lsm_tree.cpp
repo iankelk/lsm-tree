@@ -592,60 +592,92 @@ std::string LSMTree::printTree() {
 
     // Call countLogicalPairs and unpack the returned tuple
     std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
-    std::string output = "";
-    std::string levelDiskSummary = "";
-    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    output += "\nNumber of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
-    output += "Bloom filter measured false positive rate: " + bfStatus + "\n";
-    output += "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
-    percentage = (static_cast<double>(bufferContents.size()) / buffer.getMaxKvPairs()) * 100;
-    output += "Number of entries in the buffer: " + addCommas(std::to_string(bufferContents.size()))
-               + " (Max " + addCommas(std::to_string(buffer.getMaxKvPairs())) + " entries, or "
-               + addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) + " bytes, "
-               + std::to_string(static_cast<int>(percentage)) + "% full)\n\n";
+    std::stringstream output;
+    std::stringstream levelDiskSummary;
 
-    output += "Number of Levels: " + std::to_string(localLevelsCopy.size()) + "\n\n";
+    const int levelWidth = 2;
+    const int keyValueWidth = 12;
+    const int diskNameWidth = 6;
+    const int multiplierWidth = 5;
+
+    output << std::left;
+    levelDiskSummary << std::left;
+
+    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
+    output << "\nNumber of logical key-value pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
+    output << "Bloom filter measured false positive rate: " + bfStatus + "\n";
+    output << "Number of I/O operations: " + addCommas(std::to_string(getIoCount())) + "\n";
+    percentage = (static_cast<double>(bufferContents.size()) / buffer.getMaxKvPairs()) * 100;
+    output << "Number of entries in the buffer: " << addCommas(std::to_string(bufferContents.size()))
+           << " (Max " << addCommas(std::to_string(buffer.getMaxKvPairs())) << " entries, or "
+           << addCommas(std::to_string(buffer.getMaxKvPairs() * sizeof(kvPair))) << " bytes, "
+           << std::to_string(static_cast<int>(percentage)) << "% full)\n\n";
+
+    output << "Number of Levels: " + std::to_string(localLevelsCopy.size()) + "\n\n";
     for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
         std::shared_lock<std::shared_mutex> levelLock((*it)->levelMutex);
-        output += "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
+        output << "Number of Runs in Level " + std::to_string((*it)->getLevelNum()) + ": " + std::to_string((*it)->runs.size()) + "\n";
         percentage = (static_cast<double>((*it)->getKvPairs()) / (*it)->getMaxKvPairs()) * 100;
-        output += "Number of key-value pairs in level " + std::to_string((*it)->getLevelNum()) + ": "
-                   + addCommas(std::to_string((*it)->getKvPairs()))
-                   + " (Max " + addCommas(std::to_string((*it)->getMaxKvPairs())) + ", "
-                   + std::to_string(static_cast<int>(percentage)) + "% full)\n\n";
+        output << "Number of key-value pairs in level " << std::setw(levelWidth) << std::to_string((*it)->getLevelNum()) + ": "
+               << std::setw(keyValueWidth) << addCommas(std::to_string((*it)->getKvPairs()))
+               << " (Max " << std::setw(keyValueWidth) << addCommas(std::to_string((*it)->getMaxKvPairs())) + ","
+               << std::to_string(static_cast<int>(percentage)) << "% full)\n\n";
 
-        levelDiskSummary += "Level " + std::to_string((*it)->getLevelNum()) + " disk type: " + (*it)->getDiskName()
-                             + ", disk penalty multiplier: " + std::to_string((*it)->getDiskPenaltyMultiplier())
-                             + ", is it the last level? " + ((it + 1 == localLevelsCopy.end()) ? "Yes" : "No") + "\n";
+        levelDiskSummary << "Level " << std::setw(levelWidth) << (*it)->getLevelNum()
+                         << " disk type: " << std::setw(diskNameWidth) << (*it)->getDiskName() + ","
+                         << "disk penalty multiplier: " << std::setw(multiplierWidth) << std::to_string((*it)->getDiskPenaltyMultiplier()) + ","
+                         << "is it the last level? " << ((it + 1 == localLevelsCopy.end()) ? "Yes" : "No") << "\n";
     }
-    output += levelDiskSummary;
-    return output;
+    output << levelDiskSummary.str();
+    return output.str();
 }
 
 // Print the I/O count for each level and the total I/O count.
 std::string LSMTree::printLevelIoCount() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-    std::string output = "";
-    std::string penaltyOutput = "";
+    std::stringstream output;
+    std::stringstream penaltyOutput;
+
+    // Set the width for each field/column
+    const int levelWidth = 3;
+    const int ioCountWidth = 8;
+    const int timeWidth = 11;
+    const int diskNameWidth = 6;
+    const int multiplierWidth = 4;
+
     size_t penaltyTime;
     size_t totalPenaltyTime = 0;
+
+    output << std::left;
+    penaltyOutput << std::left;
+
     for (auto it = localLevelsCopy.begin(); it != localLevelsCopy.end(); it++) {
-        output += "Level " + std::to_string((*it)->getLevelNum()) + " I/O count: " + addCommas(std::to_string(getLevelIoCount((*it)->getLevelNum()))) + ", Microseconds: " + 
-                   std::to_string(getLevelIoTime((*it)->getLevelNum()).count()) + " (" + formatMicroseconds(getLevelIoTime((*it)->getLevelNum()).count()) + "), Disk name: " +
-                   (*it)->getDiskName() + ", Disk penalty multiplier: " + std::to_string((*it)->getDiskPenaltyMultiplier()) + "\n";
+        output << "Level " << std::setw(levelWidth) << (*it)->getLevelNum()
+               << "I/O count: " << std::setw(ioCountWidth) << addCommas(std::to_string(getLevelIoCount((*it)->getLevelNum()))) + ", "
+               << "Microseconds: " << std::setw(timeWidth) << getLevelIoTime((*it)->getLevelNum()).count()
+               << " (" << formatMicroseconds(getLevelIoTime((*it)->getLevelNum()).count()) << "), "
+               << "Disk name: " << std::setw(diskNameWidth) << (*it)->getDiskName() + ", "
+               << "Disk penalty multiplier: " << (*it)->getDiskPenaltyMultiplier() << "\n";
+
         penaltyTime = getLevelIoTime((*it)->getLevelNum()).count() * (*it)->getDiskPenaltyMultiplier();
         totalPenaltyTime += penaltyTime;
-        penaltyOutput += "Level " + std::to_string((*it)->getLevelNum()) + " microseconds: " + std::to_string(getLevelIoTime((*it)->getLevelNum()).count()) + " x " + 
-                         std::to_string((*it)->getDiskPenaltyMultiplier()) + " = " + std::to_string(penaltyTime) + " (" + formatMicroseconds(penaltyTime) + ")\n"; 
-    }
-    // Add up all the I/O counts for each level
-    output += "Total I/O count (sum of all levels): " + addCommas(std::to_string(getIoCount())) + "\n\n";
-    output + "Using the multiplier penalties to simulate slower drives for the higher levels:\n";
-    output += penaltyOutput;
-    output += "\nTotal time with penalties: " + std::to_string(totalPenaltyTime) + "microseconds (" + formatMicroseconds(totalPenaltyTime) + ")\n";
 
-    return output;
+        penaltyOutput << "Level " << std::setw(levelWidth) << (*it)->getLevelNum()
+                      << " microseconds: " << std::setw(timeWidth) << getLevelIoTime((*it)->getLevelNum()).count()
+                      << " x " << std::setw(multiplierWidth) << (*it)->getDiskPenaltyMultiplier()
+                      << " = " << std::setw(timeWidth) << penaltyTime
+                      << " (" << formatMicroseconds(penaltyTime) << ")\n";
+    }
+
+    // Add up all the I/O counts for each level
+    output << "Total I/O count (sum of all levels): " << addCommas(std::to_string(getIoCount())) << "\n\n";
+    output << "Using the multiplier penalties to simulate slower drives for the higher levels:\n";
+    output << penaltyOutput.str();
+    output << "\nTotal time with penalties: " << addCommas(std::to_string(totalPenaltyTime)) << " microseconds (" << formatMicroseconds(totalPenaltyTime) << ")\n";
+
+    return output.str();
 }
+
 
 // Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
 void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {

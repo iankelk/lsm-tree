@@ -367,7 +367,7 @@ void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Le
     // Create LSM-Tree with lsmTree unique pointer
     lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage);
     lsmTree->deserialize(lsmTreeJsonFile);
-    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferNumPages(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), 
+    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferMaxKvPairs(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), 
                            lsmTree->getNumThreads(), lsmTree->getCompactionPercentage());
 }
 
@@ -386,15 +386,19 @@ void printHelp() {
     ;
 }
 
-void Server::printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
+void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
+    std::string verboseFrequencyString = (verbose) ? " (report every " + addCommas(std::to_string(verboseFrequency)) + " commands)" : "";    
     SyncedCout() << "LSMTree parameters:" << std::endl;
     SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;
-    SyncedCout() << "  Number of buffer pages: " << bufferNumPages << std::endl;
+    SyncedCout() << "  Max key-value pairs in buffer: " << addCommas(std::to_string(bufferMaxKvPairs)) << " (" << 
+                       addCommas(std::to_string(bufferMaxKvPairs * sizeof(kvPair))) << " bytes) " << std::endl;
     SyncedCout() << "  LSM-tree fanout: " << fanout << std::endl;
     SyncedCout() << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     SyncedCout() << "  Number of threads: " << numThreads << std::endl;
-    SyncedCout() << "  Compaction percentage: " << compactionPercentage << std::endl;
-    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << " with frequency " << verboseFrequency << std::endl;
+    if (levelPolicy == Level::Policy::PARTIAL) {
+        SyncedCout() << "  Compaction percentage: " << compactionPercentage << std::endl;
+    }
+    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << verboseFrequencyString << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 

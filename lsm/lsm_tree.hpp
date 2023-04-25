@@ -30,7 +30,7 @@ public:
     void serializeLSMTreeToFile(const std::string& filename);
     void deserialize(const std::string& filename);
     float getBfErrorRate() const { return bfErrorRate; }
-    size_t getBufferNumPages() { return buffer.getMaxKvPairs(); }
+    size_t getBufferMaxKvPairs() { return buffer.getMaxKvPairs(); }
     int getFanout() const { return fanout; }
     Level::Policy getLevelPolicy() const { return levelPolicy; }
     void incrementBfFalsePositives();

@@ -31,7 +31,7 @@ private:
     bool verbose;
     size_t verboseFrequency;
     void sendResponse(int clientSocket, const std::string &response);
-    void printLSMTreeParameters(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy,
+    void printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy,
                                 size_t numThreads, float compactionPercentage);
 
     std::set<int> connectedClients;
