@@ -19,7 +19,7 @@ public:
     std::map<KEY_t, VAL_t> getMap();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();
-    int openFile(std::string originatingFunctionError, int flags);
+    void openFileReadOnly(const std::string& originatingFunctionError);
     void closeFile();
     json serialize() const;
     void deserialize(const json& j);
@@ -66,7 +66,6 @@ private:
     void incrementFalsePositives();
     size_t getFalsePositives();
     void incrementTruePositives();
-    size_t getTruePositives();
 
 };
 

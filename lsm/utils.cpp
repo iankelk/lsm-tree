@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <map>
+#include <algorithm>
 #include "utils.hpp"
 
 std::mutex SyncedCout::_coutMutex;
@@ -73,13 +74,11 @@ int getLongestStringLength(const std::vector<std::string>& strings) {
 
 // Function to get the length of the longest vector in a nested map (vector<vector<map<string, string>>>)
 size_t getLongestVectorLength(const std::vector<std::vector<std::map<std::string, std::string>>>& maps) {
-    size_t maxLength = 0;
-    for (const auto& level : maps) {
-        if (level.size() > maxLength) {
-            maxLength = level.size();
-        }
-    }
-    return maxLength;
+    auto maxLengthIt = std::max_element(maps.begin(), maps.end(), [](const auto& a, const auto& b) {
+        return a.size() < b.size();
+    });
+
+    return maxLengthIt != maps.end() ? maxLengthIt->size() : 0;
 }
 
 // Helper function to return a vector of values by key from a nested map (vector<vector<map<string, string>>>)

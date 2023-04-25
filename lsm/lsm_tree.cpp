@@ -84,7 +84,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // reserve space for the locks. We don't need to reserve space for the first level because it's already locked.
         compactionLocks.reserve(getCompactionPlanSize() - 1);
         // Lock the levels in the compaction plan
-        for (auto &entry : compactionPlan) {
+        for (const auto &entry : compactionPlan) {
             int levelNumber = entry.first;
             if (levelNumber == FIRST_LEVEL_NUM) {
                 continue;
@@ -108,7 +108,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock;
 
     if (currentLevelNum == FIRST_LEVEL_NUM) {
-        boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex); // Lock for reading the vector. Only lock it once.
+        levelVectorLock = boost::upgrade_lock<boost::upgrade_mutex>(levelsMutex); // Lock for reading the vector. Only lock it once.
     }
     it = levels.begin() + currentLevelNum - 1;
 
@@ -453,7 +453,7 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLogicalPairs() {
+std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
@@ -463,7 +463,7 @@ std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLo
     
     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
     if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-        return std::make_tuple(numLogicalPairs, buffer.getMap(), getLocalLevelsCopy());
+        return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
     }
 
     // Create a set of all the keys in the tree
@@ -513,17 +513,16 @@ std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLo
         numLogicalPairs = keys.size();
     }
     // Return the size of the set
-    return std::make_tuple(keys.size(), buffer.getMap(), getLocalLevelsCopy());
+    return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
 }
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
-    size_t numLogicalPairs;
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
 
     // Call countLogicalPairs and unpack the returned tuple
-    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
+    std::tie(bufferContents, localLevelsCopy) = countLogicalPairs();
 
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
@@ -584,13 +583,12 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
 // Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
 // the number of runs per each level.
 std::string LSMTree::printInfo() {
-    size_t numLogicalPairs;
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
     double percentage;
 
     // Call countLogicalPairs and unpack the returned tuple
-    std::tie(numLogicalPairs, bufferContents, localLevelsCopy) = countLogicalPairs();
+    std::tie(bufferContents, localLevelsCopy) = countLogicalPairs();
     std::stringstream output;
     std::stringstream levelDiskSummary;
     std::vector<std::string> levelStrings, keyValueStrings, maxKeyValueStrings, diskNameStrings, multiplierStrings;
@@ -626,8 +624,6 @@ std::string LSMTree::printInfo() {
     const int maxKeyValueWidth = getLongestStringLength(maxKeyValueStrings) + 2;
     const int diskNameWidth = getLongestStringLength(diskNameStrings) + 2;
     const int multiplierWidth = getLongestStringLength(multiplierStrings) + 2;
-
-    SyncedCout() << "diskNameWidth: " << diskNameWidth << "\n";
 
     // Iterate through the length of one of the containers and create the output string
     for (size_t i = 0; i < levelStrings.size(); i++) {
@@ -670,7 +666,6 @@ std::string LSMTree::printLevelIoCount() {
     const int diskNameWidth = getLongestStringLength(diskNameStrings) + 2;
     const int multiplierWidth = getLongestStringLength(multiplierStrings);
 
-    size_t penaltyTime;
     std::vector<std::string> penaltyTimes;
     size_t totalPenaltyTime = 0;
 
@@ -685,7 +680,7 @@ std::string LSMTree::printLevelIoCount() {
                << "Microseconds: " << std::setw(timeWidth) << timeStrings[i]
                << " (" << formatMicroseconds(std::stol(timeStrings[i])) << ")\n";
 
-        penaltyTime = std::stol(timeStrings[i]) * std::stol(multiplierStrings[i]);
+        size_t penaltyTime = std::stol(timeStrings[i]) * std::stol(multiplierStrings[i]);
         penaltyTimes.push_back(std::to_string(penaltyTime));
         totalPenaltyTime += penaltyTime;
     }
@@ -791,9 +786,9 @@ json LSMTree::serialize() const {
     j["rangeMisses"] = rangeMisses;
     j["rangeHits"] = rangeHits;
     j["levelIoCountAndTime"] = json::array();
-    for (const auto& levelIoCountAndTime : levelIoCountAndTime) {
-        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.first);
-        j["levelIoCountAndTime"].push_back(levelIoCountAndTime.second.count());
+    for (const auto& lvlIo : levelIoCountAndTime) {
+        j["levelIoCountAndTime"].push_back(lvlIo.first);
+        j["levelIoCountAndTime"].push_back(lvlIo.second.count());
     }
     for (const auto& level : levels) {
         j["levels"].push_back(level->serialize());
@@ -851,7 +846,7 @@ void LSMTree::deserialize(const std::string& filename) {
     infile.close();
 
     // Restore lsm_tree pointers in all Runs
-    for (auto& level : levels) {
+    for (const auto& level : levels) {
         for (auto& run : level->runs) {
             run->setLSMTree(this);
         }
@@ -901,7 +896,7 @@ double LSMTree::AutotuneFilters(size_t mFilters) {
 
     // Flatten the tree structure into a single runs vector and zero out all the bits
     std::vector<Run*> allRuns;
-    for (auto& level : levels) {
+    for (const auto& level : levels) {
         for (auto& runPtr : level->runs) {
             runPtr->setBloomFilterNumBits(0);
             allRuns.push_back(runPtr.get());

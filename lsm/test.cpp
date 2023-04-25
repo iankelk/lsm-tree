@@ -4,7 +4,6 @@
 #include <cassert>
 #include <stdexcept>
 
-#include "unistd.h"
 
 #include "data_types.hpp"
 #include "utils.hpp"

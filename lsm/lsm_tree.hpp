@@ -53,7 +53,7 @@ private:
     int fanout;
     Level::Policy levelPolicy;
     float compactionPercentage;
-    std::tuple<size_t, std::map<KEY_t, VAL_t>, std::vector<Level*>> countLogicalPairs();
+    std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> countLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();
     std::vector<std::shared_ptr<Level>> levels;

@@ -50,15 +50,15 @@ void Run::deleteFile() {
     remove(runFilePath.c_str());
 }
 
-int Run::openFile(std::string originatingFunctionError, int flags) {
+void Run::openFileReadOnly(const std::string& originatingFunctionError) {
     if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        localFd = open(runFilePath.c_str(), flags);
+        localFd = open(runFilePath.c_str(), O_RDONLY);
         if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
             die(originatingFunctionError + ": " + runFilePath);
         }
     }
-    return localFd;
 }
+
 
 void Run::closeFile() {
     if (localFd != FILE_DESCRIPTOR_UNINITIALIZED) {
@@ -126,11 +126,11 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-     std::unique_ptr<kvPair> kv;
-    std::size_t keyPos;
+    std::unique_ptr<kvPair> kv;
     {
         // Open the file descriptor
-        int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
+        openFileReadOnly("Run::get: Failed to open file for Run");
+        std::size_t keyPos;
         // Perform binary search within the identified range to find the key
         std::tie(keyPos, kv) = binarySearchInRange(localFd, start, end, key);
         // Close the file descriptor
@@ -156,8 +156,6 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
 // Return a pair of the position of a KvPair, and a pointer to the KvPair
 std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
-    std::unique_ptr<VAL_t> val;
-
     while (start <= end) {
         size_t mid = start + (end - start) / 2;
 
@@ -212,7 +210,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     size_t pageStart = searchPageStart * getpagesize();
     size_t pageEnd = (searchPageStart + 1 == fencePointersCopy.size()) ? runSize : (searchPageStart + 1) * getpagesize();
 
-    int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
+    openFileReadOnly("Run::get: Failed to open file for Run");
     std::pair<size_t, std::unique_ptr<kvPair>> startPosResult = binarySearchInRange(localFd, pageStart, pageEnd, start);
     std::unique_ptr<kvPair> startPosKvPair = std::move(startPosResult.second);
 
@@ -260,16 +258,13 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    {
-        // std::shared_lock<std::shared_mutex> lock(fileMutex);
-        // Open the file descriptor
-        int localFd = openFile("Run::get: Failed to open file for Run", O_RDONLY);
-        kvPair kv;
-        while (read(localFd, &kv, sizeof(kvPair)) > 0) {
-            map[kv.key] = kv.value;
-        }
-        closeFile();
+    // Open the file descriptor
+    openFileReadOnly("Run::get: Failed to open file for Run");
+    kvPair kv;
+    while (read(localFd, &kv, sizeof(kvPair)) > 0) {
+        map[kv.key] = kv.value;
     }
+    closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -353,16 +348,13 @@ void Run::populateBloomFilter() {
     if (size == 0) {
         return;
     }
-    {
-        // std::shared_lock<std::shared_mutex> lock(fileMutex);
-        int localFd = openFile("Run::populateBloomFilter: Failed to open file for Run", O_RDONLY);
-        // Read all the key-value pairs from the Run file and add the keys to the bloom filter
-        kvPair kv;
-        while (read(localFd, &kv, sizeof(kvPair)) > 0) {
-            bloomFilter.add(kv.key);
-        }
-        closeFile();
+    openFileReadOnly("Run::populateBloomFilter: Failed to open file for Run");
+    // Read all the key-value pairs from the Run file and add the keys to the bloom filter
+    kvPair kv;
+    while (read(localFd, &kv, sizeof(kvPair)) > 0) {
+        bloomFilter.add(kv.key);
     }
+    closeFile();
 }
 
 void Run::incrementFalsePositives() { 
@@ -377,11 +369,6 @@ void Run::incrementTruePositives() {
 size_t Run::getFalsePositives() {
     std::shared_lock<std::shared_mutex> lock(falsePositivesMutex);
     return falsePositives;
-}
-
-size_t Run::getTruePositives() {
-    std::shared_lock<std::shared_mutex> lock(truePositivesMutex);
-    return truePositives;
 }
 
 void Run::incrementSize() {

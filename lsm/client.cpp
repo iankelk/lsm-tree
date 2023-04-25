@@ -46,10 +46,10 @@ void set_running(bool value) {
 
 void listenToServer(int client_socket, bool quiet) {
     char buffer[BUFFER_SIZE];
-    ssize_t n_read;
 
     while (get_running()) {
         std::string response;
+        ssize_t n_read;
 
         while ((n_read = recv(client_socket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
             buffer[n_read] = '\0'; // Add a null-terminator after the received bytes
