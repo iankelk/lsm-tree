@@ -308,8 +308,9 @@ void Server::run() {
             }
 
             // Spawn thread to handle client connection
-            std::thread clientThread(&Server::handleClient, this, clientSocket);
-            clientThread.detach();
+            clientThreads.push_back(std::make_unique<std::thread>(&Server::handleClient, this, clientSocket));
+
+            clientThreads.back()->detach();
         }
     }
 }
@@ -548,6 +549,13 @@ int main(int argc, char **argv) {
     // Wait for the stdInThread to finish
     if (stdInThread.joinable()) {
         stdInThread.join();
+    }
+
+    // Wait for all client threads to finish
+    for (auto& thread : server.clientThreads) {
+        if (thread->joinable()) {
+            thread->join();
+        }
     }
     return 0;
 }

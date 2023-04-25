@@ -16,6 +16,9 @@ public:
     void run();
     void close();
     void listenToStdIn();
+    std::vector<std::unique_ptr<std::thread>> clientThreads;
+
+
 private:
     std::unique_ptr<LSMTree> lsmTree;
     std::shared_mutex sharedMtx;
@@ -34,7 +37,6 @@ private:
     std::set<int> connectedClients;
     std::mutex connectedClientsMutex;
     std::mutex coutMutex;
-
 };
 
 #endif /* SERVER_HPP */
