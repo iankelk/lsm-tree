@@ -15,15 +15,18 @@ class LSMTree {
 public:
     LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, 
             size_t numThreads, float compactionPercentage);
+
+    // DSL commands
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
-    void benchmark(const std::string& filename, bool verbose, size_t verboseFrequency);
     void load(const std::string& filename);
+    std::string printStats(size_t numToPrintFromEachLevel);
+
+    void benchmark(const std::string& filename, bool verbose, size_t verboseFrequency);
     bool isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it);
     bool isLastLevel(int levelNum);
-    std::string printStats(size_t numToPrintFromEachLevel);
     std::string printInfo();
     std::string printLevelIoCount();
     json serialize() const;
@@ -53,7 +56,7 @@ private:
     int fanout;
     Level::Policy levelPolicy;
     float compactionPercentage;
-    std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> countLogicalPairs();
+    std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> setNumLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();
     std::vector<std::shared_ptr<Level>> levels;
@@ -102,8 +105,8 @@ private:
     // Tricky ones
     mutable std::shared_mutex compactionPlanMutex;
     mutable std::shared_mutex bufferMutex;
-    mutable std::shared_mutex moveRunsMutex;
-    mutable boost::upgrade_mutex levelsMutex;
+    mutable std::shared_mutex moveRunsMutex;  // Blocks the moveRuns function for only one thread
+    mutable boost::upgrade_mutex levelsVectorMutex;
 
 };
 

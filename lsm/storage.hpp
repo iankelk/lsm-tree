@@ -5,7 +5,7 @@
 
 class Storage {
 public:
-    Storage() = delete; // disable the default constructor
+    Storage() = delete;  // disable the default constructor
     ~Storage() = delete; // disable the destructor
 
     static std::string getDiskName(int level);

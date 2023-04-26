@@ -108,7 +108,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
     boost::upgrade_lock<boost::upgrade_mutex> levelVectorLock;
 
     if (currentLevelNum == FIRST_LEVEL_NUM) {
-        levelVectorLock = boost::upgrade_lock<boost::upgrade_mutex>(levelsMutex); // Lock for reading the vector. Only lock it once.
+        levelVectorLock = boost::upgrade_lock<boost::upgrade_mutex>(levelsVectorMutex); // Lock for reading the vector. Only lock it once.
     }
     it = levels.begin() + currentLevelNum - 1;
 
@@ -197,7 +197,7 @@ void LSMTree::executeCompactionPlan() {
 std::vector<Level*> LSMTree::getLocalLevelsCopy() {
     std::vector<Level*> localLevelsCopy;
     {
-        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsMutex);
+        boost::shared_lock<boost::upgrade_mutex> levelVectorLock(levelsVectorMutex);
         // Create a copy of raw pointers to the levels
         localLevelsCopy.resize(levels.size());
         std::transform(levels.begin(), levels.end(), localLevelsCopy.begin(), [](const auto &level) {
@@ -453,7 +453,7 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
-std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::countLogicalPairs() {
+std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
@@ -521,8 +521,8 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
 
-    // Call countLogicalPairs and unpack the returned tuple
-    std::tie(bufferContents, localLevelsCopy) = countLogicalPairs();
+    // Call setNumLogicalPairs and unpack the returned pair
+    std::tie(bufferContents, localLevelsCopy) = setNumLogicalPairs();
 
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
@@ -587,8 +587,8 @@ std::string LSMTree::printInfo() {
     std::vector<Level*> localLevelsCopy;
     double percentage;
 
-    // Call countLogicalPairs and unpack the returned tuple
-    std::tie(bufferContents, localLevelsCopy) = countLogicalPairs();
+    // Call setNumLogicalPairs and unpack the returned pair
+    std::tie(bufferContents, localLevelsCopy) = setNumLogicalPairs();
     std::stringstream output;
     std::stringstream levelDiskSummary;
     std::vector<std::string> levelStrings, keyValueStrings, maxKeyValueStrings, diskNameStrings, multiplierStrings;
