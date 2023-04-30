@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <vector>
 
 // Declarations of error and string handling functions
 void die(const std::string& message);
