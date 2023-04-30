@@ -394,10 +394,11 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                rangePtr = range(start, end);
-                if (rangePtr->size() > 0) {
-                    SyncedCout() << rangePtr->size() << std::endl;
-                }
+                range(start, end);
+                // rangePtr = range(start, end);
+                // if (rangePtr->size() > 0) {
+                //     SyncedCout() << rangePtr->size() << std::endl;
+                // }
                 break;
             }
             default: {
@@ -461,6 +462,7 @@ bool LSMTree::isLastLevel(int levelNum) {
     return (levelNum == levels.size() - 1);
 }
 
+// Set the number of logical pairs in the tree by creating a set of all the keys in the tree
 std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
     {

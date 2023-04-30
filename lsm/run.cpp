@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <mutex>
+#include "../lib/binary_search.hpp"
 #include "run.hpp"
 #include "lsm_tree.hpp"
 #include "utils.hpp"
@@ -116,7 +117,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
         }
     }
     // Perform a binary search on the fence pointers to find the page that may contain the key
-    auto iter = std::upper_bound(fencePointersCopy.begin(), fencePointersCopy.end(), key);
+    auto iter = branchless_lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), key);
     auto pageIndex = std::distance(fencePointersCopy.begin(), iter) - 1;
 
     // Calculate the start and end position of the range to search based on the page index
@@ -201,7 +202,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     }
 
     // Use binary search to identify the starting fence pointer index where the start key might be located.
-    auto iterStart = std::upper_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
+    auto iterStart = branchless_lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), start);
     searchPageStart = std::distance(fencePointersCopy.begin(), iterStart) - 1;
 
     // Start the timer for the query
