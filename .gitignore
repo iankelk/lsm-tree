@@ -16,7 +16,8 @@ kelk
 order-mil.txt
 test.txt
 5mil
-data/
+data*/
+bin/
 data-lazy-500mil/
 data-tiered-1bil/
 *.dat

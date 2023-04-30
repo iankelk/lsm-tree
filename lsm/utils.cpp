@@ -94,3 +94,12 @@ std::vector<std::string> getMapValuesByKey(const std::vector<std::vector<std::ma
     }
     return values;
 }
+
+// Remove the quotes from a string if they exist
+std::string removeQuotes(const std::string& fileName) {
+    std::string result = fileName;
+    if (fileName.front() == '\"' && fileName.back() == '\"') {
+        result = fileName.substr(1, fileName.length() - 2);
+    }
+    return result;
+}

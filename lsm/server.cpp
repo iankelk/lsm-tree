@@ -191,7 +191,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             break;
         case 'l':
             ss >> fileName;
-            lsmTree->load(fileName);
+            lsmTree->load(removeQuotes(fileName));
             response = OK;
             break;
         case 'b':

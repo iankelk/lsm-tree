@@ -22,15 +22,7 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
     // Create the first level
     levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
     levelIoCountAndTime.push_back(std::make_pair(0, std::chrono::microseconds()));
-}
-
-// Check whether an iterator is at the last level
-bool LSMTree::isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it) {
-    return (it + 1 == levels.end());
-}
-// Check if a level number is the last level
-bool LSMTree::isLastLevel(int levelNum) {
-    return (levelNum == levels.size() - 1);
+    SyncedCout() << "Page size: " << getpagesize() << std::endl;
 }
 
 // Insert a key-value pair of integers into the LSM tree
@@ -208,6 +200,20 @@ std::vector<Level*> LSMTree::getLocalLevelsCopy() {
     return localLevelsCopy;
 }
 
+// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
+void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
+    // Create an iterator to iterate through the map
+    std::map<KEY_t, VAL_t>::iterator it = rangeMap->begin();
+    // Iterate through the map and remove all TOMBSTONES
+    while (it != rangeMap->end()) {
+        if (it->second == TOMBSTONE) {
+            it = rangeMap->erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
@@ -340,14 +346,6 @@ void LSMTree::del(KEY_t key) {
     put(key, TOMBSTONE);
 }
 
-// Print out getMisses and rangeMisses stats
-void LSMTree::printHitsMissesStats() {
-    SyncedCout() << "getHits: " << getGetHits() << std::endl;
-    SyncedCout() << "getMisses: " << getGetMisses() << std::endl;
-    SyncedCout() << "rangeHits: " << getRangeHits() << std::endl;
-    SyncedCout() << "rangeMisses: " << getRangeMisses() << std::endl;
-}
-
 // Benchmark the LSMTree by loading the file into the tree and measuring the time it takes to load the workload.
 void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verboseFrequency) {
     int count = 0;
@@ -454,6 +452,15 @@ void LSMTree::load(const std::string& filename) {
     << formatMicroseconds(duration.count()) + ") and " << getIoCount() << " I/O operations" << std::endl;
 }
 
+// Check whether an iterator is at the last level
+bool LSMTree::isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it) {
+    return (it + 1 == levels.end());
+}
+// Check if a level number is the last level
+bool LSMTree::isLastLevel(int levelNum) {
+    return (levelNum == levels.size() - 1);
+}
+
 std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPairs() {
     std::map<KEY_t, VAL_t> bufferContents;
     {
@@ -515,6 +522,14 @@ std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPai
     }
     // Return the size of the set
     return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
+}
+
+// Print out getMisses and rangeMisses stats
+void LSMTree::printHitsMissesStats() {
+    SyncedCout() << "getHits: " << getGetHits() << std::endl;
+    SyncedCout() << "getMisses: " << getGetMisses() << std::endl;
+    SyncedCout() << "rangeHits: " << getRangeHits() << std::endl;
+    SyncedCout() << "rangeMisses: " << getRangeMisses() << std::endl;
 }
 
 // Print out a summary of the tree.
@@ -581,8 +596,7 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     return output;
 }
 
-// Print tree. Print the number of entries in the buffer. Then print the number of levels, then print 
-// the number of runs per each level.
+// Print out information on the LSM tree
 std::string LSMTree::printInfo() {
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
@@ -704,32 +718,6 @@ std::string LSMTree::printLevelIoCount() {
     return output.str();
 }
 
-
-// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
-void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
-    // Create an iterator to iterate through the map
-    std::map<KEY_t, VAL_t>::iterator it = rangeMap->begin();
-    // Iterate through the map and remove all TOMBSTONES
-    while (it != rangeMap->end()) {
-        if (it->second == TOMBSTONE) {
-            it = rangeMap->erase(it);
-        } else {
-            ++it;
-        }
-    }
-}
-
-float LSMTree::getBfFalsePositiveRate() {
-    std::shared_lock<std::shared_mutex> lockF(bfFalsePositivesMutex);
-    std::shared_lock<std::shared_mutex> lockT(bfTruePositivesMutex);
-    size_t total = bfFalsePositives + bfTruePositives;
-    if (total > 0) {
-        return (float)bfFalsePositives / total;
-    } else {
-        return BLOOM_FILTER_UNUSED; // No false positives or true positives
-    }
-}
-
 // For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
 std::string LSMTree::getBloomFilterSummary() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
@@ -772,88 +760,15 @@ std::string LSMTree::getBloomFilterSummary() {
     return output.str();
 }
 
-json LSMTree::serialize() const {
-    json j;
-    j["buffer"] = buffer.serialize();
-    j["bfErrorRate"] = bfErrorRate;
-    j["fanout"] = fanout;
-    j["compactionPercentage"] = compactionPercentage;
-    j["levelPolicy"] = Level::policyToString(levelPolicy);
-    j["levels"] = json::array();
-    j["bfFalsePositives"] = bfFalsePositives;
-    j["bfTruePositives"] = bfTruePositives;
-    j["getMisses"] = getMisses;
-    j["getHits"] = getHits;
-    j["rangeMisses"] = rangeMisses;
-    j["rangeHits"] = rangeHits;
-    j["levelIoCountAndTime"] = json::array();
-    for (const auto& lvlIo : levelIoCountAndTime) {
-        j["levelIoCountAndTime"].push_back(lvlIo.first);
-        j["levelIoCountAndTime"].push_back(lvlIo.second.count());
+float LSMTree::getBfFalsePositiveRate() {
+    std::shared_lock<std::shared_mutex> lockF(bfFalsePositivesMutex);
+    std::shared_lock<std::shared_mutex> lockT(bfTruePositivesMutex);
+    size_t total = bfFalsePositives + bfTruePositives;
+    if (total > 0) {
+        return (float)bfFalsePositives / total;
+    } else {
+        return BLOOM_FILTER_UNUSED; // No false positives or true positives
     }
-    for (const auto& level : levels) {
-        j["levels"].push_back(level->serialize());
-    }
-    return j;
-}
-
-void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
-    SyncedCout() << "Writing LSMTree to file: " << filename << std::endl;
-    // Serialize the LSMTree to JSON
-    json treeJson = serialize();
-    // Write the JSON to file
-    std::ofstream outfile(filename);
-    outfile << treeJson.dump();
-    outfile.close();
-    SyncedCout() << "Finished writing LSMTree to file: " << filename << std::endl;
-}
-
-void LSMTree::deserialize(const std::string& filename) {
-    std::ifstream infile(filename);
-    if (!infile) {
-        SyncedCerr() << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
-        return;
-    }
-
-    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
-
-    json treeJson;
-    infile >> treeJson;
-
-    bfErrorRate = treeJson["bfErrorRate"].get<float>();
-    fanout = treeJson["fanout"].get<int>();
-    compactionPercentage = treeJson["compactionPercentage"].get<float>();
-    levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
-    bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
-    bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
-    levelIoCountAndTime = std::vector<std::pair<size_t, std::chrono::microseconds>>();
-    for (size_t i = 0; i < treeJson["levelIoCountAndTime"].size(); i += 2) {
-        levelIoCountAndTime.emplace_back(treeJson["levelIoCountAndTime"][i].get<size_t>(), 
-        std::chrono::microseconds(treeJson["levelIoCountAndTime"][i + 1].get<size_t>()));
-    }
-    getMisses = treeJson["getMisses"].get<size_t>();
-    getHits = treeJson["getHits"].get<size_t>();
-    rangeMisses = treeJson["rangeMisses"].get<size_t>();
-    rangeHits = treeJson["rangeHits"].get<size_t>();
-
-    buffer.deserialize(treeJson["buffer"]);
-
-    levels.clear();
-    for (const auto& levelJson : treeJson["levels"]) {
-        Level *newLevel = new Level();
-        levels.emplace_back(newLevel);
-        newLevel->deserialize(levelJson, this);
-    }
-    infile.close();
-
-    // Restore lsm_tree pointers in all Runs
-    for (const auto& level : levels) {
-        for (auto& run : level->runs) {
-            run->setLSMTree(this);
-        }
-    }
-    SyncedCout() << "Finished!\n" << std::endl;
-    SyncedCout() << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
 }
 
 // Get the total amount of bits currently used by all runs in the LSMTree
@@ -1019,4 +934,89 @@ size_t LSMTree::getRangeMisses() const {
     std::shared_lock<std::shared_mutex> lock(rangeMissesMutex);
     return rangeMisses;
 }
- 
+
+json LSMTree::serialize() const {
+    json j;
+    j["buffer"] = buffer.serialize();
+    j["bfErrorRate"] = bfErrorRate;
+    j["fanout"] = fanout;
+    j["compactionPercentage"] = compactionPercentage;
+    j["dataDirectory"] = dataDirectory;
+    j["levelPolicy"] = Level::policyToString(levelPolicy);
+    j["levels"] = json::array();
+    j["bfFalsePositives"] = bfFalsePositives;
+    j["bfTruePositives"] = bfTruePositives;
+    j["getMisses"] = getMisses;
+    j["getHits"] = getHits;
+    j["rangeMisses"] = rangeMisses;
+    j["rangeHits"] = rangeHits;
+    j["levelIoCountAndTime"] = json::array();
+    for (const auto& lvlIo : levelIoCountAndTime) {
+        j["levelIoCountAndTime"].push_back(lvlIo.first);
+        j["levelIoCountAndTime"].push_back(lvlIo.second.count());
+    }
+    for (const auto& level : levels) {
+        j["levels"].push_back(level->serialize());
+    }
+    return j;
+}
+
+void LSMTree::serializeLSMTreeToFile(const std::string& filename) {
+    SyncedCout() << "Writing LSMTree to file: " << filename << std::endl;
+    // Serialize the LSMTree to JSON
+    json treeJson = serialize();
+    // Write the JSON to file
+    std::ofstream outfile(filename);
+    outfile << treeJson.dump();
+    outfile.close();
+    SyncedCout() << "Finished writing LSMTree to file: " << filename << std::endl;
+}
+
+void LSMTree::deserialize(const std::string& filename) {
+    std::ifstream infile(filename);
+    if (!infile) {
+        SyncedCerr() << "No file " << filename << " found or unable to open it. Creating fresh database." << std::endl;
+        return;
+    }
+
+    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
+
+    json treeJson;
+    infile >> treeJson;
+
+    bfErrorRate = treeJson["bfErrorRate"].get<float>();
+    fanout = treeJson["fanout"].get<int>();
+    compactionPercentage = treeJson["compactionPercentage"].get<float>();
+    dataDirectory = treeJson["dataDirectory"].get<std::string>();
+    levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
+    bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
+    bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
+    levelIoCountAndTime = std::vector<std::pair<size_t, std::chrono::microseconds>>();
+    for (size_t i = 0; i < treeJson["levelIoCountAndTime"].size(); i += 2) {
+        levelIoCountAndTime.emplace_back(treeJson["levelIoCountAndTime"][i].get<size_t>(), 
+        std::chrono::microseconds(treeJson["levelIoCountAndTime"][i + 1].get<size_t>()));
+    }
+    getMisses = treeJson["getMisses"].get<size_t>();
+    getHits = treeJson["getHits"].get<size_t>();
+    rangeMisses = treeJson["rangeMisses"].get<size_t>();
+    rangeHits = treeJson["rangeHits"].get<size_t>();
+
+    buffer.deserialize(treeJson["buffer"]);
+
+    levels.clear();
+    for (const auto& levelJson : treeJson["levels"]) {
+        Level *newLevel = new Level();
+        levels.emplace_back(newLevel);
+        newLevel->deserialize(levelJson, this);
+    }
+    infile.close();
+
+    // Restore lsm_tree pointers in all Runs
+    for (const auto& level : levels) {
+        for (auto& run : level->runs) {
+            run->setLSMTree(this);
+        }
+    }
+    SyncedCout() << "Finished!\n" << std::endl;
+    SyncedCout() << "Command line parameters will be ignored and configuration loaded from the saved database.\n" << std::endl;
+}
