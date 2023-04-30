@@ -14,9 +14,10 @@
 #include "utils.hpp"
 
 LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy,
-                 size_t numThreads, float compactionPercentage) :
+                 size_t numThreads, float compactionPercentage, std::string dataDirectory) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), compactionPercentage(compactionPercentage)
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), 
+    compactionPercentage(compactionPercentage), dataDirectory(dataDirectory)
 {
     // Create the first level
     levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));

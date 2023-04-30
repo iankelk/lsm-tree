@@ -14,7 +14,7 @@ class Run;
 class LSMTree {
 public:
     LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, 
-            size_t numThreads, float compactionPercentage);
+            size_t numThreads, float compactionPercentage, std::string dataDirectory);
 
     // DSL commands
     void put(KEY_t, VAL_t);
@@ -48,6 +48,7 @@ public:
     size_t getLevelIoCount(int levelNum);
     std::chrono::microseconds getLevelIoTime(int levelNum);
     float getCompactionPercentage() const { return compactionPercentage; }
+    std::string getDataDirectory() const { return dataDirectory; }
 
 private:
     Memtable buffer;
@@ -56,6 +57,7 @@ private:
     int fanout;
     Level::Policy levelPolicy;
     float compactionPercentage;
+    std::string dataDirectory;
     std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> setNumLogicalPairs();
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     std::vector<Level*> getLocalLevelsCopy();

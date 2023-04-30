@@ -55,8 +55,8 @@ void listenToServer(int client_socket, bool quiet) {
             buffer[n_read] = '\0'; // Add a null-terminator after the received bytes
             response.append(buffer);
 
-            if (response.size() > std::strlen(END_OF_MESSAGE) && response.substr(response.size() - std::strlen(END_OF_MESSAGE)) == END_OF_MESSAGE) {
-                response.resize(response.size() - std::strlen(END_OF_MESSAGE));
+            if (response.size() > std::strlen(END_OF_MESSAGE.c_str()) && response.substr(response.size() - std::strlen(END_OF_MESSAGE.c_str())) == END_OF_MESSAGE) {
+                response.resize(response.size() - std::strlen(END_OF_MESSAGE.c_str()));
                 break;
             }
         }

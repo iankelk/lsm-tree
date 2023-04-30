@@ -12,12 +12,11 @@ class Server
 public:
     explicit Server(int port, bool verbose, size_t verboseFrequency);
     void createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, 
-                       size_t numThreads, float compactionPercentage);
+                       size_t numThreads, float compactionPercentage, std::string dataDirectory);
     void run();
     void close();
     void listenToStdIn();
     std::vector<std::unique_ptr<std::thread>> clientThreads;
-
 
 private:
     std::unique_ptr<LSMTree> lsmTree;
@@ -32,7 +31,7 @@ private:
     size_t verboseFrequency;
     void sendResponse(int clientSocket, const std::string &response);
     void printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy,
-                                size_t numThreads, float compactionPercentage);
+                                size_t numThreads, float compactionPercentage, std::string dataDirectory);
 
     std::set<int> connectedClients;
     std::mutex connectedClientsMutex;

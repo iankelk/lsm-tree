@@ -72,8 +72,7 @@ void Server::listenToStdIn() {
                 close();
             } else if (input == "qs") {
                 // Path to data directory and JSON file for serialization
-                std::string dataDir = DATA_DIRECTORY;
-                std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
+                std::string lsmTreeJsonFile = lsmTree->getDataDirectory(); + "/" + LSM_TREE_JSON_FILE;
                 lsmTree->serializeLSMTreeToFile(lsmTreeJsonFile);
                 terminationFlag.store(1, std::memory_order_release);
                 close();
@@ -140,7 +139,8 @@ void Server::sendResponse(int clientSocket, const std::string &response) {
         send(clientSocket, chunk, strlen(chunk), 0);
     }
     // Send the end of message indicator
-    send(clientSocket, END_OF_MESSAGE, strlen(END_OF_MESSAGE), 0);
+    send(clientSocket, END_OF_MESSAGE.c_str(), strlen(END_OF_MESSAGE.c_str()), 0);
+
 }
 
 
@@ -158,27 +158,11 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     std::string fileName;
 
     // Path to data directory and JSON file for serialization
-    std::string dataDir = DATA_DIRECTORY;
-    std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
+    std::string lsmTreeJsonFile = lsmTree->getDataDirectory() + "/" + LSM_TREE_JSON_FILE;
 
     // Response to send back to client
     std::string response;
 
-    // Locks to ensure exclusive or shared access to the LSM tree
-    // std::unique_lock<std::shared_mutex> exclusiveLock;
-    // std::shared_lock<std::shared_mutex> sharedLock;
-
-    // put, delete, load, benchmark, and quit operations are exclusive
-    // if (op == 'p' || op == 'd' || op == 'l' || op == 'b' || op == 'q') {
-    //     exclusiveLock = std::unique_lock<std::shared_mutex>(sharedMtx);  
-    // // get, range, printStats, and info operations are shared  
-    // } else if (op == 'c' || op == 'g' || op == 'r' || op == 's' || op == 'i') {
-    //     sharedLock = std::shared_lock<std::shared_mutex>(sharedMtx);
-    // } else {
-    //     response = printDSLHelp();
-    //     sendResponse(clientSocket, response);
-    //     return;
-    // }
     switch (op) {
         case 'p':
             ss >> key >> value;
@@ -360,15 +344,15 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
+void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, 
+                           size_t numThreads, float compactionPercentage, std::string dataDirectory) {
     // Path to data directory and JSON file for serialization
-    std::string dataDir = DATA_DIRECTORY;
-    std::string lsmTreeJsonFile = dataDir + LSM_TREE_JSON_FILE;
+    std::string lsmTreeJsonFile = dataDirectory + "/" + LSM_TREE_JSON_FILE;
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage);
+    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage, dataDirectory);
     lsmTree->deserialize(lsmTreeJsonFile);
     printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferMaxKvPairs(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), 
-                           lsmTree->getNumThreads(), lsmTree->getCompactionPercentage());
+                           lsmTree->getNumThreads(), lsmTree->getCompactionPercentage(), lsmTree->getDataDirectory());
 }
 
 void printHelp() {
@@ -382,11 +366,13 @@ void printHelp() {
               << "  -t <numThreads>             Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
               << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
               << "  -v <optional: frequency>    Verbose benchmarking. Reports every \"frequency\" number of commands (default: " << BENCHMARK_REPORT_FREQUENCY << ")\n"
+              << "  -d <dataDirectory>          Data directory (default: " << DEFAULT_DATA_DIRECTORY << ")\n"
               << "  -h                          Print this help message\n" << std::endl
     ;
 }
 
-void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy, size_t numThreads, float compactionPercentage) {
+void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy, size_t numThreads, 
+                                    float compactionPercentage, std::string dataDirectory) {
     std::string verboseFrequencyString = (verbose) ? " (report every " + addCommas(std::to_string(verboseFrequency)) + " commands)" : "";    
     SyncedCout() << "LSMTree parameters:" << std::endl;
     SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;
@@ -399,6 +385,7 @@ void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, 
         SyncedCout() << "  Compaction percentage: " << compactionPercentage << std::endl;
     }
     SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << verboseFrequencyString << std::endl;
+    SyncedCout() << "  Data directory: " << dataDirectory << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
@@ -472,9 +459,10 @@ int main(int argc, char **argv) {
     int numThreads = DEFAULT_NUM_THREADS;
     size_t verboseFrequency = BENCHMARK_REPORT_FREQUENCY;
     float compactionPercentage = DEFAULT_COMPACTION_PERCENTAGE;
+    std::string dataDirectory = DEFAULT_DATA_DIRECTORY;
 
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:c:hv")) != -1) {
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:c:d:hv")) != -1) {
         switch (opt) {
         case 'e':
             bfErrorRate = atof(optarg);
@@ -511,6 +499,9 @@ int main(int argc, char **argv) {
         case 'c':
             compactionPercentage = atof(optarg);
             break;
+        case 'd':
+            dataDirectory = optarg;
+            break;
         case 'v':
             verbose = true;
             // Check if there is an argument after -v and if it is a number
@@ -543,7 +534,7 @@ int main(int argc, char **argv) {
     server_ptr = &server;
 
     // Create LSM-Tree with the parsed options
-    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage);
+    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage, dataDirectory);
     // Create a thread for listening to standard input
     std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();

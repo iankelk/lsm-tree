@@ -24,10 +24,10 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
 {
 
     if (createFile) {
-        std::string dataDir = DATA_DIRECTORY;
+        std::string dataDir = lsmTree->getDataDirectory();
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
 
-        std::string sstableFileTemplate = dataDir + SSTABLE_FILE_TEMPLATE;
+        std::string sstableFileTemplate = dataDir + "/" + SSTABLE_FILE_TEMPLATE;
         char tmpFn[sstableFileTemplate.size() + 1];
         std::strcpy(tmpFn, sstableFileTemplate.c_str());
         
