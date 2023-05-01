@@ -480,31 +480,31 @@ std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPai
     // Create a set of all the keys in the tree
     std::set<KEY_t> keys;
     
-    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
+    std::vector<std::future<std::vector<kvPair>>> futures;
 
     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
         std::shared_lock<std::shared_mutex> levelLock((*level)->levelMutex);
         futures.reserve((*level)->runs.size());
 
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            // Enqueue task for getting the map from the run
+            // Enqueue task for getting the vector from the run
             futures.push_back(threadPool.enqueue([&, run] {
-                return (*run)->getMap();
+                return (*run)->getVector();
             }));
         }
     }
 
     // Wait for all tasks to finish and aggregate the results
     for (auto &future : futures) {
-        std::map<KEY_t, VAL_t> kvMap = future.get();
-        // Insert the keys from the map into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
-        for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
-            if (it->second == TOMBSTONE) {
-                if (keys.find(it->first) != keys.end()) {
-                    keys.erase(it->first);
+        std::vector<kvPair> kvVec = future.get();
+        // Insert the keys from the vector into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
+        for (const auto &kv : kvVec) {
+            if (kv.value == TOMBSTONE) {
+                if (keys.find(kv.key) != keys.end()) {
+                    keys.erase(kv.key);
                 }
             } else {
-                keys.insert(it->first);
+                keys.insert(kv.key);
             }
         }
     }
@@ -523,7 +523,7 @@ std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPai
         boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(lock);
         numLogicalPairs = keys.size();
     }
-    // Return the size of the set
+    // Return the buffer and localLevelsCopy
     return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
 }
 
@@ -546,7 +546,7 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::string output = "";
     // Create a string to hold the number of logical key value pairs in the tree
     std::string logicalPairs = "Logical Pairs: " + addCommas(std::to_string(numLogicalPairs)) + "\n";
-    std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree   
+    std::string levelKeys = "";  // Create a string to hold the number of keys in each level of the tree
     std::string treeDump = "";   // Create a string to hold the dump of the tree
 
     // Iterate through the buffer and add the key/value pairs to the treeDump string
@@ -571,17 +571,17 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
         levelKeys += "LVL" + std::to_string((*level)->getLevelNum()) + ": " + std::to_string((*level)->getKvPairs()) + ", ";
         pairsCounter = 0;
         for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            std::map<KEY_t, VAL_t> kvMap = (*run)->getMap();
-            // Insert the keys from the map into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
-            for (auto it = kvMap.begin(); it != kvMap.end(); it++) {
+            std::vector<kvPair> kvVec = (*run)->getVector();
+            // Insert the keys from the vector into the set. If the key is a TOMBSTONE, change the key value to the word TOMBSTONE
+            for (const auto &kv : kvVec) {
                 if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
                     break;
                 }
                 pairsCounter++;
-                if (it->second == TOMBSTONE) {
-                    treeDump += std::to_string(it->first) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
+                if (kv.value == TOMBSTONE) {
+                    treeDump += std::to_string(kv.key) + ":TOMBSTONE:L" + std::to_string((*level)->getLevelNum()) + " ";
                 } else {
-                    treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
+                    treeDump += std::to_string(kv.key) + ":" + std::to_string(kv.value) + ":L" + std::to_string((*level)->getLevelNum()) + " ";
                 }
             }
         }

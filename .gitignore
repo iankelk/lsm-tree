@@ -48,3 +48,5 @@ ranges2
 range3
 5mil1g
 workload-10MPuts-1MGets-HighMisses-skewed.txt
+get-workload
+.DS_Store

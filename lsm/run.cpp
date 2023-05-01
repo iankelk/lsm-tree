@@ -6,10 +6,13 @@
 #include <filesystem>
 #include <algorithm>
 #include <mutex>
+#include <queue>
+#include <vector>
 #include "../lib/binary_search.hpp"
 #include "run.hpp"
 #include "lsm_tree.hpp"
 #include "utils.hpp"
+
 
 thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
 
@@ -249,29 +252,31 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     return rangeMap;
 }
 
- std::map<KEY_t, VAL_t> Run::getMap() {
-    std::map<KEY_t, VAL_t> map;
+std::vector<kvPair> Run::getVector() {
+    std::vector<kvPair> vec;
+    vec.reserve(size);
 
     if (lsmTree == nullptr) {
-        die("Run::getMap: LSM tree is null");
+        die("Run::getVector: LSM tree is null");
     }
 
     // Start the timer for the query
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFileReadOnly("Run::get: Failed to open file for Run");
+    openFileReadOnly("Run::getVector: Failed to open file for Run");
+
     kvPair kv;
     while (read(localFd, &kv, sizeof(kvPair)) > 0) {
-        map[kv.key] = kv.value;
+        vec.push_back(kv);
     }
     closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
-    return map;
- }
+    return vec;
+}
 
 size_t Run::getMaxKvPairs() {
     return maxKvPairs;

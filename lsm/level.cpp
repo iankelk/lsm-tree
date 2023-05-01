@@ -23,10 +23,10 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
     // Iterate through the runs in the segment and merge the data
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
-        std::map<KEY_t, VAL_t> runMap = runs[idx]->getMap();
-        for (const auto &kv : runMap) {
-            if (const auto &[it, inserted] = mergedMap.try_emplace(kv.first, kv.second); !inserted) {
-                it->second = kv.second;
+        std::vector<kvPair> runVector = runs[idx]->getVector();
+        for (const auto &kv : runVector) {
+            if (const auto &[it, inserted] = mergedMap.try_emplace(kv.key, kv.value); !inserted) {
+                it->second = kv.value;
             }
         }
         newMaxKvPairs += runs[idx]->getMaxKvPairs();
@@ -51,6 +51,9 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
     return compactedRun;
 }
+
+
+
 
 
 void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {
@@ -80,32 +83,20 @@ size_t Level::getLevelSize(int levelNum) {
         return level_size;
     }
 }
-// Iterate through the runs of the level, calculating the difference between the last key of a run and the first
-// key of the next run. Return the start and end indices of the segment with the minimum key difference.
-// std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
-//     size_t bestStartIdx = 0;
-//     size_t bestEndIdx = 1;
-//     long best_diff = LONG_MAX;
-
-//     for (size_t idx = 0; idx < runs.size() - 1; ++idx) {
-//         long diff = labs(runs[idx]->getMap().rbegin()->first - runs[idx + 1]->getMap().begin()->first);
-//         if (diff < best_diff) {
-//             best_diff = diff;
-//             bestStartIdx = idx;
-//             bestEndIdx = idx + 1;
-//         }
-//     }
-//     return {bestStartIdx, bestEndIdx};
-// }
 
 // Calculate the sum of key differences for a range of runs
 long Level::sumOfKeyDifferences(size_t start, size_t end) {
     long sum = 0;
     for (size_t i = start; i < end; ++i) {
-        sum += labs(runs[i]->getMap().rbegin()->first - runs[i + 1]->getMap().begin()->first);
+        std::vector<kvPair> runVec1 = runs[i]->getVector();
+        std::vector<kvPair> runVec2 = runs[i + 1]->getVector();
+        if (!runVec1.empty() && !runVec2.empty()) {
+            sum += labs(runVec1.rbegin()->key - runVec2.begin()->key);
+        }
     }
     return sum;
 }
+
 
 // Iterate through the runs of the level, calculating the weighted sum of key differences for segments
 // Return the start and end indices of the best segment to compact

@@ -14,7 +14,6 @@
 #include "lsm_tree.hpp"
 
 
-using namespace std;
 
 /*
 

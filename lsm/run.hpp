@@ -16,7 +16,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
-    std::map<KEY_t, VAL_t> getMap();
+    std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();
     void openFileReadOnly(const std::string& originatingFunctionError);
@@ -31,8 +31,6 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
     std::string getRunFilePath() { return runFilePath; }
-    mutable std::shared_mutex fileMutex;
-    // mutable std::shared_mutex fileWriteMutex;
 
 private:
     static thread_local int localFd;
