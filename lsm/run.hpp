@@ -31,6 +31,9 @@ public:
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
     std::string getRunFilePath() { return runFilePath; }
+    void setFirstAndLastKeys(KEY_t first, KEY_t last);
+    KEY_t getFirstKey() { return firstKey; }
+    KEY_t getLastKey() { return lastKey; }
 
 private:
     static thread_local int localFd;
@@ -64,6 +67,8 @@ private:
     void incrementFalsePositives();
     size_t getFalsePositives();
     void incrementTruePositives();
+    KEY_t firstKey;
+    KEY_t lastKey;
 
 };
 

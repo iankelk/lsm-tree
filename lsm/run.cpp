@@ -101,6 +101,11 @@ void Run::put(KEY_t key, VAL_t val) {
     incrementSize();
 }
 
+void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
+    firstKey = first;
+    lastKey = last;
+}
+
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     size_t runSize;
     {

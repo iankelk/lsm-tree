@@ -109,15 +109,14 @@ size_t Level::getLevelSize(int levelNum) {
 long Level::sumOfKeyDifferences(size_t start, size_t end) {
     long sum = 0;
     for (size_t i = start; i < end; ++i) {
-        std::vector<kvPair> runVec1 = runs[i]->getVector();
-        std::vector<kvPair> runVec2 = runs[i + 1]->getVector();
-        if (!runVec1.empty() && !runVec2.empty()) {
-            sum += labs(runVec1.rbegin()->key - runVec2.begin()->key);
+        std::optional<KEY_t> lastKey1 = runs[i]->getLastKey();
+        std::optional<KEY_t> firstKey2 = runs[i + 1]->getFirstKey();
+        if (lastKey1 && firstKey2) {
+            sum += labs(*lastKey1 - *firstKey2);
         }
     }
     return sum;
 }
-
 
 // Iterate through the runs of the level, calculating the weighted sum of key differences for segments
 // Return the start and end indices of the best segment to compact
