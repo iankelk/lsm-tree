@@ -22,7 +22,7 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
     bloomFilter(maxKvPairs, bfErrorRate),
     runFilePath(""),
     size(0),
-    maxKey(0),
+    maxKey(KEY_MIN),
     levelOfRun(levelOfRun),
     lsmTree(lsmTree) 
 {
@@ -38,7 +38,7 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         int suffixLength = 4; // Length of ".bin" suffix
         localFd = mkstemps(tmpFn, suffixLength);
         if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
-            die("Run::Constructor: Failed to create file for Run");
+            die("Run::Constructor: Failed to create file for Run: " + runFilePath);
         }
         runFilePath = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
@@ -78,7 +78,7 @@ void Run::put(KEY_t key, VAL_t val) {
         runSize = size;
     }
     if (runSize >= maxKvPairs) {
-            die("Run::put: Attempting to add to full Run");
+            die("Run::put: Attempting to add to full Run: " + runFilePath);
     }
     kvPair kv = {key, val};
     addToBloomFilter(key);
@@ -96,7 +96,7 @@ void Run::put(KEY_t key, VAL_t val) {
     // Write the key-value pair to the Run file
     result = write(localFd, &kv, sizeof(kvPair));
     if (result == -1) {
-        die("Run::put: Failed to write to Run file");
+        die("Run::put: Failed to write to Run file: " + runFilePath);
     }
     incrementSize();
 }

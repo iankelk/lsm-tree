@@ -17,17 +17,29 @@ void Level::put(std::unique_ptr<Run> runPtr) {
     kvPairs += runs.front()->getMaxKvPairs(); 
 }
 
-std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
-    std::map<KEY_t, VAL_t> mergedMap;
-    size_t newMaxKvPairs = 0;
+// Helper structure for priority queue for compactSegment()
+struct PQEntry {
+    KEY_t key;
+    VAL_t value;
+    size_t runIdx;
+    typename std::vector<kvPair>::iterator vecIter;
 
-    // Iterate through the runs in the segment and merge the data
+    bool operator<(const PQEntry& other) const {
+        return key > other.key; // Min heap based on key
+    }
+};
+
+std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
+    std::priority_queue<PQEntry> pq;
+    size_t newMaxKvPairs = 0;
+    std::vector<std::vector<kvPair>> runVectors(segmentBounds.second - segmentBounds.first + 1);
+
+    // Iterate through the runs in the segment, retrieve their vectors, and add the first element of each run to the priority queue
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
-        std::vector<kvPair> runVector = runs[idx]->getVector();
-        for (const auto &kv : runVector) {
-            if (const auto &[it, inserted] = mergedMap.try_emplace(kv.key, kv.value); !inserted) {
-                it->second = kv.value;
-            }
+        runVectors[idx - segmentBounds.first] = runs[idx]->getVector();
+        std::vector<kvPair> &runVec = runVectors[idx - segmentBounds.first];
+        if (!runVec.empty()) {
+            pq.push(PQEntry{runVec[0].key, runVec[0].value, idx, runVec.begin()});
         }
         newMaxKvPairs += runs[idx]->getMaxKvPairs();
     }
@@ -37,9 +49,21 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
     // Create a new run with the merged data
     auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, levelNum, lsmTree);
-    for (const auto &kv : mergedMap) {
-        if (!(isLastLevel && kv.second == TOMBSTONE)) {
-            compactedRun->put(kv.first, kv.second);
+
+    // Merge the sorted runs using the priority queue
+    while (!pq.empty()) {
+        PQEntry top = pq.top();
+        pq.pop();
+
+        if (!(isLastLevel && top.value == TOMBSTONE)) {
+            compactedRun->put(top.key, top.value);
+        }
+
+        // Add the next element from the same run to the priority queue
+        ++top.vecIter;
+        std::vector<kvPair> &runVec = runVectors[top.runIdx - segmentBounds.first];
+        if (top.vecIter != runVec.end()) {
+            pq.push(PQEntry{top.vecIter->key, top.vecIter->value, top.runIdx, top.vecIter});
         }
     }
     compactedRun->closeFile();
@@ -51,9 +75,6 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
     return compactedRun;
 }
-
-
-
 
 
 void Level::replaceSegment(std::pair<size_t, size_t> segmentBounds, std::unique_ptr<Run> compactedRun) {

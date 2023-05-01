@@ -7,6 +7,7 @@
 #include <numeric>
 #include <shared_mutex>
 #include <algorithm>
+#include <filesystem>
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/lock_algorithms.hpp>
@@ -982,7 +983,8 @@ void LSMTree::deserialize(const std::string& filename) {
         return;
     }
 
-    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << filename << std::endl;
+    std::filesystem::path absolute_path = std::filesystem::absolute(filename);
+    SyncedCout() << "Previous LSM Tree found! Deserializing LSMTree from file: " << absolute_path << std::endl;
 
     json treeJson;
     infile >> treeJson;
