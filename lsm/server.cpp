@@ -12,7 +12,7 @@ std::atomic<sig_atomic_t> terminationFlag{0};
 
 Server *server_ptr = nullptr;
 
-void sigintHandler(int signal) {
+void handleSIGINT([[maybe_unused]] int signal) {
     terminationFlag.store(1, std::memory_order_release);
     if (server_ptr) {
         server_ptr->close();
@@ -300,7 +300,7 @@ void Server::run() {
 }
 
 
-Server::Server(int port, bool verbose, size_t verboseFrequency) : port(port), verbose(verbose), verboseFrequency(verboseFrequency) {
+Server::Server(int port, bool verbose, size_t verboseFrequency) : verbose(verbose), verboseFrequency(verboseFrequency) {
     // Create server socket
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
@@ -446,7 +446,7 @@ int main(int argc, char **argv) {
     // Set signal handler for SIGINT
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = sigintHandler;
+    sa.sa_handler = handleSIGINT;
     sigaction(SIGINT, &sa, NULL);
 
     // Default values for options
@@ -472,6 +472,10 @@ int main(int argc, char **argv) {
             break;
         case 'f':
             fanout = atoi(optarg);
+            if (fanout < 2) {
+                std::cerr << "Invalid value for -f option. Fanout must be greater than 1." << std::endl;
+                exit(1);
+            }
             break;
         case 'l':
             if (strcmp(optarg, "TIERED") == 0) {

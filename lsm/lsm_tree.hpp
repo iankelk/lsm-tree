@@ -63,11 +63,13 @@ public:
 
 private:
     // LSM tree components
+    double bfErrorRate;
+    unsigned int fanout;
+    Level::Policy levelPolicy;
+    size_t bfFalsePositives = 0;
+    size_t bfTruePositives = 0;
     Memtable buffer;
     ThreadPool threadPool;
-    double bfErrorRate;
-    int fanout;
-    Level::Policy levelPolicy;
     float compactionPercentage;
     std::string dataDirectory;
     std::vector<std::shared_ptr<Level>> levels;
@@ -109,8 +111,6 @@ private:
     size_t getRangeMisses() const;
 
     // Private functions for MONKEY bloom filter optimization
-    size_t bfFalsePositives = 0;
-    size_t bfTruePositives = 0;
     size_t getTotalBits() const;
     double TrySwitch(Run* run1, Run* run2, size_t delta, double R) const;
     double eval(size_t bits, size_t entries) const;

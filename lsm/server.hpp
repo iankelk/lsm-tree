@@ -20,7 +20,6 @@ public:
 private:
     std::unique_ptr<LSMTree> lsmTree;
     std::shared_mutex sharedMtx;
-    int port;
     int serverSocket;
     struct sockaddr_in serverAddress;
     void handleClient(int clientSocket);
