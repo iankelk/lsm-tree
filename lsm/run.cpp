@@ -298,6 +298,8 @@ json Run::serialize() const {
     j["maxKey"] = maxKey;
     j["truePositives"] = truePositives;
     j["falsePositives"] = falsePositives;
+    j["firstKey"] = firstKey;
+    j["lastKey"] = lastKey;
     return j;
 }
 
@@ -312,6 +314,8 @@ void Run::deserialize(const json& j) {
     maxKey = j["maxKey"];
     truePositives = j["truePositives"];
     falsePositives = j["falsePositives"];
+    firstKey = j["firstKey"];
+    lastKey = j["lastKey"];
 }
 
 float Run::getBfFalsePositiveRate() {

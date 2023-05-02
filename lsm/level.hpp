@@ -114,7 +114,7 @@ private:
     size_t bufferSize; // Memtable size
     Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
     int fanout;
-    std::map<int, long> levelSizes; // Vector of level sizes cached for faster lookup
+    std::map<int, long> levelSizes; // Map of level sizes cached for faster lookup
     LSMTree* lsmTree;
     std::string diskName;
     int diskPenaltyMultiplier;
