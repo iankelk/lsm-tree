@@ -39,6 +39,9 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
     // Create a new run with the merged data
     auto compactedRun = std::make_unique<Run>(newMaxKvPairs, errorRate, true, levelNum, lsmTree);
 
+    // Create a vector to accumulate key-value pairs
+    std::vector<kvPair> compactedKvPairs;
+
     // Merge the sorted runs using the priority queue
     while (!pq.empty()) {
         PQEntry top = pq.top();
@@ -47,7 +50,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
         if (!(isLastLevel && top.value == TOMBSTONE)) {
             // Check if the key is the same as the most recent key processed to avoid duplicates
             if (!mostRecentKey.has_value() || mostRecentKey.value() != top.key) { 
-                compactedRun->put(top.key, top.value);
+                compactedKvPairs.push_back({top.key, top.value});
                 mostRecentKey = top.key; // Update the most recent key processed
             }
         }
@@ -59,8 +62,10 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
             pq.push(PQEntry{top.vecIter->key, top.vecIter->value, top.runIdx, top.vecIter});
         }
     }
-    compactedRun->closeFile();
+    // Flush the accumulated key-value pairs to the compactedRun
+    compactedRun->flush(compactedKvPairs);
 
+    compactedRun->closeFile();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 

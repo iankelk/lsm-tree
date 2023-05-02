@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <map>
 
 // KEY
 using KEY_t = int32_t;
@@ -81,3 +82,21 @@ struct PQEntry {
         return key > other.key; // Min heap based on key
     }
 };
+
+template <typename T>
+KEY_t get_key(const T& it) {
+    if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
+        return it->first;
+    } else {
+        return it->key;
+    }
+}
+
+template <typename T>
+VAL_t get_value(const T& it) {
+    if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
+        return it->second;
+    } else {
+        return it->value;
+    }
+}

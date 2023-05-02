@@ -15,8 +15,11 @@ public:
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::vector<kvPair> range(KEY_t start, KEY_t end);
-    void put(KEY_t key, VAL_t val);
+    void put2(KEY_t key, VAL_t val);
+    template<typename InputIterator>
+    void flush(InputIterator begin, InputIterator end);
     void flush(const Memtable& buffer);
+    void flush(const std::vector<kvPair>& kvBuffer);
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();

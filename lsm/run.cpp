@@ -71,7 +71,8 @@ void Run::closeFile() {
     }
 }
 
-void Run::put(KEY_t key, VAL_t val) {
+template<typename InputIterator>
+void Run::flush(InputIterator begin, InputIterator end) {
     int result;
     size_t runSize;
     {
@@ -79,69 +80,44 @@ void Run::put(KEY_t key, VAL_t val) {
         runSize = size;
     }
     if (runSize >= maxKvPairs) {
-            die("Run::put: Attempting to add to full Run: " + runFilePath);
-    }
-    kvPair kv = {key, val};
-    addToBloomFilter(key);
-    // Add the key to the fence pointers vector if it is a multiple of the page size. 
-    // We can assume it is sorted because the buffer is sorted before it is written to the run
-    if (runSize % getpagesize() == 0) {
-        addFencePointer(key);
-    }
-
-    // If the key is greater than the max key, update the max key
-    if (key > getMaxKey()) {
-        setMaxKey(key);
-    }
-
-    // Write the key-value pair to the Run file
-    result = write(localFd, &kv, sizeof(kvPair));
-    if (result == -1) {
-        die("Run::put: Failed to write to Run file: " + runFilePath);
-    }
-    incrementSize();
-}
-
-void Run::flush(const Memtable& buffer) {
-    int result;
-    size_t runSize;
-    {
-        std::shared_lock<std::shared_mutex> lock(sizeMutex);
-        runSize = size;
-    }
-    if (runSize >= maxKvPairs) {
-            die("Run::putBuffer: Attempting to add to full Run: " + runFilePath);
+            die("Run::flush: Attempting to add to full Run: " + runFilePath);
     }
 
     // First pass: Add Bloom filters and fence pointers
     size_t idx = 0;
-    std::vector<kvPair> kvBuffer;
-    kvBuffer.reserve(buffer.size());
 
-    for (auto it = buffer.begin(); it != buffer.end(); ++it, ++idx) {
-        addToBloomFilter(it->first);
+    for (auto it = begin; it != end; ++it, ++idx) {
+        addToBloomFilter(get_key(it));
 
         if (idx % getpagesize() == 0) {
-            addFencePointer(it->first);
+            addFencePointer(get_key(it));
         }
 
-        if (it->first > getMaxKey()) {
-            setMaxKey(it->first);
+        if (get_key(it) > getMaxKey()) {
+            setMaxKey(get_key(it));
         }
-
-        kvBuffer.push_back({it->first, it->second});
     }
 
-    // Second pass: Write the kvBuffer to the Run file
-    result = write(localFd, kvBuffer.data(), sizeof(kvPair) * kvBuffer.size());
+    // Second pass: Write the data to the Run file
+    result = write(localFd, &(*begin), sizeof(kvPair) * std::distance(begin, end));
     if (result == -1) {
-        die("Run::putBuffer: Failed to write to Run file: " + runFilePath);
+        die("Run::flush: Failed to write to Run file: " + runFilePath);
     }
 
     {
         std::unique_lock<std::shared_mutex> lock(sizeMutex);
-        size += kvBuffer.size();
+        size += std::distance(begin, end);
     }
+}
+
+void Run::flush(const Memtable& buffer) {
+    // Call the new flush function with the Memtable's iterators
+    flush(buffer.begin(), buffer.end());
+}
+
+void Run::flush(const std::vector<kvPair>& kvBuffer) {
+    // Call the new flush function with the vector's iterators
+    flush(kvBuffer.begin(), kvBuffer.end());
 }
 
 void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
