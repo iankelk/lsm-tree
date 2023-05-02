@@ -219,6 +219,14 @@ void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap
     }
 }
 
+// Remove all TOMBSTONES from a given std::unique_ptr<std::vector<kvPair>> rangeResult
+void LSMTree::removeTombstones(std::unique_ptr<std::vector<kvPair>> &rangeResult) {
+    rangeResult->erase(std::remove_if(rangeResult->begin(), rangeResult->end(),
+                                      [](const kvPair &kv) { return kv.value == TOMBSTONE; }),
+                       rangeResult->end());
+}
+
+
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     std::unique_ptr<VAL_t> val;
@@ -269,81 +277,102 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     incrementGetMisses();
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
-// Returns a map of all the key-value pairs in the range [start, end] or an empty map if the range is invalid
-std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangeMap;
+// Returns a vector of all the key-value pairs in the range [start, end] or an empty vector if the range is invalid
+std::unique_ptr<std::vector<kvPair>> LSMTree::range(KEY_t start, KEY_t end) {
+    std::unique_ptr<std::vector<kvPair>> rangeResult = std::make_unique<std::vector<kvPair>>();
+    std::priority_queue<PQEntry> pq;
+    std::optional<KEY_t> mostRecentKey;
 
     // if either start or end is not within the range of the available keys, print to the server stderr and skip it
     if (start < KEY_MIN || start > KEY_MAX || end < KEY_MIN || end > KEY_MAX) {
         SyncedCerr() << "LSMTree::range: Key " << start << " or " << end << " is not within the range of available keys. Skipping..." << std::endl;
-        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
+        return rangeResult; // Return an empty vector
     }
     // If the start key is greater than the end key, swap them
     if (start > end) {
         SyncedCerr() << "LSMTree::range: Start key is greater than end key. Swapping them..." << std::endl;
-        KEY_t temp = start;
-        start = end;
-        end = temp;
+        std::swap(start, end);
     }
 
     // If the start key is equal to the end key, return an empty map
     if (start == end) {
-        return std::make_unique<std::map<KEY_t, VAL_t>>(); // Return an empty map
+        return rangeResult; // Return an empty vector
+
     }
-    int allPossibleKeys = end - start;
+    const size_t allPossibleKeys = end - start;
+    size_t keysFound = 0;
+    bool searchLevels = true;
 
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        // Search the buffer for the key range and return the range map as a unique_ptr
-        rangeMap = std::make_unique<std::map<KEY_t, VAL_t>>(buffer.range(start, end));
-    }
+        // Search the buffer for the key range and add the found key-value pairs to the priority queue
+        auto bufferResult = buffer.range(start, end);
+        for (const auto &kv : bufferResult) {
+            pq.push(PQEntry{kv.first, kv.second, 0, {}});
+            keysFound++;
 
-    // If the range has the size of the entire range, return the range
-    if (rangeMap->size() == allPossibleKeys) {
-        // Remove all the TOMBSTONES from the range map
-        removeTombstones(rangeMap);
-        incrementRangeHits();
-        return rangeMap;
-    }
-    std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-    std::vector<std::future<std::vector<kvPair>>> futures;
-
-    // If all of the keys are not found in the buffer, search the levels
-    for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
-        // Lock the level with a shared lock
-        std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
-        futures.reserve((*level)->runs.size());
-
-        for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
-            // Enqueue task for searching in the run
-            futures.push_back(threadPool.enqueue([&, run] {
-                return (*run)->range(start, end);
-            }));
-        }
-    }
-
-    // Wait for all tasks to finish and aggregate the results
-    for (auto &future : futures) {
-        std::vector<kvPair> tempVec = future.get();
-        if (!tempVec.empty()) {
-            for (const auto &kv : tempVec) {
-            	// Only add the key-value pair if the key is not already in the range map
-                rangeMap->try_emplace(kv.key, kv.value);
+            // If the range has the size of the entire range, break the loop
+            if (keysFound == allPossibleKeys) {
+                searchLevels = false;
+                break;
             }
         }
-        if (rangeMap->size() == allPossibleKeys) {
-            removeTombstones(rangeMap);
-            incrementRangeHits();
-            return rangeMap;
+    }
+    if (searchLevels) {
+        std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+        std::vector<std::future<std::vector<kvPair>>> futures;
+
+        // Search the levels
+        for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
+            // Lock the level with a shared lock
+            std::shared_lock<std::shared_mutex> lock((*level)->levelMutex);
+            futures.reserve((*level)->runs.size());
+
+            for (auto run = (*level)->runs.begin(); run != (*level)->runs.end(); run++) {
+                // Enqueue task for searching in the run
+                futures.push_back(threadPool.enqueue([&, run] {
+                    return (*run)->range(start, end);
+                }));
+            }
+        }
+
+        // Wait for all tasks to finish and add the results to the priority queue
+        for (auto &future : futures) {
+            std::vector<kvPair> tempVec = future.get();
+            if (!tempVec.empty()) {
+                for (const auto &kv : tempVec) {
+                    pq.push(PQEntry{kv.key, kv.value, 0, {}});
+                }
+            }
         }
     }
-    if (rangeMap->size() == 0) {
+    // Reset keysFound to 0 since now we're searching everything
+    keysFound = 0;
+    // Merge the sorted key-value pairs using the priority queue
+    while (!pq.empty()) {
+        PQEntry top = pq.top();
+        pq.pop();
+        // Check if the key is the same as the most recent key processed to avoid duplicates
+        if (!mostRecentKey.has_value() || mostRecentKey.value() != top.key) {
+            rangeResult->push_back(kvPair{top.key, top.value});
+            mostRecentKey = top.key; // Update the most recent key processed
+            keysFound++;
+            // If the range has the size of the entire range, break the loop
+            if (keysFound == allPossibleKeys) {
+                break;
+            }
+        }
+    }
+    // Remove all the TOMBSTONES from the rangeResult
+    removeTombstones(rangeResult);
+
+    // Update range hits and misses
+    if (rangeResult->empty()) {
         incrementRangeMisses();
     } else {
         incrementRangeHits();
     }
-    removeTombstones(rangeMap);
-    return rangeMap;
+    return rangeResult;
 }
 
 // Given a key, delete the key-value pair from the tree.
@@ -373,7 +402,7 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
         char command_code;
         line_ss >> command_code;
 
-        std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
+        std::unique_ptr<std::vector<kvPair>> rangePtr;
 
         switch (command_code) {
             case 'p': {

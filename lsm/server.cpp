@@ -153,7 +153,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
     
     // Pointers to store the results of get and range
     std::unique_ptr<VAL_t> valuePtr;
-    std::unique_ptr<std::map<KEY_t, VAL_t>> rangePtr;
+    std::unique_ptr<std::vector<kvPair>> rangePtr;
     // fileName is used for load and benchmark operations
     std::string fileName;
 
@@ -230,10 +230,10 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             }
             rangePtr = lsmTree->range(start, end);
             if (rangePtr->size() > 0) {
-                // Iterate over the map and store the key-value pairs in results
+                // Iterate over the vector and store the key-value pairs in results
                 for (const auto &p : *rangePtr) {
                     // Return key-value pairs as key:value separated by spaces
-                    response += std::to_string(p.first) + ":" + std::to_string(p.second) + " ";
+                    response += std::to_string(p.key) + ":" + std::to_string(p.value) + " ";
                 }
             }
             else {

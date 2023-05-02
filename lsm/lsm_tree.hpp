@@ -19,7 +19,7 @@ public:
     // DSL commands
     void put(KEY_t, VAL_t);
     std::unique_ptr<VAL_t> get(KEY_t key);
-    std::unique_ptr<std::map<KEY_t, VAL_t>> range(KEY_t start, KEY_t end);
+    std::unique_ptr<std::vector<kvPair>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
     void load(const std::string& filename);
     std::string printStats(size_t numToPrintFromEachLevel);
@@ -80,6 +80,7 @@ private:
 
     // Private compaction functions
     void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
+    void removeTombstones(std::unique_ptr<std::vector<kvPair>> &rangeResult);
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
     size_t getCompactionPlanSize();
