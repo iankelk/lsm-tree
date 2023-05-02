@@ -133,7 +133,7 @@ void Server::handleClient(int clientSocket) {
 }
 
 void Server::sendResponse(int clientSocket, const std::string &response) {
-    for (int i = 0; i < response.length(); i += BUFFER_SIZE) {
+    for (size_t i = 0; i < response.length(); i += BUFFER_SIZE) {
         char chunk[BUFFER_SIZE] = {};
         std::strncpy(chunk, response.c_str() + i, BUFFER_SIZE - 1); // Subtracts 1 from BUFFER_SIZE to make sure the string is null-terminated
         send(clientSocket, chunk, strlen(chunk), 0);
@@ -372,7 +372,7 @@ void printHelp() {
 }
 
 void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy, size_t numThreads, 
-                                    float compactionPercentage, std::string dataDirectory) {
+                                    float compactionPercentage, const std::string& dataDirectory) {
     std::string verboseFrequencyString = (verbose) ? " (report every " + addCommas(std::to_string(verboseFrequency)) + " commands)" : "";    
     SyncedCout() << "LSMTree parameters:" << std::endl;
     SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;

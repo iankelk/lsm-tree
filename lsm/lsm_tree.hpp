@@ -14,7 +14,7 @@ class LSMTree {
 public:
     // Constructor
     LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, 
-            size_t numThreads, float compactionPercentage, std::string dataDirectory);
+            size_t numThreads, float compactionPercentage, const std::string& dataDirectory);
 
     // DSL commands
     void put(KEY_t, VAL_t);
@@ -22,12 +22,12 @@ public:
     std::unique_ptr<std::vector<kvPair>> range(KEY_t start, KEY_t end);
     void del(KEY_t key);
     void load(const std::string& filename);
-    std::string printStats(size_t numToPrintFromEachLevel);
+    std::string printStats(ssize_t numToPrintFromEachLevel);
     void benchmark(const std::string& filename, bool verbose, size_t verboseFrequency);
 
     // Public compaction functions
     bool isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it);
-    bool isLastLevel(int levelNum);
+    bool isLastLevel(unsigned int levelNum);
 
     // Printing output
     void printHitsMissesStats();

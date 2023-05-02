@@ -16,7 +16,7 @@
 #include "utils.hpp"
 
 LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy,
-                 size_t numThreads, float compactionPercentage, std::string dataDirectory) :
+                 size_t numThreads, float compactionPercentage, const std::string& dataDirectory) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
     buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), 
     compactionPercentage(compactionPercentage), dataDirectory(dataDirectory)
@@ -29,7 +29,6 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
-    size_t bufferMaxKvPairs;
     std::chrono::high_resolution_clock::time_point start_time;
     std::unique_lock<std::shared_mutex> firstLevelLock;
 
@@ -43,16 +42,16 @@ void LSMTree::put(KEY_t key, VAL_t val) {
             return;
         }
         // The buffer is full, so do all buffer operations while protected by the bufferMutex
-        bufferMaxKvPairs = buffer.getMaxKvPairs();
+        size_t bufferMaxKvPairs = buffer.getMaxKvPairs();
         // Lock the first level
         firstLevelLock = std::unique_lock<std::shared_mutex>(levels.front()->levelMutex);
 
         if (!levels.front()->willBufferFit()) {
-            std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
+            std::unique_lock<std::shared_mutex> mrLock(moveRunsMutex);
             moveRuns(FIRST_LEVEL_NUM);
         } else if (levels.front()->runs.size() > 0) {
             if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
-                std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+                std::unique_lock<std::shared_mutex> cpLock(compactionPlanMutex);
                 compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
             }
         }
@@ -490,7 +489,7 @@ bool LSMTree::isLastLevel(std::vector<std::shared_ptr<Level>>::iterator it) {
     return (it + 1 == levels.end());
 }
 // Check if a level number is the last level
-bool LSMTree::isLastLevel(int levelNum) {
+bool LSMTree::isLastLevel(unsigned int levelNum) {
     return (levelNum == levels.size() - 1);
 }
 
@@ -567,7 +566,7 @@ void LSMTree::printHitsMissesStats() {
 }
 
 // Print out a summary of the tree.
-std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
+std::string LSMTree::printStats(ssize_t numToPrintFromEachLevel) {
     std::map<KEY_t, VAL_t> bufferContents;
     std::vector<Level*> localLevelsCopy;
 
@@ -581,7 +580,7 @@ std::string LSMTree::printStats(size_t numToPrintFromEachLevel) {
     std::string treeDump = "";   // Create a string to hold the dump of the tree
 
     // Iterate through the buffer and add the key/value pairs to the treeDump string
-    size_t pairsCounter = 0;
+    ssize_t pairsCounter = 0;
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
             break;

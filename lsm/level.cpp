@@ -54,7 +54,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
         // Add the next element from the same run to the priority queue
         ++top.vecIter;
-        std::vector<kvPair> &runVec = runVectors[top.runIdx - segmentBounds.first];
+        const std::vector<kvPair> &runVec = runVectors[top.runIdx - segmentBounds.first];
         if (top.vecIter != runVec.end()) {
             pq.push(PQEntry{top.vecIter->key, top.vecIter->value, top.runIdx, top.vecIter});
         }

@@ -37,19 +37,18 @@ public:
 private:
     static thread_local int localFd;
     std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
-
-    KEY_t maxKey;
     size_t maxKvPairs;
     double bfErrorRate;
-    BloomFilter bloomFilter;
     std::vector<KEY_t> fencePointers;
-    std::string runFilePath;
-    size_t size;
-    LSMTree* lsmTree;
     float getBfFalsePositiveRate();
     size_t falsePositives = 0;
     size_t truePositives = 0;
     size_t levelOfRun;
+    LSMTree* lsmTree;
+    BloomFilter bloomFilter;
+    std::string runFilePath;
+    size_t size;
+    KEY_t maxKey;
     mutable std::shared_mutex falsePositivesMutex;
     mutable std::shared_mutex truePositivesMutex;
     mutable std::shared_mutex sizeMutex;

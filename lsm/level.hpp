@@ -22,9 +22,10 @@ public:
     };
     // constructor
     Level(long bufferSize, int fanout, Policy levelPolicy, int levelNum, LSMTree* lsmTree) :
-    bufferSize(bufferSize), fanout(fanout), levelPolicy(levelPolicy), levelNum(levelNum),
-    kvPairs(0), maxKvPairs(pow(fanout, levelNum) * bufferSize), lsmTree(lsmTree), 
+    bufferSize(bufferSize), fanout(fanout), levelPolicy(levelPolicy), levelNum(levelNum),  
+    lsmTree(lsmTree), kvPairs(0), maxKvPairs(pow(fanout, levelNum) * bufferSize), 
     diskName(Storage::getDiskName(levelNum)), diskPenaltyMultiplier(Storage::getDiskPenaltyMultiplier(levelNum)) {};
+
 
     Level() = default; // default constructor
     ~Level() {}; // destructor
@@ -48,7 +49,6 @@ public:
     long sumOfKeyDifferences(size_t start, size_t end);
 
     mutable std::shared_mutex levelMutex;
-    mutable boost::upgrade_mutex runsMutex;
 
     static std::string policyToString(Policy policy) {
         switch (policy) {
@@ -73,48 +73,47 @@ public:
     json serialize() const;
     void deserialize(const json& j, LSMTree* lsmTreePtr);
 
-    // copy constructor
+    // Move constructor
     Level(Level&& other) noexcept
-        : levelNum(other.levelNum),
-        fanout(other.fanout),
-        maxKvPairs(other.maxKvPairs),
-        bufferSize(other.bufferSize),
-        levelPolicy(other.levelPolicy),
-        kvPairs(other.kvPairs),
-        lsmTree(other.lsmTree),
-        diskName(other.diskName),
-        diskPenaltyMultiplier(other.diskPenaltyMultiplier),
-        runs(std::move(other.runs)),
+        : runs(std::move(other.runs)),
         levelMutex(), // Mutexes are default constructed
-        runsMutex()
+        bufferSize(other.bufferSize),
+        fanout(other.fanout),
+        levelPolicy(other.levelPolicy),
+        levelNum(other.levelNum),
+        lsmTree(other.lsmTree),
+        kvPairs(other.kvPairs),
+        maxKvPairs(other.maxKvPairs),
+        diskName(other.diskName),
+        diskPenaltyMultiplier(other.diskPenaltyMultiplier)
     {
     }
     // copy assignment operator
     Level& operator=(Level&& other) noexcept {
         if (this != &other) {
-            levelNum = other.levelNum;
-            fanout = other.fanout;
-            maxKvPairs = other.maxKvPairs;
+            runs = std::move(other.runs); 
             bufferSize = other.bufferSize;
+            fanout = other.fanout;
             levelPolicy = other.levelPolicy;
-            kvPairs = other.kvPairs;
+            levelNum = other.levelNum;
             lsmTree = other.lsmTree;
+            kvPairs = other.kvPairs;
+            maxKvPairs = other.maxKvPairs;
             diskName = other.diskName;
-            diskPenaltyMultiplier = other.diskPenaltyMultiplier;
-            runs = std::move(other.runs);            
+            diskPenaltyMultiplier = other.diskPenaltyMultiplier;           
         }
         return *this;
     }
 
 private:
-    int levelNum;
+    size_t bufferSize; // Memtable size
+    int fanout; // Fanout of the tree
+    Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
+    unsigned int levelNum;
+    LSMTree* lsmTree;
     size_t kvPairs; // the number of key-value pairs in the level 
     size_t maxKvPairs; // the maximum number of key-value pairs that can be in the level
-    size_t bufferSize; // Memtable size
-    Policy levelPolicy; // can be TIERED, LEVELED, LAZY_LEVELED, or PARTIAL
-    int fanout;
     std::map<int, long> levelSizes; // Map of level sizes cached for faster lookup
-    LSMTree* lsmTree;
     std::string diskName;
     int diskPenaltyMultiplier;
 };

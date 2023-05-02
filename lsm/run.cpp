@@ -18,12 +18,12 @@ thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
 Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree = nullptr) :
     maxKvPairs(maxKvPairs),
     bfErrorRate(bfErrorRate),
+    levelOfRun(levelOfRun),
+    lsmTree(lsmTree),
     bloomFilter(maxKvPairs, bfErrorRate),
     runFilePath(""),
     size(0),
-    maxKey(KEY_MIN),
-    levelOfRun(levelOfRun),
-    lsmTree(lsmTree) 
+    maxKey(KEY_MIN)
 {
 
     if (createFile) {
@@ -71,7 +71,8 @@ void Run::closeFile() {
 }
 
 void Run::put(KEY_t key, VAL_t val) {
-    int result, runSize;
+    int result;
+    size_t runSize;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         runSize = size;
@@ -125,7 +126,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     }
     // Perform a binary search on the fence pointers to find the page that may contain the key
     auto iter = branchless_lower_bound(fencePointersCopy.begin(), fencePointersCopy.end(), key);
-    auto pageIndex = std::distance(fencePointersCopy.begin(), iter) - 1;
+    size_t pageIndex = std::distance(fencePointersCopy.begin(), iter) - 1;
 
     // Calculate the start and end position of the range to search based on the page index
     size_t start = pageIndex * getpagesize();
@@ -354,7 +355,7 @@ std::map<std::string, std::string> Run::getBloomFilterSummary() {
 }
 
 void Run::resizeBloomFilterBitset(size_t numBits) {
-    bloomFilter.resize(bloomFilter.getNumBits());
+    bloomFilter.resize(numBits);
 }
 
 // Populate the bloom filter. This will typically be called after MONKEY resizes them.

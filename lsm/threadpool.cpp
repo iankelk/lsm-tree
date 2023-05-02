@@ -6,7 +6,7 @@
 #include <functional>
 #include "threadpool.hpp"
 
-ThreadPool::ThreadPool(size_t numThreads) : stop(false), activeTasks(0) {
+ThreadPool::ThreadPool(size_t numThreads) : activeTasks(0), stop(false) {
     for (size_t i = 0; i < numThreads; ++i) {
         workers.emplace_back([this] {
             while (true) {

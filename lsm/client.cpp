@@ -97,7 +97,7 @@ void listenToServer(int client_socket, bool quiet) {
     }
 }
 
-void sendCommandsToServer(int client_socket, bool quiet, bool is_stdin_file) {
+void sendCommandsToServer(int client_socket, bool is_stdin_file) {
     std::string command_str;
 
     while (true) {
@@ -183,7 +183,7 @@ int main(int argc, char *argv[]) {
 
     std::thread server_listener(listenToServer, client_socket, quiet);
 
-    std::thread command_sender(sendCommandsToServer, client_socket, quiet, is_stdin_connected_to_file);
+    std::thread command_sender(sendCommandsToServer, client_socket, is_stdin_connected_to_file);
     command_sender.join();
 
     // End measuring time, calculate the duration, and print it
