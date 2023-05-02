@@ -18,6 +18,11 @@ public:
     long getMaxKvPairs() const;
     json serialize() const;
     void deserialize(const json& j);
+    // Read-only iterators
+    std::map<KEY_t, VAL_t>::const_iterator begin() const;
+    std::map<KEY_t, VAL_t>::const_iterator end() const;
+    std::map<KEY_t, VAL_t>::const_reverse_iterator rbegin() const;
+
 private:
     size_t maxKvPairs;
     std::map<KEY_t, VAL_t> table_;  

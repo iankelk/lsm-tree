@@ -62,6 +62,18 @@ long Memtable::getMaxKvPairs() const {
     return maxKvPairs;
 }
 
+std::map<KEY_t, VAL_t>::const_iterator Memtable::begin() const {
+    return table_.begin();
+}
+
+std::map<KEY_t, VAL_t>::const_iterator Memtable::end() const {
+    return table_.end();
+}
+
+std::map<KEY_t, VAL_t>::const_reverse_iterator Memtable::rbegin() const {
+    return table_.rbegin();
+}
+
 // Serialize the memtable to a JSON object
 json Memtable::serialize() const {
     json j;

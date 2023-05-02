@@ -30,7 +30,8 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
     size_t bufferMaxKvPairs;
-    std::map<KEY_t, VAL_t> bufferContents;
+    std::chrono::high_resolution_clock::time_point start_time;
+    std::unique_lock<std::shared_mutex> firstLevelLock;
 
     {
         boost::unique_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
@@ -42,33 +43,32 @@ void LSMTree::put(KEY_t key, VAL_t val) {
             return;
         }
         // The buffer is full, so do all buffer operations while protected by the bufferMutex
-        bufferContents = buffer.getMap();
         bufferMaxKvPairs = buffer.getMaxKvPairs();
+        // Lock the first level
+        firstLevelLock = std::unique_lock<std::shared_mutex>(levels.front()->levelMutex);
+
+        if (!levels.front()->willBufferFit()) {
+            std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
+            moveRuns(FIRST_LEVEL_NUM);
+        } else if (levels.front()->runs.size() > 0) {
+            if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
+                std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
+                compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
+            }
+        }
+        start_time = std::chrono::high_resolution_clock::now();
+
+        // Create a new run and add a unique pointer to it to the first level
+        levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
+        auto it = buffer.begin();
+        // Save the first and last keys for partial compaction
+        levels.front()->runs.front()->setFirstAndLastKeys(it->first, buffer.rbegin()->first);
+        // Flush the buffer to level 1
+        for (; it != buffer.end(); it++) {
+            levels.front()->runs.front()->put(it->first, it->second);
+        }
         buffer.clear();
         buffer.put(key, val);
-    }
-    // Lock the first level
-    std::unique_lock<std::shared_mutex> firstLevelLock(levels.front()->levelMutex);
-
-    if (!levels.front()->willBufferFit()) {
-        std::unique_lock<std::shared_mutex> lock(moveRunsMutex);
-        moveRuns(FIRST_LEVEL_NUM);
-    } else if (levels.front()->runs.size() > 0) {
-        if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
-            std::unique_lock<std::shared_mutex> lock(compactionPlanMutex);
-            compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
-        }
-    }
-    auto start_time = std::chrono::high_resolution_clock::now();
-
-    // Create a new run and add a unique pointer to it to the first level
-    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
-    auto it = bufferContents.begin();
-    // Save the first and last keys for partial compaction
-    levels.front()->runs.front()->setFirstAndLastKeys(it->first, bufferContents.rbegin()->first);
-    // Flush the buffer to level 1
-    for (; it != bufferContents.end(); it++) {
-        levels.front()->runs.front()->put(it->first, it->second);
     }
     levels.front()->runs.front()->closeFile();
 
@@ -129,10 +129,8 @@ void LSMTree::moveRuns(int currentLevelNum) {
         boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLevelVectorLock(levelVectorLock);
         // Create a new level
         std::unique_ptr<Level> newLevel;
-        {
-            std::shared_lock<std::shared_mutex> lock(bufferMutex);
-            newLevel = std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
-        }
+        newLevel = std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, currentLevelNum + 1, this);
+        
         nextLevelLock = std::unique_lock<std::shared_mutex>(newLevel->levelMutex);
         levels.push_back(std::move(newLevel));
         {
