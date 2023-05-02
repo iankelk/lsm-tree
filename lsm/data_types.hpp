@@ -38,11 +38,11 @@ const std::string SSTABLE_FILE_TEMPLATE = "lsm-XXXXXX.bin";
 
 // DISK DEFINITIONS
 constexpr int NUM_DISK_TYPES = 5;
-#define DISK1_NAME "SSD"
-#define DISK2_NAME "HDD1"
-#define DISK3_NAME "HDD2"
-#define DISK4_NAME "HDD3"
-#define DISK5_NAME "HDD4"
+const std::string DISK1_NAME = "SSD";
+const std::string DISK2_NAME = "HDD1";
+const std::string DISK3_NAME = "HDD2";
+const std::string DISK4_NAME = "HDD3";
+const std::string DISK5_NAME = "HDD4";
 
 constexpr int DISK1_PENALTY_MULTIPLIER = 1;
 constexpr int DISK2_PENALTY_MULTIPLIER = 5;

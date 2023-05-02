@@ -1,5 +1,4 @@
-#ifndef UTILS_HPP
-#define UTILS_HPP
+#pragma once
 #include <iostream>
 #include <mutex>
 #include <sstream>
@@ -54,5 +53,3 @@ public:
 private:
     static std::mutex _cerrMutex;
 };
-
-#endif /* UTILS_HPP */

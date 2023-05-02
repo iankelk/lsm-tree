@@ -1,5 +1,4 @@
-#ifndef LSM_RUN_HPP
-#define LSM_RUN_HPP
+#pragma once
 #include <vector>
 #include <map>
 #include <string>
@@ -14,7 +13,7 @@ public:
     Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree);
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
-    std::map<KEY_t, VAL_t> range(KEY_t start, KEY_t end);
+    std::vector<kvPair> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
@@ -71,5 +70,3 @@ private:
     KEY_t lastKey;
 
 };
-
-#endif /* LSM_RUN_HPP */

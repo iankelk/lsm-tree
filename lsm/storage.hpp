@@ -1,5 +1,4 @@
-#ifndef STORAGE_HPP
-#define STORAGE_HPP
+#pragma once
 #include <array>
 #include "data_types.hpp"
 
@@ -14,5 +13,3 @@ public:
 private:
     static const std::array<std::pair<std::string, int>, NUM_DISK_TYPES> disks;
 };
-
-#endif /* STORAGE_HPP */

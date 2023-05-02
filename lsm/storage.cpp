@@ -1,5 +1,6 @@
 #include "storage.hpp"
 #include "utils.hpp"
+#include "data_types.hpp"
 #include <iostream>
 
 const std::array<std::pair<std::string, int>, NUM_DISK_TYPES> Storage::disks {{

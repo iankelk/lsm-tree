@@ -1,5 +1,4 @@
-#ifndef MEMTABLE_HPP
-#define MEMTABLE_HPP
+#pragma once
 #include <map>
 #include "data_types.hpp"
 #include <nlohmann/json.hpp>
@@ -23,5 +22,3 @@ private:
     size_t maxKvPairs;
     std::map<KEY_t, VAL_t> table_;  
 };
-
-#endif /* MEMTABLE_HPP */

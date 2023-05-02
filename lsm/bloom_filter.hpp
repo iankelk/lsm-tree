@@ -1,5 +1,4 @@
-#ifndef BLOOM_FILTER_HPP
-#define BLOOM_FILTER_HPP
+#pragma once
 #include <boost/dynamic_bitset.hpp>
 #include "data_types.hpp"
 #include <nlohmann/json.hpp>
@@ -26,5 +25,3 @@ private:
     int numHashes;
     boost::dynamic_bitset<> bits;
 };
-
-#endif /* BLOOM_FILTER_HPP */

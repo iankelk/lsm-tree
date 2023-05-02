@@ -62,7 +62,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Create a new run and add a unique pointer to it to the first level
-    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, 1, this));
+    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
     auto it = bufferContents.begin();
     // Save the first and last keys for partial compaction
     levels.front()->runs.front()->setFirstAndLastKeys(it->first, bufferContents.rbegin()->first);
@@ -306,7 +306,7 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
         return rangeMap;
     }
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
-    std::vector<std::future<std::map<KEY_t, VAL_t>>> futures;
+    std::vector<std::future<std::vector<kvPair>>> futures;
 
     // If all of the keys are not found in the buffer, search the levels
     for (auto level = localLevelsCopy.begin(); level != localLevelsCopy.end(); level++) {
@@ -324,11 +324,11 @@ std::unique_ptr<std::map<KEY_t, VAL_t>> LSMTree::range(KEY_t start, KEY_t end) {
 
     // Wait for all tasks to finish and aggregate the results
     for (auto &future : futures) {
-        std::map<KEY_t, VAL_t> tempMap = future.get();
-        if (tempMap.size() != 0) {
-            for (const auto &kv : tempMap) {
+        std::vector<kvPair> tempVec = future.get();
+        if (!tempVec.empty()) {
+            for (const auto &kv : tempVec) {
             	// Only add the key-value pair if the key is not already in the range map
-                rangeMap->try_emplace(kv.first, kv.second);
+                rangeMap->try_emplace(kv.key, kv.value);
             }
         }
         if (rangeMap->size() == allPossibleKeys) {
@@ -399,11 +399,11 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                range(start, end);
-                // rangePtr = range(start, end);
-                // if (rangePtr->size() > 0) {
-                //     SyncedCout() << rangePtr->size() << std::endl;
-                // }
+                // range(start, end);
+                rangePtr = range(start, end);
+                if (rangePtr->size() > 0) {
+                    SyncedCout() << rangePtr->size() << std::endl;
+                }
                 break;
             }
             default: {

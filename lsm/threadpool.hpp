@@ -1,5 +1,4 @@
-#ifndef THREADPOOL_HPP
-#define THREADPOOL_HPP
+#pragma once
 #include <vector>
 #include <queue>
 #include <mutex>
@@ -45,5 +44,3 @@ auto ThreadPool::enqueue(F&& f) -> std::future<typename std::invoke_result<F>::t
     condition.notify_one();
     return res;
 }
-
-#endif /* THREADPOOL_HPP */

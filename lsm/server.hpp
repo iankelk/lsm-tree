@@ -1,5 +1,4 @@
-#ifndef SERVER_HPP
-#define SERVER_HPP
+#pragma once
 #include <thread>
 #include <netinet/in.h>
 #include <set>
@@ -37,5 +36,3 @@ private:
     std::mutex connectedClientsMutex;
     std::mutex coutMutex;
 };
-
-#endif /* SERVER_HPP */

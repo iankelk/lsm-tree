@@ -13,7 +13,6 @@
 #include "lsm_tree.hpp"
 #include "utils.hpp"
 
-
 thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
 
 Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree = nullptr) :
@@ -187,9 +186,9 @@ std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(int fd, size
 }
 
 // Return a map of all the key-value pairs in the range [start, end)
-std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
+std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
     size_t searchPageStart, runSize;
-    std::map<KEY_t, VAL_t> rangeMap;
+    std::vector<kvPair> rangeVec;
 
     // Check if the run is empty
     {
@@ -199,14 +198,14 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     // Check if the run is empty. If so, return an empty result set.
     if (runSize == 0) {
-        return rangeMap;
+        return rangeVec;
     }
 
     auto fencePointersCopy = getFencePointers();
 
     // Check if the specified range is outside the range of keys in the run. If so, return an empty result set.
     if (end <= fencePointersCopy.front() || start > getMaxKey()) {
-        return rangeMap;
+        return rangeVec;
     }
 
     // Use binary search to identify the starting fence pointer index where the start key might be located.
@@ -225,7 +224,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
 
     size_t rangeStartIndex;
     if (startPosKvPair != nullptr) {
-        rangeMap[startPosKvPair->key] = startPosKvPair->value;
+        rangeVec.push_back(*startPosKvPair);
         // Start key was already found so don't need to read again
         rangeStartIndex = startPosResult.first + 1;
     } else {
@@ -241,7 +240,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
         }
 
         if (kv.key >= start && kv.key < end) {
-            rangeMap[kv.key] = kv.value;
+            rangeVec.push_back(kv);
         } else if (kv.key >= end) {
             break;
         }
@@ -254,7 +253,7 @@ std::map<KEY_t, VAL_t> Run::range(KEY_t start, KEY_t end) {
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
 
     // Return the data structure containing the key-value pairs within the specified range.
-    return rangeMap;
+    return rangeVec;
 }
 
 std::vector<kvPair> Run::getVector() {

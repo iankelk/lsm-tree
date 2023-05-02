@@ -1,5 +1,4 @@
-#ifndef LEVEL_HPP
-#define LEVEL_HPP
+#pragma once
 #include <queue>
 #include <cmath>
 #include <shared_mutex>
@@ -119,5 +118,3 @@ private:
     std::string diskName;
     int diskPenaltyMultiplier;
 };
-
-#endif /* LEVEL_HPP */
