@@ -103,9 +103,11 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // Save the first and last keys for partial compaction
         levels.front()->runs.front()->setFirstAndLastKeys(it->first, buffer.rbegin()->first);
         // Flush the buffer to level 1
-        for (; it != buffer.end(); it++) {
-            levels.front()->runs.front()->put(it->first, it->second);
-        }
+        levels.front()->runs.front()->flush(buffer);
+
+        // for (; it != buffer.end(); it++) {
+        //     levels.front()->runs.front()->put(it->first, it->second);
+        // }
         buffer.clear();
         buffer.put(key, val);
     }

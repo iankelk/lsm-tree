@@ -11,6 +11,7 @@
 #include "../lib/binary_search.hpp"
 #include "run.hpp"
 #include "lsm_tree.hpp"
+#include "memtable.hpp"
 #include "utils.hpp"
 
 thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
@@ -99,6 +100,48 @@ void Run::put(KEY_t key, VAL_t val) {
         die("Run::put: Failed to write to Run file: " + runFilePath);
     }
     incrementSize();
+}
+
+void Run::flush(const Memtable& buffer) {
+    int result;
+    size_t runSize;
+    {
+        std::shared_lock<std::shared_mutex> lock(sizeMutex);
+        runSize = size;
+    }
+    if (runSize >= maxKvPairs) {
+            die("Run::putBuffer: Attempting to add to full Run: " + runFilePath);
+    }
+
+    // First pass: Add Bloom filters and fence pointers
+    size_t idx = 0;
+    std::vector<kvPair> kvBuffer;
+    kvBuffer.reserve(buffer.size());
+
+    for (auto it = buffer.begin(); it != buffer.end(); ++it, ++idx) {
+        addToBloomFilter(it->first);
+
+        if (idx % getpagesize() == 0) {
+            addFencePointer(it->first);
+        }
+
+        if (it->first > getMaxKey()) {
+            setMaxKey(it->first);
+        }
+
+        kvBuffer.push_back({it->first, it->second});
+    }
+
+    // Second pass: Write the kvBuffer to the Run file
+    result = write(localFd, kvBuffer.data(), sizeof(kvPair) * kvBuffer.size());
+    if (result == -1) {
+        die("Run::putBuffer: Failed to write to Run file: " + runFilePath);
+    }
+
+    {
+        std::unique_lock<std::shared_mutex> lock(sizeMutex);
+        size += kvBuffer.size();
+    }
 }
 
 void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
@@ -389,6 +432,11 @@ size_t Run::getFalsePositives() {
 void Run::incrementSize() {
     std::unique_lock<std::shared_mutex> lock(sizeMutex);
     size++;
+}
+
+void Run::setSize(size_t newSize) {
+    std::unique_lock<std::shared_mutex> lock(sizeMutex);
+    size = newSize;
 }
 
 void Run::setMaxKey(KEY_t key) {

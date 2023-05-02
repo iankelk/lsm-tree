@@ -4,6 +4,7 @@
 #include <string>
 #include <shared_mutex>
 #include <thread>
+#include "memtable.hpp"
 #include "bloom_filter.hpp"
 
 class LSMTree;
@@ -15,6 +16,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::vector<kvPair> range(KEY_t start, KEY_t end);
     void put(KEY_t key, VAL_t val);
+    void flush(const Memtable& buffer);
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();
@@ -56,6 +58,7 @@ private:
     mutable std::shared_mutex fencePointersMutex;
     mutable std::shared_mutex bloomFilterMutex;
     void incrementSize();
+    void setSize(size_t newSize);
     void setMaxKey(KEY_t key);
     KEY_t getMaxKey();
     void addFencePointer(KEY_t key);
