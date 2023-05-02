@@ -3,6 +3,7 @@
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #include <boost/thread/lock_algorithms.hpp>
+#include <optional>
 #include "memtable.hpp"
 #include "level.hpp"
 #include "run.hpp"
@@ -13,8 +14,8 @@ class Run;
 class LSMTree {
 public:
     // Constructor
-    LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, 
-            size_t numThreads, float compactionPercentage, const std::string& dataDirectory);
+    LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads, 
+            float compactionPercentage, const std::string& dataDirectory, bool throughputPrinting, size_t throughputFrequency);
 
     // DSL commands
     void put(KEY_t, VAL_t);
@@ -47,6 +48,8 @@ public:
     std::chrono::microseconds getLevelIoTime(int levelNum);
     float getCompactionPercentage() const { return compactionPercentage; }
     std::string getDataDirectory() const { return dataDirectory; }
+    bool getThroughputPrinting() const { return throughputPrinting; }
+    size_t getThroughputFrequency() const { return throughputFrequency; }
 
     // Incrementers
     void incrementBfFalsePositives();
@@ -73,6 +76,8 @@ private:
     float compactionPercentage;
     std::string dataDirectory;
     std::vector<std::shared_ptr<Level>> levels;
+    size_t throughputFrequency;
+    bool throughputPrinting;
 
     // Timer and IO count
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
@@ -130,4 +135,12 @@ private:
     mutable std::shared_mutex bufferMutex;
     mutable std::shared_mutex moveRunsMutex;  // Blocks the moveRuns function to only a single thread
     mutable boost::upgrade_mutex levelsVectorMutex;
+
+    // Throughput tracking
+    mutable boost::upgrade_mutex throughputMutex;
+    void calculateAndPrintThroughput();
+    std::atomic<uint64_t> commandCounter{0};
+    std::chrono::steady_clock::time_point startTime;
+    std::chrono::steady_clock::time_point lastReportTime;
+    bool timerStarted = false;
 };

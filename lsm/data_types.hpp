@@ -13,21 +13,21 @@ constexpr int32_t VAL_MIN = -2147483647;
 constexpr int32_t TOMBSTONE = -2147483648;
 
 // DEFAULT LSM TREE PARAMETERS
-constexpr int DEFAULT_FANOUT = 10;
-constexpr int DEFAULT_NUM_PAGES = 128;
+constexpr size_t DEFAULT_FANOUT = 10;
+constexpr size_t DEFAULT_NUM_PAGES = 128;
 constexpr double DEFAULT_ERROR_RATE = 0.01;
 #define DEFAULT_LEVELING_POLICY Level::TIERED
-constexpr bool DEFAULT_VERBOSE_LEVEL = false;
-constexpr int DEFAULT_NUM_THREADS = 10;
+constexpr size_t DEFAULT_NUM_THREADS = 10;
 constexpr double DEFAULT_COMPACTION_PERCENTAGE = 0.2;
 const std::string DEFAULT_DATA_DIRECTORY = "data";
+constexpr bool DEFAULT_VERBOSE_PRINTING = false;
+constexpr size_t DEFAULT_VERBOSE_FREQUENCY = 100000;
+constexpr bool DEFAULT_THROUGHPUT_PRINTING = false;
+constexpr size_t DEFAULT_THROUGHPUT_FREQUENCY = 1000000;
 
 // LSM TREE DEFINITIONS
 constexpr int STATS_PRINT_EVERYTHING = -1;
 constexpr int NUM_LOGICAL_PAIRS_NOT_CACHED = -1;
-
-// LSM TREE PARAMETERS
-constexpr int BENCHMARK_REPORT_FREQUENCY = 100000;
 
 // BLOOM FILTER DEFINITIONS
 constexpr float BLOOM_FILTER_UNUSED = -1.0f;

@@ -5,6 +5,7 @@
 #include <shared_mutex>
 #include <sys/select.h>
 #include <atomic>
+#include <string>
 #include "server.hpp"
 #include "utils.hpp"
 
@@ -344,15 +345,16 @@ void Server::close() {
     }
 }
 
-void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, 
-                           size_t numThreads, float compactionPercentage, std::string dataDirectory) {
+void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Level::Policy levelPolicy, size_t numThreads, 
+                           float compactionPercentage, std::string dataDirectory, bool throughputPrinting, size_t throughputFrequency) {
     // Path to data directory and JSON file for serialization
     std::string lsmTreeJsonFile = dataDirectory + "/" + LSM_TREE_JSON_FILE;
     // Create LSM-Tree with lsmTree unique pointer
-    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage, dataDirectory);
+    lsmTree = std::make_unique<LSMTree>(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, 
+                                        compactionPercentage, dataDirectory, throughputPrinting, throughputFrequency);
     lsmTree->deserialize(lsmTreeJsonFile);
-    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferMaxKvPairs(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), 
-                           lsmTree->getNumThreads(), lsmTree->getCompactionPercentage(), lsmTree->getDataDirectory());
+    printLSMTreeParameters(lsmTree->getBfErrorRate(), lsmTree->getBufferMaxKvPairs(), lsmTree->getFanout(), lsmTree->getLevelPolicy(), lsmTree->getNumThreads(),
+                           lsmTree->getCompactionPercentage(), lsmTree->getDataDirectory(), lsmTree->getThroughputPrinting(), lsmTree->getThroughputFrequency());
 }
 
 void printHelp() {
@@ -365,15 +367,17 @@ void printHelp() {
               << "  -p <port>                   Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
               << "  -t <numThreads>             Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
               << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
-              << "  -v <optional: frequency>    Verbose benchmarking. Reports every \"frequency\" number of commands (default: " << BENCHMARK_REPORT_FREQUENCY << ")\n"
+              << "  -v <optional: frequency>    Verbose benchmarking. Reports every \"frequency\" number of commands (default: " << DEFAULT_VERBOSE_FREQUENCY << ")\n"
+              << "  -s <optional: frequency>    Throughput reporting. Reports every \"frequency\" number of commands (default: " << DEFAULT_THROUGHPUT_FREQUENCY << ")\n"
               << "  -d <dataDirectory>          Data directory (default: " << DEFAULT_DATA_DIRECTORY << ")\n"
               << "  -h                          Print this help message\n" << std::endl
     ;
 }
 
 void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, int fanout, Level::Policy levelPolicy, size_t numThreads, 
-                                    float compactionPercentage, const std::string& dataDirectory) {
+                                    float compactionPercentage, const std::string& dataDirectory, bool throughputPrinting, size_t throughputFrequency) {
     std::string verboseFrequencyString = (verbose) ? " (report every " + addCommas(std::to_string(verboseFrequency)) + " commands)" : "";    
+    std::string throughputFrequencyString = (throughputPrinting) ? " (report every " + addCommas(std::to_string(throughputFrequency)) + " commands)" : "";
     SyncedCout() << "LSMTree parameters:" << std::endl;
     SyncedCout() << "  Bloom filter error rate: " << bfErrorRate << std::endl;
     SyncedCout() << "  Max key-value pairs in buffer: " << addCommas(std::to_string(bufferMaxKvPairs)) << " (" << 
@@ -386,6 +390,7 @@ void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, 
     }
     SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << verboseFrequencyString << std::endl;
     SyncedCout() << "  Data directory: " << dataDirectory << std::endl;
+    SyncedCout() << "  Throughput printing: " << (throughputPrinting ? "on" : "off") << throughputFrequencyString << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
@@ -455,23 +460,25 @@ int main(int argc, char **argv) {
     int bufferNumPages = DEFAULT_NUM_PAGES;
     int fanout = DEFAULT_FANOUT;
     Level::Policy levelPolicy = DEFAULT_LEVELING_POLICY;
-    bool verbose = DEFAULT_VERBOSE_LEVEL;
+    bool verbose = DEFAULT_VERBOSE_PRINTING;
     int numThreads = DEFAULT_NUM_THREADS;
-    size_t verboseFrequency = BENCHMARK_REPORT_FREQUENCY;
+    size_t verboseFrequency = DEFAULT_VERBOSE_FREQUENCY;
     float compactionPercentage = DEFAULT_COMPACTION_PERCENTAGE;
     std::string dataDirectory = DEFAULT_DATA_DIRECTORY;
+    bool throughputPrinting = DEFAULT_THROUGHPUT_PRINTING;
+    size_t throughputFrequency = DEFAULT_THROUGHPUT_FREQUENCY;
 
     // Parse command line arguments
-    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:c:d:hv")) != -1) {
+    while ((opt = getopt(argc, argv, "e:n:f:l:p:t:c:d:shv")) != -1) {
         switch (opt) {
         case 'e':
             bfErrorRate = atof(optarg);
             break;
         case 'n':
-            bufferNumPages = atoi(optarg);
+            bufferNumPages = std::stoull(optarg);
             break;
         case 'f':
-            fanout = atoi(optarg);
+            fanout = std::stoull(optarg);
             if (fanout < 2) {
                 std::cerr << "Invalid value for -f option. Fanout must be greater than 1." << std::endl;
                 exit(1);
@@ -498,7 +505,7 @@ int main(int argc, char **argv) {
             port = atoi(optarg);
             break;
         case 't':
-            numThreads = atoi(optarg);
+            numThreads = std::stoull(optarg);
             break;
         case 'c':
             compactionPercentage = atof(optarg);
@@ -510,10 +517,17 @@ int main(int argc, char **argv) {
             verbose = true;
             // Check if there is an argument after -v and if it is a number
             if (optind < argc && isdigit(argv[optind][0])) {
-                verboseFrequency = atoi(argv[optind]);
+                verboseFrequency = std::stoull(argv[optind]);
                 optind++; // Move to the next argument
             }
-            SyncedCout() << "Verbose is enabled with frequency " << verboseFrequency << std::endl;
+            break;
+        case 's':
+            throughputPrinting = true;
+            // Check if there is an argument after -s and if it is a number
+            if (optind < argc && isdigit(argv[optind][0])) {
+                throughputFrequency = std::stoull(argv[optind]);
+                optind++; // Move to the next argument
+            }
             break;
         case 'h':
             printHelp();
@@ -538,7 +552,7 @@ int main(int argc, char **argv) {
     server_ptr = &server;
 
     // Create LSM-Tree with the parsed options
-    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage, dataDirectory);
+    server.createLSMTree(bfErrorRate, bufferNumPages, fanout, levelPolicy, numThreads, compactionPercentage, dataDirectory, throughputPrinting, throughputFrequency);
     // Create a thread for listening to standard input
     std::thread stdInThread(&Server::listenToStdIn, &server);
     server.run();

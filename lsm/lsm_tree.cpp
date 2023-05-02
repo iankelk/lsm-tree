@@ -15,11 +15,11 @@
 #include "run.hpp"
 #include "utils.hpp"
 
-LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy,
-                 size_t numThreads, float compactionPercentage, const std::string& dataDirectory) :
+LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Policy levelPolicy, size_t numThreads,
+                 float compactionPercentage, const std::string& dataDirectory, bool throughputPrinting, size_t throughputFrequency) :
     bfErrorRate(bfErrorRate), fanout(fanout), levelPolicy(levelPolicy), bfFalsePositives(0), bfTruePositives(0),
-    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), 
-    compactionPercentage(compactionPercentage), dataDirectory(dataDirectory)
+    buffer(buffer_num_pages * getpagesize() / sizeof(kvPair)), threadPool(numThreads), compactionPercentage(compactionPercentage),
+    dataDirectory(dataDirectory), throughputPrinting(throughputPrinting), throughputFrequency(throughputFrequency)
 {
     // Create the first level
     levels.emplace_back(std::make_unique<Level>(buffer.getMaxKvPairs(), fanout, levelPolicy, FIRST_LEVEL_NUM, this));
@@ -27,8 +27,48 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
     SyncedCout() << "Page size: " << getpagesize() << std::endl;
 }
 
+void LSMTree::calculateAndPrintThroughput() {
+    double slidingWindowThroughput;
+    double overallThroughput;
+    uint64_t currentCounter = ++commandCounter;
+    {
+        boost::upgrade_lock<boost::upgrade_mutex> upgradeLock(throughputMutex);
+        if (!timerStarted) {
+            startTime = std::chrono::steady_clock::now();
+            lastReportTime = startTime;
+            timerStarted = true;
+            return;
+        }
+        if (currentCounter % throughputFrequency != 0) {
+            return;
+        }
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsedTimeSinceLastReport = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - lastReportTime).count();
+        auto elapsedTimeSinceStart = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - startTime).count();
+        
+        // Calculate sliding window throughput in commands per second
+        slidingWindowThroughput = (static_cast<double>(throughputFrequency) / elapsedTimeSinceLastReport) * 1e6;
+        
+        // Calculate overall throughput in commands per second
+        overallThroughput = (static_cast<double>(currentCounter) / elapsedTimeSinceStart) * 1e6;
+        
+        boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(upgradeLock);
+        // Update the lastReportTime
+        lastReportTime = currentTime;
+    }
+    SyncedCout() << "Total commands: " << currentCounter 
+                 << " Sliding Window Throughput: " << std::fixed << std::setprecision(2) << slidingWindowThroughput 
+                 << " cps, Overall Throughput: " << std::fixed << std::setprecision(2) << overallThroughput 
+                 << " cps" << std::endl;
+}
+
+
+
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    if (throughputPrinting) {
+        calculateAndPrintThroughput();
+    }
     std::chrono::high_resolution_clock::time_point start_time;
     std::unique_lock<std::shared_mutex> firstLevelLock;
 
@@ -226,6 +266,9 @@ void LSMTree::removeTombstones(std::unique_ptr<std::vector<kvPair>> &rangeResult
 
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
+    if (throughputPrinting) {
+        calculateAndPrintThroughput();
+    }
     std::unique_ptr<VAL_t> val;
     // std::vector<Level*> localLevelsCopy;
 
@@ -276,6 +319,9 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
 }
 // Returns a vector of all the key-value pairs in the range [start, end] or an empty vector if the range is invalid
 std::unique_ptr<std::vector<kvPair>> LSMTree::range(KEY_t start, KEY_t end) {
+    if (throughputPrinting) {
+        calculateAndPrintThroughput();
+    }
     std::unique_ptr<std::vector<kvPair>> rangeResult = std::make_unique<std::vector<kvPair>>();
     std::priority_queue<PQEntry> pq;
     std::optional<KEY_t> mostRecentKey;
