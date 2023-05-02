@@ -17,22 +17,11 @@ void Level::put(std::unique_ptr<Run> runPtr) {
     kvPairs += runs.front()->getMaxKvPairs(); 
 }
 
-// Helper structure for priority queue for compactSegment()
-struct PQEntry {
-    KEY_t key;
-    VAL_t value;
-    size_t runIdx;
-    typename std::vector<kvPair>::iterator vecIter;
-
-    bool operator<(const PQEntry& other) const {
-        return key > other.key; // Min heap based on key
-    }
-};
-
 std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, size_t> segmentBounds, bool isLastLevel) {
     std::priority_queue<PQEntry> pq;
     size_t newMaxKvPairs = 0;
     std::vector<std::vector<kvPair>> runVectors(segmentBounds.second - segmentBounds.first + 1);
+    std::optional<KEY_t> mostRecentKey;
 
     // Iterate through the runs in the segment, retrieve their vectors, and add the first element of each run to the priority queue
     for (size_t idx = segmentBounds.first; idx <= segmentBounds.second; ++idx) {
@@ -56,7 +45,11 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
         pq.pop();
 
         if (!(isLastLevel && top.value == TOMBSTONE)) {
-            compactedRun->put(top.key, top.value);
+            // Check if the key is the same as the most recent key processed to avoid duplicates
+            if (!mostRecentKey.has_value() || mostRecentKey.value() != top.key) { 
+                compactedRun->put(top.key, top.value);
+                mostRecentKey = top.key; // Update the most recent key processed
+            }
         }
 
         // Add the next element from the same run to the priority queue

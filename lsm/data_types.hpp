@@ -69,3 +69,15 @@ struct kvPair {
     KEY_t key;
     VAL_t value;
 };
+
+// Helper structure for priority queues
+struct PQEntry {
+    KEY_t key;
+    VAL_t value;
+    size_t runIdx;
+    typename std::vector<kvPair>::iterator vecIter;
+
+    bool operator<(const PQEntry& other) const {
+        return key > other.key; // Min heap based on key
+    }
+};
