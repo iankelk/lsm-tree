@@ -31,6 +31,8 @@ void LSMTree::calculateAndPrintThroughput() {
     double slidingWindowThroughput;
     double overallThroughput;
     uint64_t currentCounter = ++commandCounter;
+    uint64_t elapsedTimeSinceLastReport;
+    uint64_t elapsedTimeSinceStart;
     {
         boost::upgrade_lock<boost::upgrade_mutex> upgradeLock(throughputMutex);
         if (!timerStarted) {
@@ -43,8 +45,8 @@ void LSMTree::calculateAndPrintThroughput() {
             return;
         }
         auto currentTime = std::chrono::steady_clock::now();
-        auto elapsedTimeSinceLastReport = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - lastReportTime).count();
-        auto elapsedTimeSinceStart = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - startTime).count();
+        elapsedTimeSinceLastReport = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - lastReportTime).count();
+        elapsedTimeSinceStart = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - startTime).count();
         
         // Calculate sliding window throughput in commands per second
         slidingWindowThroughput = (static_cast<double>(throughputFrequency) / elapsedTimeSinceLastReport) * 1e6;
@@ -57,8 +59,10 @@ void LSMTree::calculateAndPrintThroughput() {
         lastReportTime = currentTime;
     }
     SyncedCout() << "Total commands: " << currentCounter 
-                 << " Sliding Window Throughput: " << std::fixed << std::setprecision(2) << slidingWindowThroughput 
-                 << " cps, Overall Throughput: " << std::fixed << std::setprecision(2) << overallThroughput 
+                 << " Sliding Window Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceLastReport / 1e6 
+                 << " Throughput: " << std::fixed << std::setprecision(2) << slidingWindowThroughput 
+                 << " cps, Overall Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceStart / 1e6 
+                 << " Throughput: " << std::fixed << std::setprecision(2) << overallThroughput 
                  << " cps" << std::endl;
 }
 

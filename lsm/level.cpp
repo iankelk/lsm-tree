@@ -41,6 +41,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
     // Create a vector to accumulate key-value pairs
     std::vector<kvPair> compactedKvPairs;
+    compactedKvPairs.reserve(newMaxKvPairs);
 
     // Merge the sorted runs using the priority queue
     while (!pq.empty()) {
@@ -49,7 +50,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
         if (!(isLastLevel && top.value == TOMBSTONE)) {
             // Check if the key is the same as the most recent key processed to avoid duplicates
-            if (!mostRecentKey.has_value() || mostRecentKey.value() != top.key) { 
+            if (compactedKvPairs.empty() || compactedKvPairs.back().key != top.key) {
                 compactedKvPairs.push_back({top.key, top.value});
                 mostRecentKey = top.key; // Update the most recent key processed
             }
@@ -62,6 +63,8 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
             pq.push(PQEntry{top.vecIter->key, top.vecIter->value, top.runIdx, top.vecIter});
         }
     }
+    SyncedCout() << "Max kv pairs: " << newMaxKvPairs << std::endl;
+    SyncedCout() << "Compacted " << compactedKvPairs.size() << " key-value pairs" << std::endl;
     // Flush the accumulated key-value pairs to the compactedRun
     compactedRun->flush(compactedKvPairs);
 
