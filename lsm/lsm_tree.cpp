@@ -70,46 +70,56 @@ void LSMTree::calculateAndPrintThroughput() {
 
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
+    size_t bufferMaxKvPairs;
+    std::vector<kvPair> bufferVector;
+
     if (throughputPrinting) {
         calculateAndPrintThroughput();
     }
     std::chrono::high_resolution_clock::time_point start_time;
     std::unique_lock<std::shared_mutex> firstLevelLock;
-
     {
         boost::unique_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
         numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
     }
     {
         std::unique_lock<std::shared_mutex> lock(bufferMutex);
+        // Do all buffer operations while protected by the bufferMutex
         if(buffer.put(key, val)) {
             return;
         }
-        // The buffer is full, so do all buffer operations while protected by the bufferMutex
-        size_t bufferMaxKvPairs = buffer.getMaxKvPairs();
-        // Lock the first level
-        firstLevelLock = std::unique_lock<std::shared_mutex>(levels.front()->levelMutex);
-
-        if (!levels.front()->willBufferFit()) {
-            std::unique_lock<std::shared_mutex> mrLock(moveRunsMutex);
-            moveRuns(FIRST_LEVEL_NUM);
-        } else if (levels.front()->runs.size() > 0) {
-            if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
-                std::unique_lock<std::shared_mutex> cpLock(compactionPlanMutex);
-                compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
-            }
-        }
-        start_time = std::chrono::high_resolution_clock::now();
-
-        // Create a new run and add a unique pointer to it to the first level
-        levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
-        // Save the first and last keys for partial compaction
-        levels.front()->runs.front()->setFirstAndLastKeys(buffer.begin()->first, buffer.rbegin()->first);
-        // Flush the buffer to level 1
-        levels.front()->runs.front()->flush(buffer);
+        // Buffer is full
+        bufferVector.reserve(buffer.size());
+        // Copy the buffer into a vector of kvPairs
+        std::transform(buffer.begin(), buffer.end(), std::back_inserter(bufferVector),
+                       [](const auto &kv) { return kvPair{kv.first, kv.second}; });
+        bufferMaxKvPairs = buffer.getMaxKvPairs();
         buffer.clear();
         buffer.put(key, val);
     }
+
+    // Lock the first level
+    firstLevelLock = std::unique_lock<std::shared_mutex>(levels.front()->levelMutex);
+
+    if (!levels.front()->willBufferFit()) {
+        std::unique_lock<std::shared_mutex> mrLock(moveRunsMutex);
+        moveRuns(FIRST_LEVEL_NUM);
+    } else if (levels.front()->runs.size() > 0) {
+        if (levelPolicy == Level::LEVELED || (levelPolicy == Level::LAZY_LEVELED && isLastLevel(FIRST_LEVEL_NUM))) {
+            std::unique_lock<std::shared_mutex> cpLock(compactionPlanMutex);
+            compactionPlan[FIRST_LEVEL_NUM] = std::make_pair<int, int>(0, levels[FIRST_LEVEL_NUM-1]->runs.size());
+        }
+    }
+    start_time = std::chrono::high_resolution_clock::now();
+
+    // Create a new run and add a unique pointer to it to the first level
+    levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
+    // Save the first and last keys for partial compaction
+    levels.front()->runs.front()->setFirstAndLastKeys(bufferVector.front().key, bufferVector.back().key);
+
+    // Flush the buffer to level 1
+    std::unique_ptr<std::vector<kvPair>> bufferVectorPtr = std::make_unique<std::vector<kvPair>>(std::move(bufferVector));
+    levels.front()->runs.front()->flush(std::move(bufferVectorPtr));
     levels.front()->runs.front()->closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();

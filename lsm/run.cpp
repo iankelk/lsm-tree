@@ -71,9 +71,7 @@ void Run::closeFile() {
     }
 }
 
-// The flush function either takes the Memtable or a vector of kvPairs
-template<typename InputIterator>
-void Run::flush(InputIterator begin, InputIterator end) {
+void Run::flush(std::unique_ptr<std::vector<kvPair>> kvPairs) {
     int result;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
@@ -84,41 +82,23 @@ void Run::flush(InputIterator begin, InputIterator end) {
     // First pass: Add Bloom filters and fence pointers
     size_t idx = 0;
 
-    for (auto it = begin; it != end; ++it, ++idx) {
-        addToBloomFilter(getKey(it));
+    for (const auto &kv : *kvPairs) {
+        addToBloomFilter(kv.key);
 
         if (idx % getpagesize() == 0) {
-            addFencePointer(getKey(it));
+            addFencePointer(kv.key);
         }
-
-        if (getKey(it) > getMaxKey()) {
-            setMaxKey(getKey(it));
+        if (kv.key > getMaxKey()) {
+            setMaxKey(kv.key);
         }
+        ++idx;
     }
-
-    // Get the kvBuffer, which will be either the original vector or a newly created one
-    std::vector<kvPair> kvBuffer = getKvBuffer(begin, end);
-
     // Second pass: Write the data to the Run file
-    result = write(localFd, kvBuffer.data(), sizeof(kvPair) * kvBuffer.size());
+    result = write(localFd, kvPairs->data(), sizeof(kvPair) * kvPairs->size());
     if (result == -1) {
         die("Run::flush: Failed to write to Run file: " + runFilePath);
     }
-    {
-        std::unique_lock<std::shared_mutex> lock(sizeMutex);
-        size += std::distance(begin, end);
-    }
-}
-
-
-void Run::flush(const Memtable& buffer) {
-    // Call the new flush function with the Memtable's iterators
-    flush(buffer.begin(), buffer.end());
-}
-
-void Run::flush(const std::vector<kvPair>& kvBuffer) {
-    // Call the new flush function with the vector's iterators
-    flush(kvBuffer.begin(), kvBuffer.end());
+    setSize(kvPairs->size());
 }
 
 void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
@@ -216,7 +196,6 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         runSize = size;
     }
-
     // Check if the run is empty. If so, return an empty result set.
     if (runSize == 0) {
         return rangeVec;
@@ -272,8 +251,6 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
     lsmTree->incrementLevelIoCountAndTime(levelOfRun, duration);
-
-    // Return the data structure containing the key-value pairs within the specified range.
     return rangeVec;
 }
 
@@ -404,11 +381,6 @@ void Run::incrementTruePositives() {
 size_t Run::getFalsePositives() {
     std::shared_lock<std::shared_mutex> lock(falsePositivesMutex);
     return falsePositives;
-}
-
-void Run::incrementSize() {
-    std::unique_lock<std::shared_mutex> lock(sizeMutex);
-    size++;
 }
 
 void Run::setSize(size_t newSize) {

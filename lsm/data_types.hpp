@@ -82,39 +82,3 @@ struct PQEntry {
         return key > other.key; // Min heap based on key
     }
 };
-
-template <typename T>
-KEY_t getKey(const T& it) {
-    if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
-        return it->first;
-    } else {
-        return it->key;
-    }
-}
-
-template <typename T>
-VAL_t getValue(const T& it) {
-    if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
-        return it->second;
-    } else {
-        return it->value;
-    }
-}
-
-template<typename InputIterator>
-std::vector<kvPair> getKvBuffer(InputIterator begin, InputIterator end) {
-    if constexpr (std::is_same_v<typename std::iterator_traits<InputIterator>::value_type, kvPair>) {
-        // If the iterator points to kvPair, it's already a vector<kvPair>, so we can just use a reference to the original vector
-        return std::vector<kvPair>(begin, end);
-    } else {
-        // If the iterator points to a map, we need to create a new vector<kvPair>
-        std::vector<kvPair> kvBuffer;
-        kvBuffer.reserve(std::distance(begin, end));
-
-        for (auto it = begin; it != end; ++it) {
-            kvBuffer.push_back({getKey(it), getValue(it)});
-        }
-
-        return kvBuffer;
-    }
-}

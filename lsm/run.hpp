@@ -16,10 +16,7 @@ public:
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::vector<kvPair> range(KEY_t start, KEY_t end);
     void put2(KEY_t key, VAL_t val);
-    template<typename InputIterator>
-    void flush(InputIterator begin, InputIterator end);
-    void flush(const Memtable& buffer);
-    void flush(const std::vector<kvPair>& kvBuffer);
+    void flush(std::unique_ptr<std::vector<kvPair>> kvPairs);
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();
@@ -60,7 +57,6 @@ private:
     mutable std::shared_mutex maxKeyMutex;
     mutable std::shared_mutex fencePointersMutex;
     mutable std::shared_mutex bloomFilterMutex;
-    void incrementSize();
     void setSize(size_t newSize);
     void setMaxKey(KEY_t key);
     KEY_t getMaxKey();

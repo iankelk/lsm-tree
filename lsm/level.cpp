@@ -64,7 +64,8 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
         }
     }
     // Flush the accumulated key-value pairs to the compactedRun
-    compactedRun->flush(compactedKvPairs);
+    std::unique_ptr<std::vector<kvPair>> kvPairsPtr = std::make_unique<std::vector<kvPair>>(std::move(compactedKvPairs));
+    compactedRun->flush(std::move(kvPairsPtr));
 
     compactedRun->closeFile();
     auto end_time = std::chrono::high_resolution_clock::now();
