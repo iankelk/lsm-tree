@@ -35,7 +35,7 @@ constexpr float BLOOM_FILTER_UNUSED = -1.0f;
 
 // FILE DEFINITIONS
 const std::string LSM_TREE_JSON_FILE = "lsm-tree.json";
-const std::string SSTABLE_FILE_TEMPLATE = "lsm-XXXXXX.bin";
+const std::string SSTABLE_FILE_TEMPLATE = "lsm-";
 
 // DISK DEFINITIONS
 constexpr int NUM_DISK_TYPES = 5;

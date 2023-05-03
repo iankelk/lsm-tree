@@ -1,20 +1,19 @@
-#include <fcntl.h>
-#include <unistd.h>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <filesystem>
+#include <memory>
 #include <algorithm>
 #include <mutex>
 #include <queue>
 #include <vector>
+#include <random>
 #include "../lib/binary_search.hpp"
 #include "run.hpp"
 #include "lsm_tree.hpp"
 #include "memtable.hpp"
 #include "utils.hpp"
-
-thread_local int Run::localFd = FILE_DESCRIPTOR_UNINITIALIZED;
 
 Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfRun, LSMTree* lsmTree = nullptr) :
     maxKvPairs(maxKvPairs),
@@ -26,53 +25,73 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
     size(0),
     maxKey(KEY_MIN)
 {
-
     if (createFile) {
         std::string dataDir = lsmTree->getDataDirectory();
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
 
         std::string sstableFileTemplate = dataDir + "/" + SSTABLE_FILE_TEMPLATE;
-        char tmpFn[sstableFileTemplate.size() + 1];
-        std::strcpy(tmpFn, sstableFileTemplate.c_str());
         
-        int suffixLength = 4; // Length of ".bin" suffix
-        localFd = mkstemps(tmpFn, suffixLength);
-        if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
-            die("Run::Constructor: Failed to create file for Run: " + runFilePath);
-        }
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> dis(0, std::numeric_limits<int>::max());
+        std::string tmpFn;
+        std::ofstream tmpOfs;
+
+        do {
+            std::string uniqueId = std::to_string(dis(gen));
+            tmpFn = sstableFileTemplate + uniqueId + ".bin";
+            tmpOfs.open(tmpFn, std::ios::out | std::ios::binary);
+        } while(!tmpOfs.is_open());
+
+        tmpOfs.close();
         runFilePath = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
     }
 }
 
-Run::~Run() {
-    closeFile();
-}
+
+Run::~Run() {}
 
 void Run::deleteFile() {
-    closeFile();
     remove(runFilePath.c_str());
 }
 
-void Run::openFileReadOnly(const std::string& originatingFunctionError) {
-    if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
-        localFd = open(runFilePath.c_str(), O_RDONLY);
-        if (localFd == FILE_DESCRIPTOR_UNINITIALIZED) {
+// New function to open the output file stream
+void Run::openOutputFileStream(std::ofstream& ofs, const std::string& originatingFunctionError) {
+    if (!ofs.is_open()) {
+        ofs.open(runFilePath, std::ios::out | std::ios::binary);
+        if (!ofs.is_open()) {
             die(originatingFunctionError + ": " + runFilePath);
         }
     }
 }
 
+// New function to open the input file stream
+void Run::openInputFileStream(std::ifstream& ifs, const std::string& originatingFunctionError) {
+    if (!ifs.is_open()) {
+        ifs.open(runFilePath, std::ios::in | std::ios::binary);
+        if (!ifs.is_open()) {
+            die(originatingFunctionError + ": " + runFilePath);
+        }
+    }
+}
 
-void Run::closeFile() {
-    if (localFd != FILE_DESCRIPTOR_UNINITIALIZED) {
-        close(localFd);
-        localFd = FILE_DESCRIPTOR_UNINITIALIZED;
+// New function to close the output file stream
+void Run::closeOutputFileStream(std::ofstream& ofs) {
+    if (ofs.is_open()) {
+        ofs.close();
+    }
+}
+
+// New function to close the input file stream
+void Run::closeInputFileStream(std::ifstream& ifs) {
+    if (ifs.is_open()) {
+        ifs.close();
     }
 }
 
 void Run::flush(std::unique_ptr<std::vector<kvPair>> kvPairs) {
-    int result;
+    std::ofstream ofs;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         if (size >= maxKvPairs) {
@@ -94,12 +113,13 @@ void Run::flush(std::unique_ptr<std::vector<kvPair>> kvPairs) {
         ++idx;
     }
     // Second pass: Write the data to the Run file
-    result = write(localFd, kvPairs->data(), sizeof(kvPair) * kvPairs->size());
-    if (result == -1) {
-        die("Run::flush: Failed to write to Run file: " + runFilePath);
-    }
+    openOutputFileStream(ofs, "Run::flush: Failed to open file for Run");
+    ofs.write(reinterpret_cast<const char*>(kvPairs->data()), sizeof(kvPair) * kvPairs->size());
+    ofs.flush();
+    closeOutputFileStream(ofs);
     setSize(kvPairs->size());
 }
+
 
 void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
     firstKey = first;
@@ -108,6 +128,7 @@ void Run::setFirstAndLastKeys(KEY_t first, KEY_t last) {
 
 std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     size_t runSize;
+    std::ifstream ifs;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         runSize = size;
@@ -137,13 +158,10 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 
     std::unique_ptr<kvPair> kv;
     {
-        // Open the file descriptor
-        openFileReadOnly("Run::get: Failed to open file for Run");
+        openInputFileStream(ifs, "Run::get: Failed to open file for Run");
         std::size_t keyPos;
-        // Perform binary search within the identified range to find the key
-        std::tie(keyPos, kv) = binarySearchInRange(localFd, start, end, key);
-        // Close the file descriptor
-        closeFile();
+        std::tie(keyPos, kv) = binarySearchInRange(ifs, start, end, key);
+        closeInputFileStream(ifs);
     }
     if (kv == nullptr) {
         // If the key was not found, increment the false positive count
@@ -164,16 +182,15 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
 }
 
 // Return a pair of the position of a KvPair, and a pointer to the KvPair
-std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(int fd, size_t start, size_t end, KEY_t key) {
+std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(std::ifstream &ifs, size_t start, size_t end, KEY_t key) {
     while (start <= end) {
         size_t mid = start + (end - start) / 2;
 
         // Read the key-value pair at the mid index
         kvPair kv;
-        ssize_t bytes_read = pread(fd, &kv, sizeof(kvPair), mid * sizeof(kvPair));
-        if (bytes_read != sizeof(kvPair)) {
-            SyncedCerr() << "ERROR: Read only " << bytes_read << " bytes from file" << std::endl;
-        }
+        ifs.seekg(mid * sizeof(kvPair), std::ios::beg);
+        ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair));
+
         if (kv.key == key) {
             std::unique_ptr<kvPair> found_kv = std::make_unique<kvPair>(kv);
             return std::make_pair(mid, std::move(found_kv));
@@ -186,8 +203,10 @@ std::pair<size_t, std::unique_ptr<kvPair>> Run::binarySearchInRange(int fd, size
     return std::make_pair(start, nullptr);
 }
 
+
 // Return a map of all the key-value pairs in the range [start, end)
 std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
+    std::ifstream ifs;
     size_t searchPageStart, runSize;
     std::vector<kvPair> rangeVec;
 
@@ -218,8 +237,8 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
     size_t pageStart = searchPageStart * getpagesize();
     size_t pageEnd = (searchPageStart + 1 == fencePointersCopy.size()) ? runSize : (searchPageStart + 1) * getpagesize();
 
-    openFileReadOnly("Run::get: Failed to open file for Run");
-    std::pair<size_t, std::unique_ptr<kvPair>> startPosResult = binarySearchInRange(localFd, pageStart, pageEnd, start);
+    openInputFileStream(ifs, "Run::range: Failed to open file for Run");
+    std::pair<size_t, std::unique_ptr<kvPair>> startPosResult = binarySearchInRange(ifs, pageStart, pageEnd, start);
     std::unique_ptr<kvPair> startPosKvPair = std::move(startPosResult.second);
 
     size_t rangeStartIndex;
@@ -234,10 +253,9 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
 
     for (size_t i = rangeStartIndex; i < runSize; i++) {
         kvPair kv;
-        ssize_t bytes_read = pread(localFd, &kv, sizeof(kvPair), i * sizeof(kvPair));
-        if (bytes_read != sizeof(kvPair)) {
-            SyncedCerr() << "ERROR: Read only " << bytes_read << " bytes from file" << std::endl;
-        }
+        // Read the key-value pair at index i
+        ifs.seekg(i * sizeof(kvPair), std::ios::beg);
+        ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair));
 
         if (kv.key >= start && kv.key < end) {
             rangeVec.push_back(kv);
@@ -245,7 +263,7 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
             break;
         }
     }
-    closeFile();
+    closeInputFileStream(ifs);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -255,6 +273,7 @@ std::vector<kvPair> Run::range(KEY_t start, KEY_t end) {
 }
 
 std::vector<kvPair> Run::getVector() {
+    std::ifstream ifs;
     std::vector<kvPair> vec;
     vec.reserve(size);
 
@@ -266,13 +285,13 @@ std::vector<kvPair> Run::getVector() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Open the file descriptor
-    openFileReadOnly("Run::getVector: Failed to open file for Run");
+    openInputFileStream(ifs, "Run::getVector: Failed to open file for Run");
 
     kvPair kv;
-    while (read(localFd, &kv, sizeof(kvPair)) > 0) {
+    while (ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair))) {
         vec.push_back(kv);
     }
-    closeFile();
+    closeInputFileStream(ifs);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -360,13 +379,14 @@ void Run::populateBloomFilter() {
     if (size == 0) {
         return;
     }
-    openFileReadOnly("Run::populateBloomFilter: Failed to open file for Run");
+    std::ifstream ifs;
+    openInputFileStream(ifs, "Run::populateBloomFilter: Failed to open file for Run");
     // Read all the key-value pairs from the Run file and add the keys to the bloom filter
     kvPair kv;
-    while (read(localFd, &kv, sizeof(kvPair)) > 0) {
+    while (ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair))) {
         bloomFilter.add(kv.key);
     }
-    closeFile();
+    closeInputFileStream(ifs);
 }
 
 void Run::incrementFalsePositives() { 

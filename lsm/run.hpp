@@ -20,8 +20,11 @@ public:
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
     std::map<std::string, std::string> getBloomFilterSummary();
-    void openFileReadOnly(const std::string& originatingFunctionError);
-    void closeFile();
+    void openOutputFileStream(std::ofstream& ofs, const std::string& originatingFunctionError);
+    void openInputFileStream(std::ifstream& ifs, const std::string& originatingFunctionError);
+    void closeOutputFileStream(std::ofstream& ofs);
+    void closeInputFileStream(std::ifstream& ifs);
+
     json serialize() const;
     void deserialize(const json& j);
     void deleteFile();
@@ -37,8 +40,7 @@ public:
     KEY_t getLastKey() { return lastKey; }
 
 private:
-    static thread_local int localFd;
-    std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(int fd, size_t start, size_t end, KEY_t key);
+    std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(std::ifstream &ifs, size_t start, size_t end, KEY_t key);
     size_t maxKvPairs;
     double bfErrorRate;
     std::vector<KEY_t> fencePointers;

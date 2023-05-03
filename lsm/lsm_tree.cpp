@@ -120,7 +120,6 @@ void LSMTree::put(KEY_t key, VAL_t val) {
     // Flush the buffer to level 1
     std::unique_ptr<std::vector<kvPair>> bufferVectorPtr = std::make_unique<std::vector<kvPair>>(std::move(bufferVector));
     levels.front()->runs.front()->flush(std::move(bufferVectorPtr));
-    levels.front()->runs.front()->closeFile();
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
