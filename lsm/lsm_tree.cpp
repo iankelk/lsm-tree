@@ -104,7 +104,7 @@ void LSMTree::put(KEY_t key, VAL_t val) {
         // Create a new run and add a unique pointer to it to the first level
         levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
         // Save the first and last keys for partial compaction
-        levels.front()->runs.front()->setFirstAndLastKeys(buffer.begin()->first, buffer.rbegin()->first);
+        levels.front()->runs.front()->setFirstAndLastKeys(buffer.begin()->key, buffer.rbegin()->key);
         // Flush the buffer to level 1
         levels.front()->runs.front()->flush(buffer);
         buffer.clear();
@@ -352,7 +352,7 @@ std::unique_ptr<std::vector<kvPair>> LSMTree::range(KEY_t start, KEY_t end) {
         // Search the buffer for the key range and add the found key-value pairs to the priority queue
         auto bufferResult = buffer.range(start, end);
         for (const auto &kv : bufferResult) {
-            pq.push(PQEntry{kv.first, kv.second, 0, {}});
+            pq.push(PQEntry{kv.key, kv.value, 0, {}});
             keysFound++;
 
             // If the range has the size of the entire range, break the loop
@@ -541,17 +541,17 @@ bool LSMTree::isLastLevel(unsigned int levelNum) {
 }
 
 // Set the number of logical pairs in the tree by creating a set of all the keys in the tree
-std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPairs() {
-    std::map<KEY_t, VAL_t> bufferContents;
+std::pair<std::set<kvPair>, std::vector<Level*>> LSMTree::setNumLogicalPairs() {
+    std::set<kvPair> bufferContents;
     {
         std::shared_lock<std::shared_mutex> bufferLock(bufferMutex);
-        bufferContents = buffer.getMap();
+        bufferContents = buffer.getSet();
     }
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
     
     boost::upgrade_lock<boost::upgrade_mutex> lock(numLogicalPairsMutex);
     if (numLogicalPairs != NUM_LOGICAL_PAIRS_NOT_CACHED) {
-        return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
+        return std::make_pair(buffer.getSet(), getLocalLevelsCopy());
     }
 
     // Create a set of all the keys in the tree
@@ -588,12 +588,12 @@ std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPai
 
     // Iterate through the buffer and insert the keys into the set. If the key is a TOMBSTONE, check to see if it is in the set and remove it.
     for (auto it = bufferContents.begin(); it != bufferContents.end(); it++) {
-        if (it->second == TOMBSTONE) {
-            if (keys.find(it->first) != keys.end()) {
-                keys.erase(it->first);
+        if (it->value == TOMBSTONE) {
+            if (keys.find(it->key) != keys.end()) {
+                keys.erase(it->key);
             }
         } else {
-            keys.insert(it->first);
+            keys.insert(it->key);
         }
     }
     {
@@ -601,7 +601,7 @@ std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> LSMTree::setNumLogicalPai
         numLogicalPairs = keys.size();
     }
     // Return the buffer and localLevelsCopy
-    return std::make_pair(buffer.getMap(), getLocalLevelsCopy());
+    return std::make_pair(buffer.getSet(), getLocalLevelsCopy());
 }
 
 // Print out getMisses and rangeMisses stats
@@ -614,7 +614,7 @@ void LSMTree::printHitsMissesStats() {
 
 // Print out a summary of the tree.
 std::string LSMTree::printStats(ssize_t numToPrintFromEachLevel) {
-    std::map<KEY_t, VAL_t> bufferContents;
+    std::set<kvPair> bufferContents;
     std::vector<Level*> localLevelsCopy;
 
     // Call setNumLogicalPairs and unpack the returned pair
@@ -632,10 +632,10 @@ std::string LSMTree::printStats(ssize_t numToPrintFromEachLevel) {
         if (numToPrintFromEachLevel != STATS_PRINT_EVERYTHING && pairsCounter >= numToPrintFromEachLevel) {
             break;
         }
-        if (it->second == TOMBSTONE) {
-            treeDump += std::to_string(it->first) + ":TOMBSTONE:L0 ";
+        if (it->value == TOMBSTONE) {
+            treeDump += std::to_string(it->key) + ":TOMBSTONE:L0 ";
         } else {
-            treeDump += std::to_string(it->first) + ":" + std::to_string(it->second) + ":L0 ";
+            treeDump += std::to_string(it->key) + ":" + std::to_string(it->value) + ":L0 ";
         }
         pairsCounter++;
     }
@@ -678,7 +678,7 @@ std::string LSMTree::printStats(ssize_t numToPrintFromEachLevel) {
 
 // Print out information on the LSM tree
 std::string LSMTree::printInfo() {
-    std::map<KEY_t, VAL_t> bufferContents;
+    std::set<kvPair> bufferContents;
     std::vector<Level*> localLevelsCopy;
     double percentage;
 

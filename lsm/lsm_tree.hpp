@@ -76,8 +76,8 @@ private:
     float compactionPercentage;
     std::string dataDirectory;
     std::vector<std::shared_ptr<Level>> levels;
-    size_t throughputFrequency;
     bool throughputPrinting;
+    size_t throughputFrequency;
 
     // Timer and IO count
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
@@ -94,7 +94,7 @@ private:
     void clearCompactionPlan();
 
     // Counting number of logical pairs
-    std::pair<std::map<KEY_t, VAL_t>, std::vector<Level*>> setNumLogicalPairs();
+    std::pair<std::set<kvPair>, std::vector<Level*>> setNumLogicalPairs();
     mutable boost::upgrade_mutex numLogicalPairsMutex;
     ssize_t numLogicalPairs = NUM_LOGICAL_PAIRS_NOT_CACHED;
 

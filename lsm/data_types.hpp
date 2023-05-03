@@ -69,6 +69,9 @@ const std::string SERVER_SHUTDOWN = "<SERVER_SHUTDOWN>";
 struct kvPair {
     KEY_t key;
     VAL_t value;
+    bool operator<(const kvPair &rhs) const {
+        return key < rhs.key;
+    }
 };
 
 // Helper structure for priority queues
