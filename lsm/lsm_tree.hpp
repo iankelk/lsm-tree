@@ -76,8 +76,9 @@ private:
     float compactionPercentage;
     std::string dataDirectory;
     std::vector<std::shared_ptr<Level>> levels;
-    size_t throughputFrequency;
     bool throughputPrinting;
+    size_t throughputFrequency;
+    
 
     // Timer and IO count
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;

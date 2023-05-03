@@ -71,18 +71,16 @@ void Run::closeFile() {
     }
 }
 
+// The flush function either takes the Memtable or a vector of kvPairs
 template<typename InputIterator>
 void Run::flush(InputIterator begin, InputIterator end) {
     int result;
-    size_t runSize;
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
-        runSize = size;
-    }
-    if (runSize >= maxKvPairs) {
+        if (size >= maxKvPairs) {
             die("Run::flush: Attempting to add to full Run: " + runFilePath);
+        }
     }
-
     // First pass: Add Bloom filters and fence pointers
     size_t idx = 0;
 

@@ -63,8 +63,6 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
             pq.push(PQEntry{top.vecIter->key, top.vecIter->value, top.runIdx, top.vecIter});
         }
     }
-    SyncedCout() << "Max kv pairs: " << newMaxKvPairs << std::endl;
-    SyncedCout() << "Compacted " << compactedKvPairs.size() << " key-value pairs" << std::endl;
     // Flush the accumulated key-value pairs to the compactedRun
     compactedRun->flush(compactedKvPairs);
 
