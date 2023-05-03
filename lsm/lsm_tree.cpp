@@ -103,15 +103,10 @@ void LSMTree::put(KEY_t key, VAL_t val) {
 
         // Create a new run and add a unique pointer to it to the first level
         levels.front()->put(std::make_unique<Run>(bufferMaxKvPairs, bfErrorRate, true, FIRST_LEVEL_NUM, this));
-        auto it = buffer.begin();
         // Save the first and last keys for partial compaction
-        levels.front()->runs.front()->setFirstAndLastKeys(it->first, buffer.rbegin()->first);
+        levels.front()->runs.front()->setFirstAndLastKeys(buffer.begin()->first, buffer.rbegin()->first);
         // Flush the buffer to level 1
         levels.front()->runs.front()->flush(buffer);
-
-        // for (; it != buffer.end(); it++) {
-        //     levels.front()->runs.front()->put(it->first, it->second);
-        // }
         buffer.clear();
         buffer.put(key, val);
     }
