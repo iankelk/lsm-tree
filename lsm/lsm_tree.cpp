@@ -1043,7 +1043,6 @@ json LSMTree::serialize() const {
     j["bfErrorRate"] = bfErrorRate;
     j["fanout"] = fanout;
     j["compactionPercentage"] = compactionPercentage;
-    j["dataDirectory"] = dataDirectory;
     j["levelPolicy"] = Level::policyToString(levelPolicy);
     j["levels"] = json::array();
     j["bfFalsePositives"] = bfFalsePositives;
@@ -1094,7 +1093,6 @@ void LSMTree::deserialize(const std::string& filename) {
     bfErrorRate = treeJson["bfErrorRate"].get<float>();
     fanout = treeJson["fanout"].get<int>();
     compactionPercentage = treeJson["compactionPercentage"].get<float>();
-    dataDirectory = treeJson["dataDirectory"].get<std::string>();
     levelPolicy = Level::stringToPolicy(treeJson["levelPolicy"].get<std::string>());
     bfFalsePositives = treeJson["bfFalsePositives"].get<size_t>();
     bfTruePositives = treeJson["bfTruePositives"].get<size_t>();
