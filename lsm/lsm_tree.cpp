@@ -1052,8 +1052,6 @@ json LSMTree::serialize() const {
     j["rangeMisses"] = rangeMisses;
     j["rangeHits"] = rangeHits;
     j["levelIoCountAndTime"] = json::array();
-    j["throughputFrequency"] = throughputFrequency;
-    j["throughputPrinting"] = throughputPrinting;
     j["commandCounter"] = commandCounter.load();
 
     for (const auto& lvlIo : levelIoCountAndTime) {
@@ -1105,8 +1103,6 @@ void LSMTree::deserialize(const std::string& filename) {
     getHits = treeJson["getHits"].get<size_t>();
     rangeMisses = treeJson["rangeMisses"].get<size_t>();
     rangeHits = treeJson["rangeHits"].get<size_t>();
-    throughputFrequency = treeJson["throughputFrequency"].get<size_t>();
-    throughputPrinting = treeJson["throughputPrinting"].get<bool>();
     commandCounter.store(treeJson["commandCounter"].get<uint64_t>());
 
     buffer.deserialize(treeJson["buffer"]);
