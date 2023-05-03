@@ -98,17 +98,20 @@ void Run::flush(InputIterator begin, InputIterator end) {
         }
     }
 
+    // Get the kvBuffer, which will be either the original vector or a newly created one
+    std::vector<kvPair> kvBuffer = get_kv_buffer(begin, end);
+
     // Second pass: Write the data to the Run file
-    result = write(localFd, &(*begin), sizeof(kvPair) * std::distance(begin, end));
+    result = write(localFd, kvBuffer.data(), sizeof(kvPair) * kvBuffer.size());
     if (result == -1) {
         die("Run::flush: Failed to write to Run file: " + runFilePath);
     }
-
     {
         std::unique_lock<std::shared_mutex> lock(sizeMutex);
         size += std::distance(begin, end);
     }
 }
+
 
 void Run::flush(const Memtable& buffer) {
     // Call the new flush function with the Memtable's iterators

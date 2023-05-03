@@ -100,3 +100,21 @@ VAL_t get_value(const T& it) {
         return it->value;
     }
 }
+
+template<typename InputIterator>
+std::vector<kvPair> get_kv_buffer(InputIterator begin, InputIterator end) {
+    if constexpr (std::is_same_v<typename std::iterator_traits<InputIterator>::value_type, kvPair>) {
+        // If the iterator points to kvPair, it's already a vector<kvPair>, so we can just use a reference to the original vector
+        return std::vector<kvPair>(begin, end);
+    } else {
+        // If the iterator points to a map, we need to create a new vector<kvPair>
+        std::vector<kvPair> kvBuffer;
+        kvBuffer.reserve(std::distance(begin, end));
+
+        for (auto it = begin; it != end; ++it) {
+            kvBuffer.push_back({get_key(it), get_value(it)});
+        }
+
+        return kvBuffer;
+    }
+}

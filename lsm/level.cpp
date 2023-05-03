@@ -50,7 +50,7 @@ std::unique_ptr<Run> Level::compactSegment(double errorRate, std::pair<size_t, s
 
         if (!(isLastLevel && top.value == TOMBSTONE)) {
             // Check if the key is the same as the most recent key processed to avoid duplicates
-            if (compactedKvPairs.empty() || compactedKvPairs.back().key != top.key) {
+            if (!mostRecentKey.has_value() || mostRecentKey.value() != top.key) { 
                 compactedKvPairs.push_back({top.key, top.value});
                 mostRecentKey = top.key; // Update the most recent key processed
             }

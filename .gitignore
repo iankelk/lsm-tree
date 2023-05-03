@@ -50,3 +50,7 @@ range3
 workload-10MPuts-1MGets-HighMisses-skewed.txt
 get-workload
 .DS_Store
+huge-load.txt
+huge.txt
+ups
+yikes.txt
