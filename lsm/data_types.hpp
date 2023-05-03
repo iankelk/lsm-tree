@@ -84,7 +84,7 @@ struct PQEntry {
 };
 
 template <typename T>
-KEY_t get_key(const T& it) {
+KEY_t getKey(const T& it) {
     if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
         return it->first;
     } else {
@@ -93,7 +93,7 @@ KEY_t get_key(const T& it) {
 }
 
 template <typename T>
-VAL_t get_value(const T& it) {
+VAL_t getValue(const T& it) {
     if constexpr (std::is_same_v<T, std::map<KEY_t, VAL_t>::const_iterator>) {
         return it->second;
     } else {
@@ -102,7 +102,7 @@ VAL_t get_value(const T& it) {
 }
 
 template<typename InputIterator>
-std::vector<kvPair> get_kv_buffer(InputIterator begin, InputIterator end) {
+std::vector<kvPair> getKvBuffer(InputIterator begin, InputIterator end) {
     if constexpr (std::is_same_v<typename std::iterator_traits<InputIterator>::value_type, kvPair>) {
         // If the iterator points to kvPair, it's already a vector<kvPair>, so we can just use a reference to the original vector
         return std::vector<kvPair>(begin, end);
@@ -112,7 +112,7 @@ std::vector<kvPair> get_kv_buffer(InputIterator begin, InputIterator end) {
         kvBuffer.reserve(std::distance(begin, end));
 
         for (auto it = begin; it != end; ++it) {
-            kvBuffer.push_back({get_key(it), get_value(it)});
+            kvBuffer.push_back({getKey(it), getValue(it)});
         }
 
         return kvBuffer;

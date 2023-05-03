@@ -87,19 +87,19 @@ void Run::flush(InputIterator begin, InputIterator end) {
     size_t idx = 0;
 
     for (auto it = begin; it != end; ++it, ++idx) {
-        addToBloomFilter(get_key(it));
+        addToBloomFilter(getKey(it));
 
         if (idx % getpagesize() == 0) {
-            addFencePointer(get_key(it));
+            addFencePointer(getKey(it));
         }
 
-        if (get_key(it) > getMaxKey()) {
-            setMaxKey(get_key(it));
+        if (getKey(it) > getMaxKey()) {
+            setMaxKey(getKey(it));
         }
     }
 
     // Get the kvBuffer, which will be either the original vector or a newly created one
-    std::vector<kvPair> kvBuffer = get_kv_buffer(begin, end);
+    std::vector<kvPair> kvBuffer = getKvBuffer(begin, end);
 
     // Second pass: Write the data to the Run file
     result = write(localFd, kvBuffer.data(), sizeof(kvPair) * kvBuffer.size());
