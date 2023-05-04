@@ -1,5 +1,5 @@
 Policy,Total commands,Sliding Window Time,Throughput (cps),Overall Time,Overall Throughput (cps),Faults,Faults Increase,Page Ins
-TIered,0,0,0,0,0,1692705,0,2
+Tiered,0,0,0,0,0,1692705,0,2
 Tiered,100000000,160.3,623827.16,160.3,623827.16,1790014,97309,2
 Tiered,200000000,172.44,579904.03,332.74,601064.23,1797381,7367,2
 Tiered,300000000,189.25,528396.66,521.99,574718.26,1804743,7362,2
