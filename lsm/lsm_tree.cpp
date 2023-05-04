@@ -30,6 +30,8 @@ LSMTree::LSMTree(float bfErrorRate, int buffer_num_pages, int fanout, Level::Pol
 void LSMTree::calculateAndPrintThroughput() {
     double slidingWindowThroughput;
     double overallThroughput;
+    uint64_t slidingWindowIo;
+    uint64_t overallIo;
     uint64_t currentCounter = ++commandCounter;
     uint64_t elapsedTimeSinceLastReport;
     uint64_t elapsedTimeSinceStart;
@@ -54,17 +56,25 @@ void LSMTree::calculateAndPrintThroughput() {
         // Calculate overall throughput in commands per second
         overallThroughput = (static_cast<double>(currentCounter) / elapsedTimeSinceStart) * 1e6;
         
+        // Calculate sliding window and overall I/O counts
+        uint64_t currentIoCount = getIoCount();
+        slidingWindowIo = currentIoCount - lastReportIoCount;
+        overallIo = currentIoCount;
+
         boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(upgradeLock);
-        // Update the lastReportTime
+        // Update the lastReportTime and lastReportIoCount
         lastReportTime = currentTime;
+        lastReportIoCount = currentIoCount;
     }
     SyncedCout() << "Total commands: " << currentCounter 
-                 << " Sliding Window Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceLastReport / 1e6 
+                 << ", Sliding Window Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceLastReport / 1e6 
                  << " Throughput: " << std::fixed << std::setprecision(2) << slidingWindowThroughput 
-                 << " cps, Overall Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceStart / 1e6 
+                 << " cps I/O: " << slidingWindowIo
+                 << ", Overall Time: " << std::fixed << std::setprecision(2) << elapsedTimeSinceStart / 1e6 
                  << " Throughput: " << std::fixed << std::setprecision(2) << overallThroughput 
-                 << " cps" << std::endl;
+                 << " cps I/O: " << overallIo << std::endl;
 }
+
 
 
 

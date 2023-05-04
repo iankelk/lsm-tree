@@ -143,5 +143,6 @@ private:
     std::atomic<uint64_t> commandCounter{0};
     std::chrono::steady_clock::time_point startTime;
     std::chrono::steady_clock::time_point lastReportTime;
+    uint64_t lastReportIoCount = 0;
     bool timerStarted = false;
 };
