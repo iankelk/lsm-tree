@@ -363,10 +363,10 @@ void printHelp() {
               << "  -e <errorRate>              Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
               << "  -n <numPages>               Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>                 LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <levelPolicy>            Level policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -l <levelPolicy>            Compaction policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
               << "  -p <port>                   Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
               << "  -t <numThreads>             Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
-              << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
               << "  -v <optional: frequency>    Verbose benchmarking. Reports every \"frequency\" number of commands (default: " << DEFAULT_VERBOSE_FREQUENCY << ")\n"
               << "  -s <optional: frequency>    Throughput reporting. Reports every \"frequency\" number of commands (default: " << DEFAULT_THROUGHPUT_FREQUENCY << ")\n"
               << "  -d <dataDirectory>          Data directory (default: " << DEFAULT_DATA_DIRECTORY << ")\n"
@@ -383,14 +383,14 @@ void Server::printLSMTreeParameters(float bfErrorRate, size_t bufferMaxKvPairs, 
     SyncedCout() << "  Max key-value pairs in buffer: " << addCommas(std::to_string(bufferMaxKvPairs)) << " (" << 
                        addCommas(std::to_string(bufferMaxKvPairs * sizeof(kvPair))) << " bytes) " << std::endl;
     SyncedCout() << "  LSM-tree fanout: " << fanout << std::endl;
-    SyncedCout() << "  Level policy: " << Level::policyToString(levelPolicy) << std::endl;
     SyncedCout() << "  Number of threads: " << numThreads << std::endl;
+    SyncedCout() << "  Compaction policy: " << Level::policyToString(levelPolicy) << std::endl;
     if (levelPolicy == Level::Policy::PARTIAL) {
         SyncedCout() << "  Compaction percentage: " << compactionPercentage << std::endl;
     }
-    SyncedCout() << "  Verbosity: " << (verbose ? "on" : "off") << verboseFrequencyString << std::endl;
-    SyncedCout() << "  Data directory: " << dataDirectory << std::endl;
+    SyncedCout() << "  Verbosity for benchmarking: " << (verbose ? "on" : "off") << verboseFrequencyString << std::endl;
     SyncedCout() << "  Throughput printing: " << (throughputPrinting ? "on" : "off") << throughputFrequencyString << std::endl;
+    SyncedCout() << "  Data directory: " << dataDirectory << std::endl;
     SyncedCout() << "\nLSM Tree ready and waiting for input" << std::endl;
 }
 
