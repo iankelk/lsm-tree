@@ -115,7 +115,7 @@ void Server::handleClient(int clientSocket) {
         }
         else if (n_read == 0) {
             SyncedCerr() << "Client disconnected" << std::endl;
-            return;
+            break;
         }
         std::string command(buffer, n_read);
 

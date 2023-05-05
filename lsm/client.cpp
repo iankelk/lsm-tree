@@ -136,11 +136,16 @@ void sendCommandsToServer(int client_socket, bool is_stdin_file) {
                 response_received = false;
                 command_processed = false;
             } else if (is_stdin_file) {
+                // Wait for the server response
+                std::unique_lock<std::mutex> lock(mtx);
+                cv.wait(lock, []{ return response_received; });
+                lock.unlock();
                 break; // Break the loop when EOF is reached while reading from the file
             }
         }
     }
 }
+
 
 
 int main(int argc, char *argv[]) {
