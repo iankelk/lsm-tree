@@ -34,7 +34,7 @@ public:
     size_t getSize() { return size; }
     void resizeBloomFilterBitset(size_t numBits);
     void populateBloomFilter();
-    std::string getRunFilePath() { return runFilePath; }
+    std::string getRunFilePath();
     void setFirstAndLastKeys(KEY_t first, KEY_t last);
     KEY_t getFirstKey() { return firstKey; }
     KEY_t getLastKey() { return lastKey; }
@@ -50,7 +50,7 @@ private:
     size_t levelOfRun;
     LSMTree* lsmTree;
     BloomFilter bloomFilter;
-    std::string runFilePath;
+    std::string runFileName;
     size_t size;
     KEY_t maxKey;
     mutable std::shared_mutex falsePositivesMutex;

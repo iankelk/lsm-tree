@@ -21,15 +21,13 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
     levelOfRun(levelOfRun),
     lsmTree(lsmTree),
     bloomFilter(maxKvPairs, bfErrorRate),
-    runFilePath(""),
+    runFileName(""),
     size(0),
     maxKey(KEY_MIN)
 {
     if (createFile) {
         std::string dataDir = lsmTree->getDataDirectory();
         std::filesystem::create_directory(dataDir); // Create the directory if it does not exist
-
-        std::string sstableFileTemplate = dataDir + "/" + SSTABLE_FILE_TEMPLATE;
         
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -39,12 +37,12 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
 
         do {
             std::string uniqueId = std::to_string(dis(gen));
-            tmpFn = sstableFileTemplate + uniqueId + ".bin";
-            tmpOfs.open(tmpFn, std::ios::out | std::ios::binary);
+            tmpFn = SSTABLE_FILE_TEMPLATE + uniqueId + ".bin";
+            tmpOfs.open(dataDir + "/" + tmpFn, std::ios::out | std::ios::binary);
         } while(!tmpOfs.is_open());
 
         tmpOfs.close();
-        runFilePath = tmpFn;
+        runFileName = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
     }
 }
@@ -52,16 +50,20 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
 
 Run::~Run() {}
 
+std::string Run::getRunFilePath() {
+    return lsmTree->getDataDirectory() + "/" + runFileName;
+}
+
 void Run::deleteFile() {
-    remove(runFilePath.c_str());
+    remove(getRunFilePath().c_str());
 }
 
 // New function to open the output file stream
 void Run::openOutputFileStream(std::ofstream& ofs, const std::string& originatingFunctionError) {
     if (!ofs.is_open()) {
-        ofs.open(runFilePath, std::ios::out | std::ios::binary);
+        ofs.open(getRunFilePath(), std::ios::out | std::ios::binary);
         if (!ofs.is_open()) {
-            die(originatingFunctionError + ": " + runFilePath);
+            die(originatingFunctionError + ": " + getRunFilePath());
         }
     }
 }
@@ -69,9 +71,9 @@ void Run::openOutputFileStream(std::ofstream& ofs, const std::string& originatin
 // New function to open the input file stream
 void Run::openInputFileStream(std::ifstream& ifs, const std::string& originatingFunctionError) {
     if (!ifs.is_open()) {
-        ifs.open(runFilePath, std::ios::in | std::ios::binary);
+        ifs.open(getRunFilePath(), std::ios::in | std::ios::binary);
         if (!ifs.is_open()) {
-            die(originatingFunctionError + ": " + runFilePath);
+            die(originatingFunctionError + ": " + getRunFilePath());
         }
     }
 }
@@ -95,7 +97,7 @@ void Run::flush(std::unique_ptr<std::vector<kvPair>> kvPairs) {
     {
         std::shared_lock<std::shared_mutex> lock(sizeMutex);
         if (size >= maxKvPairs) {
-            die("Run::flush: Attempting to add to full Run: " + runFilePath);
+            die("Run::flush: Attempting to add to full Run: " + getRunFilePath());
         }
     }
     // First pass: Add Bloom filters and fence pointers
@@ -309,7 +311,7 @@ json Run::serialize() const {
     j["bfErrorRate"] = bfErrorRate;
     j["bloomFilter"] = bloomFilter.serialize();
     j["fencePointers"] = fencePointers;
-    j["runFilePath"] = runFilePath;
+    j["runFileName"] = runFileName;
     j["size"] = size;
     j["maxKey"] = maxKey;
     j["truePositives"] = truePositives;
@@ -325,7 +327,7 @@ void Run::deserialize(const json& j) {
 
     bloomFilter.deserialize(j["bloomFilter"]);
     fencePointers = j["fencePointers"].get<std::vector<KEY_t>>();
-    runFilePath = j["runFilePath"];
+    runFileName = j["runFileName"];
     size = j["size"];
     maxKey = j["maxKey"];
     truePositives = j["truePositives"];

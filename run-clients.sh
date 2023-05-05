@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Set the number of clients
-num_clients=5
+# Set the number of clients (default to 10)
+if [ $# -eq 1 ]; then
+    num_clients=$1
+else
+    num_clients=10
+fi
 
 # Launch clients with workloads
 for i in $(seq 1 $num_clients); do

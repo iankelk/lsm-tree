@@ -491,11 +491,11 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
                 KEY_t start;
                 KEY_t end;
                 line_ss >> start >> end;
-                // range(start, end);
-                rangePtr = range(start, end);
-                if (rangePtr->size() > 0) {
-                    SyncedCout() << rangePtr->size() << std::endl;
-                }
+                range(start, end);
+                // rangePtr = range(start, end);
+                // if (rangePtr->size() > 0) {
+                //     SyncedCout() << rangePtr->size() << std::endl;
+                // }
                 break;
             }
             default: {
