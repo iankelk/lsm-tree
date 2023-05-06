@@ -60,13 +60,19 @@ public:
         }
     }
     // Used for deserialization
-    static Policy stringToPolicy(std::string policy) {
-        switch (policy[0]) {
-            case 'T': return Policy::TIERED;
-            case 'L': return Policy::LEVELED;
-            case 'Z': return Policy::LAZY_LEVELED;
-            case 'P': return Policy::PARTIAL;
-            default: return Policy::TIERED;
+    static Policy stringToPolicy(const std::string& policy) {
+        static const std::map<std::string, Policy> policyMap = {
+            {"TIERED", Policy::TIERED},
+            {"LEVELED", Policy::LEVELED},
+            {"LAZY_LEVELED", Policy::LAZY_LEVELED},
+            {"PARTIAL", Policy::PARTIAL}
+        };
+
+        auto it = policyMap.find(policy);
+        if (it != policyMap.end()) {
+            return it->second;
+        } else {
+            return Policy::TIERED;
         }
     }
 

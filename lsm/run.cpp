@@ -140,10 +140,14 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
         return nullptr;
     }
     auto fencePointersCopy = getFencePointers();
+    // Check if it is in the range of the fence pointers
+    if (key < fencePointersCopy.front() || key > getMaxKey()) {
+        return nullptr;
+    }
     {
+        // Separately check if it is in the bloom filter under a shared lock
         std::shared_lock<std::shared_mutex> lock(bloomFilterMutex);
-        // Check if the key is in the bloom filter and if it is in the range of the fence pointers
-        if (key < fencePointersCopy.front() || key > getMaxKey() || !bloomFilter.contains(key)) {
+        if (!bloomFilter.contains(key)) {
             return nullptr;
         }
     }

@@ -16,9 +16,9 @@ void BloomFilter::add(const KEY_t key) {
     uint64_t hash1 = hash.high64;
     uint64_t hash2 = hash.low64;
 
-    for (int i = 0; i < this->numHashes; i++) {
-        int index = std::abs(static_cast<int>((hash1 + i * hash2) % this->numBits));
-        this->bits.set(index);
+    for (int i = 0; i < numHashes; i++) {
+        size_t index = (hash1 + i * hash2) % numBits;
+        bits.set(index);
     }
 }
 
@@ -27,9 +27,9 @@ bool BloomFilter::contains(const KEY_t key) {
     uint64_t hash1 = hash.high64;
     uint64_t hash2 = hash.low64;
 
-    for (int i = 0; i < this->numHashes; i++) {
-        int index = std::abs(static_cast<int>((hash1 + i * hash2) % this->numBits));
-        if (!this->bits.test(index)) {
+    for (int i = 0; i < numHashes; i++) {
+        size_t index = (hash1 + i * hash2) % numBits;
+        if (!bits.test(index)) {
             return false;
         }
     }
@@ -38,12 +38,15 @@ bool BloomFilter::contains(const KEY_t key) {
 
 // Resize bloom filter to new bitset size
 void BloomFilter::resize(size_t newNumBits) {
-    this->bits.resize(newNumBits);
+    numBits = newNumBits;
+    bits.resize(newNumBits);
+    numHashes = std::ceil(std::log(2) * (newNumBits / capacity));
 }
 
 double BloomFilter::theoreticalErrorRate() const {
-    return std::exp(static_cast<double>(-static_cast<int64_t>(numBits)) / static_cast<double>(capacity) * std::pow(std::log(2), 2));
+    return std::pow(1 - std::exp(-static_cast<double>(numHashes * capacity) / static_cast<double>(numBits)), numHashes);
 }
+  
 
 json BloomFilter::serialize() const {
     json j;

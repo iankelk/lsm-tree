@@ -38,6 +38,7 @@ void LSMTree::calculateAndPrintThroughput() {
     {
         boost::upgrade_lock<boost::upgrade_mutex> upgradeLock(throughputMutex);
         if (!timerStarted) {
+            boost::upgrade_to_unique_lock<boost::upgrade_mutex> uniqueLock(upgradeLock);
             startTime = std::chrono::steady_clock::now();
             lastReportTime = startTime;
             timerStarted = true;
@@ -452,7 +453,14 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
         SyncedCerr() << "Unable to open file " << filename << std::endl;
         return;
     }
-
+    {
+        // Restart the timer
+        boost::unique_lock<boost::upgrade_mutex> lock(throughputMutex);
+        startTime = std::chrono::steady_clock::now();
+        lastReportTime = startTime;
+        lastReportIoCount = 0;
+        timerStarted = true;
+    }
     std::stringstream ss;
     ss << file.rdbuf();
 
@@ -464,8 +472,6 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
         std::stringstream line_ss(line);
         char command_code;
         line_ss >> command_code;
-
-        std::unique_ptr<std::vector<kvPair>> rangePtr;
 
         switch (command_code) {
             case 'p': {
@@ -492,10 +498,6 @@ void LSMTree::benchmark(const std::string& filename, bool verbose, size_t verbos
                 KEY_t end;
                 line_ss >> start >> end;
                 range(start, end);
-                // rangePtr = range(start, end);
-                // if (rangePtr->size() > 0) {
-                //     SyncedCout() << rangePtr->size() << std::endl;
-                // }
                 break;
             }
             default: {
@@ -743,7 +745,7 @@ std::string LSMTree::printInfo() {
     for (size_t i = 0; i < levelStrings.size(); i++) {
         output << "Number of Runs in Level " + levelStrings[i] + ": " + std::to_string(localLevelsCopy[i]->runs.size()) + "\n";
         percentage = (static_cast<double>(localLevelsCopy[i]->getKvPairs()) / localLevelsCopy[i]->getMaxKvPairs()) * 100;
-        output << "Number of key-value pairs in level " << std::setw(levelWidth) << levelStrings[i] + ": "
+        output << "Number of key-value pairs allocated for level " << std::setw(levelWidth) << levelStrings[i] + ": "
             << std::setw(keyValueWidth) << keyValueStrings[i]
             << " (Max " << std::setw(maxKeyValueWidth) << maxKeyValueStrings[i] + ", "
             << std::to_string(static_cast<int>(percentage)) << "% full)\n\n";
@@ -1033,19 +1035,6 @@ size_t LSMTree::getRangeMisses() const {
     std::shared_lock<std::shared_mutex> lock(rangeMissesMutex);
     return rangeMisses;
 }
-
-/*
-    // Throughput tracking
-    size_t throughputFrequency;
-    bool throughputPrinting;
-    mutable boost::upgrade_mutex throughputMutex;
-    void calculateAndPrintThroughput();
-    std::atomic<uint64_t> commandCounter{0};
-    std::chrono::steady_clock::time_point startTime;
-    std::chrono::steady_clock::time_point lastReportTime;
-    bool timerStarted = false;
-    
-*/
 
 json LSMTree::serialize() const {
     json j;
