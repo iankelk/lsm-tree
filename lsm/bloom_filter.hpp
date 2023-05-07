@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <vector>
 #include "xxhash.h"
+#include "MurmurHash3.h"
 
 class BloomFilter {
 public:

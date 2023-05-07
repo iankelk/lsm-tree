@@ -45,18 +45,23 @@ size_t BloomFilter::location(uint64_t h1, uint64_t h2, size_t i) const {
     return static_cast<size_t>((h1 + h2 * i) & mask);
 }
 
+// std::array<uint64_t, 2> BloomFilter::hash(const void* data, size_t len) const {
+//     // Two different large prime numbers as seeds
+//     uint64_t seed1 = 0x9e3779b1;
+//     uint64_t seed2 = 0x85ebca77;
+    
+//     uint64_t v1 = XXH64(data, len, seed1);
+//     uint64_t v2 = XXH64(data, len, seed2);
+//     return {v1, v2};
+// }
+
 std::array<uint64_t, 2> BloomFilter::hash(const void* data, size_t len) const {
-    uint64_t v1 = XXH64(data, len, 0);
-    uint64_t v2;
-    if (len > 0) {
-        uint8_t* tmp = new uint8_t[len];
-        memcpy(tmp, data, len);
-        tmp[len - 1] = 0;
-        v2 = XXH64(tmp, len, 0);
-        delete[] tmp;
-    }
-    return {v1, v2};
+    uint64_t output[2];
+    MurmurHash3_x64_128(data, len, 0, output);
+    return {output[0], output[1]};
 }
+
+
 
 size_t BloomFilter::nextPow2(size_t v) {
     for (size_t i = 8; i < (1ull << 62); i *= 2) {
