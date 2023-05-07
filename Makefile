@@ -4,7 +4,13 @@ SRCS = lsm/bloom_filter.cpp lsm/utils.cpp lsm/memtable.cpp lsm/run.cpp lsm/level
 $(shell mkdir -p bin)
 
 # Link the Boost library
-LDLIBS = -lpthread -lboost_thread-mt 
+OS_NAME := $(shell uname)
+
+ifeq ($(OS_NAME), Darwin)
+  LDLIBS = -lpthread -lboost_thread-mt
+else
+  LDLIBS = -lpthread -lboost_thread
+endif
 
 CXXFLAGS = -std=c++20 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
 LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
