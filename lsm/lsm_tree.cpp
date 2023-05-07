@@ -213,7 +213,7 @@ void LSMTree::moveRuns(int currentLevelNum) {
         (*next)->runs.insert((*next)->runs.begin(), std::make_move_iterator((*it)->runs.begin()), std::make_move_iterator((*it)->runs.end()));
         (*it)->runs.clear();
         (*it)->setKvPairs(0);
-    } else { // PARTIAL moves the best segment of 2 runs to the next level
+    } else { // PARTIAL moves the best segment of 2 or more runs (depending on the compaction percentage) to the next level
         auto segmentBounds = (*it)->findBestSegmentToCompact();
         if (!(*it)->willLowerLevelFit()) {
             {
@@ -261,20 +261,6 @@ std::vector<Level*> LSMTree::getLocalLevelsCopy() {
         });
     }
     return localLevelsCopy;
-}
-
-// Remove all TOMBSTONES from a given unique_ptr<map<KEY_t, VAL_t>> rangeMap
-void LSMTree::removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap) {
-    // Create an iterator to iterate through the map
-    std::map<KEY_t, VAL_t>::iterator it = rangeMap->begin();
-    // Iterate through the map and remove all TOMBSTONES
-    while (it != rangeMap->end()) {
-        if (it->second == TOMBSTONE) {
-            it = rangeMap->erase(it);
-        } else {
-            ++it;
-        }
-    }
 }
 
 // Remove all TOMBSTONES from a given std::unique_ptr<std::vector<kvPair>> rangeResult

@@ -78,7 +78,6 @@ private:
     std::vector<std::shared_ptr<Level>> levels;
     bool throughputPrinting;
     size_t throughputFrequency;
-    
 
     // Timer and IO count
     std::vector<std::pair<size_t, std::chrono::microseconds>> levelIoCountAndTime;
@@ -87,7 +86,6 @@ private:
     std::map<int, std::pair<int, int>> compactionPlan;
 
     // Private compaction functions
-    void removeTombstones(std::unique_ptr<std::map<KEY_t, VAL_t>> &rangeMap);
     void removeTombstones(std::unique_ptr<std::vector<kvPair>> &rangeResult);
     void moveRuns(int currentLevelNum);
     void executeCompactionPlan();
