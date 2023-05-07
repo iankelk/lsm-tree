@@ -814,8 +814,8 @@ std::string LSMTree::getBloomFilterSummary() {
     std::stringstream output;
     output << std::right;
 
-    // std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
-    // output << "\nBloom filter total measured FPR: " << bfStatus << "\n";
+    std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
+    output << "\nBloom filter total measured FPR: " << bfStatus << "\n";
 
     std::vector<std::vector<std::map<std::string, std::string>>> summaries(localLevelsCopy.size());
     for (size_t i = 0; i < localLevelsCopy.size(); i++) {
@@ -841,10 +841,10 @@ std::string LSMTree::getBloomFilterSummary() {
             << "Hash Functions: " << std::setw(numHashFunctionsWidth) << summaries[i][j]["hashFunctions"] + ", "
             << "Number of Keys: " << std::setw(keysWidth) << summaries[i][j]["keys"] + ", "
             << "Theoretical FPR: " << std::setw(fprWidth) << summaries[i][j]["theoreticalFPR"]
-            // << "Theoretical FPR: " << std::setw(fprWidth) << summaries[i][j]["theoreticalFPR"] + ", "
-            // << "TP: " << std::setw(tpfpWidth) << summaries[i][j]["truePositives"] + ", "
-            // << "FP: " << std::setw(tpfpWidth) << summaries[i][j]["falsePositives"] + ", "
-            // << "Measured FPR: " << summaries[i][j]["measuredFPR"] 
+            << "Theoretical FPR: " << std::setw(fprWidth) << summaries[i][j]["theoreticalFPR"] + ", "
+            << "TP: " << std::setw(tpfpWidth) << summaries[i][j]["truePositives"] + ", "
+            << "FP: " << std::setw(tpfpWidth) << summaries[i][j]["falsePositives"] + ", "
+            << "Measured FPR: " << summaries[i][j]["measuredFPR"] 
             << "\n";
         }
     }

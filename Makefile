@@ -19,14 +19,11 @@ all: server client
 
 fast: fast_server fast_client
 
-build:
-	g++ lsm/main.cpp $(SRCS) -o bin/lsm $(CXXFLAGS) $(LDFLAGS)
-
 server:
-	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra
 
 client:
-	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra
 
 fast_server:
 	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS)
@@ -34,19 +31,18 @@ fast_server:
 fast_client:
 	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS)
 
-test:
-	g++ -ggdb3 -g -O0 lsm/test.cpp $(SRCS) -o bin/test $(CXXFLAGS) $(LDFLAGS) -fsanitize=address -fno-omit-frame-pointer
-
+# Use make genm1 to build the generator on M1 Macs
 .PHONY: genm1
 genm1:
 	$(CC) generator/generator.c -I/opt/homebrew/include -L/opt/homebrew/lib -o bin/generator -lgsl -lgslcblas -lm
 
+# Use make generator to build the generator on Intel Macs or Linux
 .PHONY: generator
 generator:
 	$(CC) generator/generator.c -o bin/generator -lgsl -lgslcblas
 
 .PHONY: clean
-	rm bin/generator bin/lsm bin/test
+	rm bin/generator bin/client bin/server
 
 
 # server:
