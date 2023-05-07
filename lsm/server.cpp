@@ -197,7 +197,7 @@ void Server::handleCommand(std::stringstream& ss, int clientSocket) {
             break;
         case 'b':
             ss >> fileName;
-            lsmTree->benchmark(fileName, verbose, verboseFrequency);
+            lsmTree->benchmark(removeQuotes(fileName), verbose, verboseFrequency);
             response = OK;
             break;
         case 'q':

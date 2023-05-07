@@ -65,7 +65,6 @@ private:
     void addFencePointer(KEY_t key);
     std::vector<KEY_t> getFencePointers();
     void addToBloomFilter(KEY_t key);
-
     void incrementFalsePositives();
     size_t getFalsePositives();
     void incrementTruePositives();
