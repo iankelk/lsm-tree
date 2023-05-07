@@ -29,10 +29,11 @@ public:
     void deserialize(const json& j);
     void deleteFile();
     void setLSMTree(LSMTree* lsmTree);
-    size_t getBloomFilterNumBits() { return bloomFilter.getNumBits(); }
-    void setBloomFilterNumBits(size_t numBits) { bloomFilter.setNumBits(numBits); }
+    size_t getBloomFilterNumBits() { return bfNumBits; }
+    //void setBloomFilterNumBits(size_t numBits) { bloomFilter.setNumBits(numBits); }
+    void setBloomFilterNumBits(size_t numBits) { bfNumBits = numBits; }
     size_t getSize() { return size; }
-    void resizeBloomFilterBitset(size_t numBits);
+    void resizeBloomFilterBitset(size_t newNumBits);
     void populateBloomFilter();
     std::string getRunFilePath();
     void setFirstAndLastKeys(KEY_t first, KEY_t last);
@@ -43,16 +44,18 @@ private:
     std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(std::ifstream &ifs, size_t start, size_t end, KEY_t key);
     size_t maxKvPairs;
     double bfErrorRate;
+    double bfTheoreticalErrorRate() const;
     std::vector<KEY_t> fencePointers;
     float getBfFalsePositiveRate();
     size_t falsePositives = 0;
     size_t truePositives = 0;
     size_t levelOfRun;
     LSMTree* lsmTree;
-    BloomFilter bloomFilter;
+    bloom_filter bloomFilter;
     std::string runFileName;
     size_t size;
     KEY_t maxKey;
+    size_t bfNumBits;
     mutable std::shared_mutex falsePositivesMutex;
     mutable std::shared_mutex truePositivesMutex;
     mutable std::shared_mutex sizeMutex;

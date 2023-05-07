@@ -20,7 +20,6 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
     bfErrorRate(bfErrorRate),
     levelOfRun(levelOfRun),
     lsmTree(lsmTree),
-    bloomFilter(maxKvPairs, bfErrorRate),
     runFileName(""),
     size(0),
     maxKey(KEY_MIN)
@@ -44,6 +43,18 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         tmpOfs.close();
         runFileName = tmpFn;
         fencePointers.reserve(maxKvPairs / getpagesize());
+
+        bloom_parameters parameters;
+        // parameters.projected_element_count = maxKvPairs;
+        // parameters.false_positive_probability = bfErrorRate;
+        // parameters.random_seed = 0xA5A5A5A5;
+        // parameters.compute_optimal_parameters();
+        bfNumBits = std::ceil(-(maxKvPairs * std::log(errorRate)) / std::log(2) / std::log(2));
+        parameters.optimal_parameters.number_of_hashes = std::ceil(std::log(2) * (bfNumBits / maxKvPairs));
+        parameters.optimal_parameters.number_of_hashes = bfNumBits;
+
+        bloomFilter = bloom_filter(parameters);
+        setBloomFilterNumBits(parameters.optimal_parameters.table_size);
     }
 }
 
@@ -313,7 +324,7 @@ json Run::serialize() const {
     nlohmann::json j;
     j["maxKvPairs"] = maxKvPairs;
     j["bfErrorRate"] = bfErrorRate;
-    j["bloomFilter"] = bloomFilter.serialize();
+   // j["bloomFilter"] = bloomFilter.serialize();
     j["fencePointers"] = fencePointers;
     j["runFileName"] = runFileName;
     j["size"] = size;
@@ -329,7 +340,7 @@ void Run::deserialize(const json& j) {
     maxKvPairs = j["maxKvPairs"];
     bfErrorRate = j["bfErrorRate"];
 
-    bloomFilter.deserialize(j["bloomFilter"]);
+   // bloomFilter.deserialize(j["bloomFilter"]);
     fencePointers = j["fencePointers"].get<std::vector<KEY_t>>();
     runFileName = j["runFileName"];
     size = j["size"];
@@ -366,9 +377,9 @@ std::map<std::string, std::string> Run::getBloomFilterSummary() {
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
 
     summary["bloomFilterSize"] = addCommas(std::to_string(getBloomFilterNumBits()));
-    summary["hashFunctions"] = std::to_string(bloomFilter.getNumHashes());
+    summary["hashFunctions"] = std::to_string(bloomFilter.salt_count());
     summary["keys"] = addCommas(std::to_string(size)) + " (Max " + addCommas(std::to_string(maxKvPairs)) + ")";
-    summary["theoreticalFPR"] = std::to_string(bloomFilter.theoreticalErrorRate());
+    summary["theoreticalFPR"] = std::to_string(bfTheoreticalErrorRate());
     summary["truePositives"] = addCommas(std::to_string(truePositives));
     summary["falsePositives"] = addCommas(std::to_string(getFalsePositives()));
     summary["measuredFPR"] = bfStatus;
@@ -376,8 +387,13 @@ std::map<std::string, std::string> Run::getBloomFilterSummary() {
     return summary;
 }
 
-void Run::resizeBloomFilterBitset(size_t numBits) {
-    bloomFilter.resize(numBits);
+void Run::resizeBloomFilterBitset(size_t newNumBits) {
+    bloom_parameters parameters;
+    parameters.optimal_parameters.table_size = newNumBits;
+    parameters.optimal_parameters.number_of_hashes = std::ceil(std::log(2) * (newNumBits / maxKvPairs));
+    parameters.random_seed = 0xA5A5A5A5;
+    bloomFilter = bloom_filter(parameters);
+    // setBloomFilterNumBits(newNumBits);
 }
 
 // Populate the bloom filter. This will typically be called after MONKEY resizes them.
@@ -390,7 +406,7 @@ void Run::populateBloomFilter() {
     // Read all the key-value pairs from the Run file and add the keys to the bloom filter
     kvPair kv;
     while (ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair))) {
-        bloomFilter.add(kv.key);
+        bloomFilter.insert(kv.key);
     }
     closeInputFileStream(ifs);
 }
@@ -436,7 +452,8 @@ std::vector<KEY_t> Run::getFencePointers() {
 
 void Run::addToBloomFilter(KEY_t key) {
     std::unique_lock<std::shared_mutex> lock(bloomFilterMutex);
-    bloomFilter.add(key);
+    bloomFilter.insert(key);
 }
-
-
+double Run::bfTheoreticalErrorRate() const {
+    return std::pow(1 - std::exp(-static_cast<double>(bloomFilter.salt_count() * maxKvPairs) / static_cast<double>(bfNumBits)), bloomFilter.salt_count());
+}
