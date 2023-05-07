@@ -360,7 +360,7 @@ void Server::createLSMTree(float bfErrorRate, int bufferNumPages, int fanout, Le
 void printHelp() {
     SyncedCout() << "Usage: ./server [OPTIONS]\n"
               << "Options:\n"
-              << "  -e <errorRate>              Bloom filter error rate (default: " << DEFAULT_FANOUT << ")\n"
+              << "  -e <errorRate>              Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
               << "  -n <numPages>               Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>                 LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
               << "  -l <levelPolicy>            Compaction policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
