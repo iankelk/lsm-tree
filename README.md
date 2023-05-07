@@ -111,8 +111,8 @@ Once the client has been launched, you can enter the following commands in the t
 | `g [INT1]` | Get (Retrieve the value associated with a key) |
 | `r [INT1] [INT2]` | Range (Retrieve key-value pairs within a range of keys) |
 | `d [INT1]` | Delete (Remove a key-value pair) |
-| `l "/path/to/fileName"` | Load (Insert key-value pairs from a binary file) |
-| `b "/path/to/fileName"` | Benchmark (Run commands from a text file quietly with no output) |
+| `l "/path/to/fileName"` | Load (Insert key-value pairs from a binary file, quotes optional) |
+| `b "/path/to/fileName"` | Benchmark (Run commands from a text file quietly with no output, quotes optional) |
 | `s [Optional INT1]` | Print Stats (Display information about the current state of the tree) |
 | `i` | Summarized Tree Info |
 | `q` | Shutdown server and save the database state to disk |
