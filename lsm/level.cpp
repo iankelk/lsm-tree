@@ -115,7 +115,7 @@ long Level::sumOfKeyDifferences(size_t start, size_t end) {
     return sum;
 }
 
-// Iterate through the runs of the level, calculating the weighted sum of key differences for segments
+// Iterate through the runs of the level, calculating the sum of key differences for segments
 // Return the start and end indices of the best segment to compact
 std::pair<size_t, size_t> Level::findBestSegmentToCompact() {
     size_t num_runs_to_merge = std::max(2, static_cast<int>(std::round(lsmTree->getCompactionPercentage() * runs.size())));
