@@ -45,13 +45,13 @@ Run::Run(size_t maxKvPairs, double bfErrorRate, bool createFile, size_t levelOfR
         fencePointers.reserve(maxKvPairs / getpagesize());
 
         bloom_parameters parameters;
-        // parameters.projected_element_count = maxKvPairs;
-        // parameters.false_positive_probability = bfErrorRate;
-        // parameters.random_seed = 0xA5A5A5A5;
-        // parameters.compute_optimal_parameters();
-        bfNumBits = std::ceil(-(maxKvPairs * std::log(errorRate)) / std::log(2) / std::log(2));
-        parameters.optimal_parameters.number_of_hashes = std::ceil(std::log(2) * (bfNumBits / maxKvPairs));
-        parameters.optimal_parameters.number_of_hashes = bfNumBits;
+        parameters.projected_element_count = maxKvPairs;
+        parameters.false_positive_probability = bfErrorRate;
+        parameters.random_seed = 0xA5A5A5A5;
+        parameters.compute_optimal_parameters();
+        bfNumBits = std::ceil(-(maxKvPairs * std::log(bfErrorRate)) / std::log(2) / std::log(2));
+        // parameters.optimal_parameters.number_of_hashes = std::ceil(std::log(2) * (bfNumBits / maxKvPairs));
+        // parameters.optimal_parameters.number_of_hashes = bfNumBits;
 
         bloomFilter = bloom_filter(parameters);
         setBloomFilterNumBits(parameters.optimal_parameters.table_size);
