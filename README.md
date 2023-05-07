@@ -265,10 +265,10 @@ The print stats command allows the caller to view some information about the cur
 **Syntax:**
 
 ```
-s
+s [Optional INT1]`
 ```
 
-The 's' command code is used for printing stats. This command takes no arguments and prints out the stats for the tree.
+The 's' command code is used for printing stats. This command has an optional integer argument to limit how many key-value pairs are printed per level, and prints out the stats for the tree. It's recommended to use the optional integer for large databases, as otherwise you may find yourself waiting for your computer to finish printing the entire dump of the database.
 
 **Example:**
 
