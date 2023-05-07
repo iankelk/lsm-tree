@@ -808,6 +808,9 @@ std::string LSMTree::printLevelIoCount() {
 // For each level, list the level number, then for each run in the level list the run number, then call Run::getBloomFilterSummary() to get the bloom filter summary
 std::string LSMTree::getBloomFilterSummary() {
     std::vector<Level*> localLevelsCopy = getLocalLevelsCopy();
+    if (localLevelsCopy.front()->runs.empty()) {
+        return "No levels to print bloom filter summary for.\n";
+    }
     std::stringstream output;
     output << std::right;
 
