@@ -1,5 +1,7 @@
 #!/bin/bash
-
+# Shell script to run multiple concurrent clients
+# Change the "milgets" string below to work with
+# series of similar workloads.
 # Set the number of clients (default to 10)
 if [ $# -eq 1 ]; then
     num_clients=$1
