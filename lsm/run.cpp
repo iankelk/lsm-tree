@@ -147,7 +147,7 @@ std::unique_ptr<VAL_t> Run::get(KEY_t key) {
     {
         // Separately check if it is in the bloom filter under a shared lock
         std::shared_lock<std::shared_mutex> lock(bloomFilterMutex);
-        if (!bloomFilter.contains(key)) {
+        if (!bloomFilter.contains(&key, sizeof(KEY_t))) {
             return nullptr;
         }
     }
@@ -358,6 +358,11 @@ void Run::setLSMTree(LSMTree* lsmTree) {
     this->lsmTree = lsmTree;
 }
 
+double Run::theoreticalFalsePositiveRate(size_t m, size_t k, size_t n) {
+    return std::pow(1 - std::exp(-static_cast<double>(k * n) / m), k);
+}
+
+
 // Get the summary for a Run's bloom filter and return a map of variable names and their values.
 std::map<std::string, std::string> Run::getBloomFilterSummary() {
     std::map<std::string, std::string> summary;
@@ -366,9 +371,9 @@ std::map<std::string, std::string> Run::getBloomFilterSummary() {
     std::string bfStatus = getBfFalsePositiveRate() == BLOOM_FILTER_UNUSED ? "Unused" : std::to_string(getBfFalsePositiveRate());
 
     summary["bloomFilterSize"] = addCommas(std::to_string(getBloomFilterNumBits()));
-    summary["hashFunctions"] = std::to_string(bloomFilter.getNumHashes());
+    summary["hashFunctions"] = std::to_string(bloomFilter.numHashFunctions());
     summary["keys"] = addCommas(std::to_string(size)) + " (Max " + addCommas(std::to_string(maxKvPairs)) + ")";
-    summary["theoreticalFPR"] = std::to_string(bloomFilter.theoreticalErrorRate());
+    summary["theoreticalFPR"] = std::to_string(theoreticalFalsePositiveRate(bloomFilter.length(), bloomFilter.numHashFunctions(), maxKvPairs));
     summary["truePositives"] = addCommas(std::to_string(truePositives));
     summary["falsePositives"] = addCommas(std::to_string(getFalsePositives()));
     summary["measuredFPR"] = bfStatus;
@@ -390,7 +395,7 @@ void Run::populateBloomFilter() {
     // Read all the key-value pairs from the Run file and add the keys to the bloom filter
     kvPair kv;
     while (ifs.read(reinterpret_cast<char*>(&kv), sizeof(kvPair))) {
-        bloomFilter.add(kv.key);
+        bloomFilter.insert(&kv.key, sizeof(KEY_t));
     }
     closeInputFileStream(ifs);
 }
@@ -436,7 +441,7 @@ std::vector<KEY_t> Run::getFencePointers() {
 
 void Run::addToBloomFilter(KEY_t key) {
     std::unique_lock<std::shared_mutex> lock(bloomFilterMutex);
-    bloomFilter.add(key);
+    bloomFilter.insert(&key, sizeof(KEY_t));
 }
 
 

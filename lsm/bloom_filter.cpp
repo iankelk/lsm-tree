@@ -1,75 +1,113 @@
-#include <iostream>
-#include <cmath>
-#include <sstream>
-#include "../lib/xxhash.h"
 #include "bloom_filter.hpp"
-#include "utils.hpp"
+
 
 BloomFilter::BloomFilter(size_t capacity, double errorRate) :
     capacity(capacity), errorRate(errorRate),
-    numBits(std::ceil(-(capacity * std::log(errorRate)) / std::log(2) / std::log(2))),
-    numHashes(std::ceil(std::log(2) * (numBits / capacity))),
-    bits(numBits) {}
+    m(nextPow2(std::ceil(-(capacity * std::log(errorRate)) / std::log(2) / std::log(2)))),
+    k(std::ceil(std::log(2) * (m / capacity))),
+    mask(m - 1)
+    {
+        buf.resize(m >> 3);
+    }
 
-void BloomFilter::add(const KEY_t key) {
-    XXH128_hash_t hash = XXH3_128bits(static_cast<const void*>(&key), sizeof(KEY_t));
-    uint64_t hash1 = hash.high64;
-    uint64_t hash2 = hash.low64;
+// BloomFilter::BloomFilter(size_t m, size_t k)
+//     : k(k), m(nextPow2(m)), mask(m - 1) {
+//     buf.resize(m >> 3);
+// }
 
-    for (int i = 0; i < numHashes; i++) {
-        size_t index = (hash1 + i * hash2) % numBits;
-        bits.set(index);
+BloomFilter::BloomFilter(std::vector<uint8_t> buf, size_t k)
+    : k(k), m(nextPow2(buf.size() * 8)), mask(m - 1), buf(std::move(buf)) {
+    if (m != this->buf.size() * 8) {
+        throw std::runtime_error("BloomFilter: buffer bit count must be a power of two");
     }
 }
 
-bool BloomFilter::contains(const KEY_t key) {
-    XXH128_hash_t hash = XXH3_128bits(static_cast<const void*>(&key), sizeof(KEY_t));
-    uint64_t hash1 = hash.high64;
-    uint64_t hash2 = hash.low64;
+void BloomFilter::insert(const void* data, size_t len) {
+    auto h = hash(data, len);
+    for (size_t i = 0; i < k; ++i) {
+        size_t loc = location(h[0], h[1], i);
+        buf[loc >> 3] |= 1 << (loc & 7);
+    }
+}
 
-    for (int i = 0; i < numHashes; i++) {
-        size_t index = (hash1 + i * hash2) % numBits;
-        if (!bits.test(index)) {
+bool BloomFilter::contains(const void* data, size_t len) {
+    auto h = hash(data, len);
+    for (size_t i = 0; i < k; ++i) {
+        size_t loc = location(h[0], h[1], i);
+        if ((buf[loc >> 3] & (1 << (loc & 7))) == 0) {
             return false;
         }
     }
     return true;
 }
 
-// Resize bloom filter to new bitset size
-void BloomFilter::resize(size_t newNumBits) {
-    numBits = newNumBits;
-    bits.resize(newNumBits);
-    numHashes = std::ceil(std::log(2) * (newNumBits / capacity));
+size_t BloomFilter::location(uint64_t h1, uint64_t h2, size_t i) const {
+    return static_cast<size_t>((h1 + h2 * i) & mask);
 }
 
-double BloomFilter::theoreticalErrorRate() const {
-    return std::pow(1 - std::exp(-static_cast<double>(numHashes * capacity) / static_cast<double>(numBits)), numHashes);
-}
-  
-
-json BloomFilter::serialize() const {
-    json j;
-    j["capacity"] = capacity;
-    j["errorRate"] = errorRate;
-    j["numBits"] = numBits;
-    j["numHashes"] = numHashes;
-
-    std::stringstream ss;
-    ss << bits;
-    j["bits"] = ss.str();
-
-    return j;
-}
-
-void BloomFilter::deserialize(const json& j) {
-    if (!j.contains("capacity") || !j.contains("errorRate") || !j.contains("numBits") || !j.contains("numHashes") || !j.contains("bits")) {
-        std::cerr << "BloomFilter::deserialize: Invalid JSON format for deserializing BloomFilter. Skipping..." << std::endl;
-        return;
+std::array<uint64_t, 2> BloomFilter::hash(const void* data, size_t len) const {
+    uint64_t v1 = XXH64(data, len, 0);
+    uint64_t v2;
+    if (len > 0) {
+        uint8_t* tmp = new uint8_t[len];
+        memcpy(tmp, data, len);
+        tmp[len - 1] = 0;
+        v2 = XXH64(tmp, len, 0);
+        delete[] tmp;
     }
-    capacity = j["capacity"];
-    errorRate = j["errorRate"];
-    numBits = j["numBits"];
-    numHashes = j["numHashes"];
-    bits = boost::dynamic_bitset<>(j["bits"].get<std::string>());
+    return {v1, v2};
+}
+
+size_t BloomFilter::nextPow2(size_t v) {
+    for (size_t i = 8; i < (1ull << 62); i *= 2) {
+        if (i >= v) {
+            return i;
+        }
+    }
+    throw std::runtime_error("unreachable");
+}
+
+void BloomFilter::resize(size_t new_m) {
+    new_m = nextPow2(new_m);
+    if (new_m != m) {
+        m = new_m;
+        mask = m - 1;
+        buf.resize(m >> 3);
+    }
+}
+
+void BloomFilter::setNumBits(size_t numBits) {
+    size_t new_m = nextPow2(numBits);
+    if (new_m != m) {
+        m = new_m;
+        mask = m - 1;
+        buf.resize(m >> 3);
+    }
+}
+
+double theoreticalFalsePositiveRate(size_t m, size_t k, size_t n) {
+    return std::pow(1 - std::exp(-static_cast<double>(k * n) / m), k);
+}
+
+
+std::vector<uint8_t> BloomFilter::serialize() const {
+    std::vector<uint8_t> data;
+    data.reserve((m >> 3) + sizeof(size_t) * 2);
+    data.insert(data.end(), reinterpret_cast<const uint8_t*>(&m), reinterpret_cast<const uint8_t*>(&m) + sizeof(size_t));
+    data.insert(data.end(), reinterpret_cast<const uint8_t*>(&k), reinterpret_cast<const uint8_t*>(&k) + sizeof(size_t));
+    data.insert(data.end(), buf.begin(), buf.end());
+    return data;
+}
+
+BloomFilter BloomFilter::deserialize(const std::vector<uint8_t>& data) {
+    if (data.size() < sizeof(size_t) * 2) {
+        throw std::runtime_error("BloomFilter: insufficient data for deserialization");
+    }
+
+    size_t m, k;
+    memcpy(&m, data.data(), sizeof(size_t));
+    memcpy(&k, data.data() + sizeof(size_t), sizeof(size_t));
+
+    std::vector<uint8_t> buf(data.begin() + sizeof(size_t) * 2, data.end());
+    return BloomFilter(std::move(buf), k);
 }

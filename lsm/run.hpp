@@ -38,6 +38,7 @@ public:
     void setFirstAndLastKeys(KEY_t first, KEY_t last);
     KEY_t getFirstKey() { return firstKey; }
     KEY_t getLastKey() { return lastKey; }
+    
 
 private:
     std::pair<size_t, std::unique_ptr<kvPair>> binarySearchInRange(std::ifstream &ifs, size_t start, size_t end, KEY_t key);
@@ -69,6 +70,8 @@ private:
     void incrementFalsePositives();
     size_t getFalsePositives();
     void incrementTruePositives();
+    double theoreticalFalsePositiveRate(size_t m, size_t k, size_t n);
+
     KEY_t firstKey;
     KEY_t lastKey;
 
