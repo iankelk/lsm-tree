@@ -363,7 +363,7 @@ void printHelp() {
               << "  -e <errorRate>              Bloom filter error rate (default: " << DEFAULT_ERROR_RATE << ")\n"
               << "  -n <numPages>               Size of the buffer by number of disk pages (default: " << DEFAULT_NUM_PAGES << ")\n"
               << "  -f <fanout>                 LSM tree fanout (default: " << DEFAULT_FANOUT << ")\n"
-              << "  -l <levelPolicy>            Compaction policy (default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
+              << "  -l <levelPolicy>            Compaction policy (options are TIERED, LEVELED, LAZY_LEVELED, PARTIAL default: " << Level::policyToString(DEFAULT_LEVELING_POLICY) << ")\n"
               << "  -c <compactionPercentage>   Compaction \% used for PARTIAL compaction only (default: " << DEFAULT_COMPACTION_PERCENTAGE << ")\n"
               << "  -p <port>                   Port number (default: " << DEFAULT_SERVER_PORT << ")\n"
               << "  -t <numThreads>             Number of threads for GET and RANGE queries (default: " << DEFAULT_NUM_THREADS << ")\n"
