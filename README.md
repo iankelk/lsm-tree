@@ -48,6 +48,13 @@ To install `nlohmann/json.hpp`, use the following commands:
 brew install nlohmann-json
 ```
 
+## Compiling
+
+Use the Makefile to build the LSM tree. It has two different ways to compile. It is recommended that you compile with `make fast`.
+
+- For all compiler optimizations so it runs as fast as possible: `make fast`
+- For compiling with debugging and minimal optimizations: `make`
+
 ## Launching the Server
 
 To launch the server, use the following command, with any desired options:
@@ -279,3 +286,62 @@ LVL1: 3, LVL3: 11
 
 7:32:L3 19:73:L3 32:91:L3 45:64:L3 58:3:L3 61:10:L3 66:4:L3 85:15:L3 91:71:L3 95:87:L3 97:76:L3
 ```
+
+## Additions to the README
+
+### Generator Compilation for M1 Macs, Intel Macs, and Linux
+
+Make sure to compile the generator using `genm1` for M1 Macs, or `generator` for Intel Macs and Linux systems. The Makefile contains the commands for both M1 Macs and Intel Macs/Linux:
+
+```make
+# Ensure bin directory exists
+$(shell mkdir -p bin)
+
+# Link the Boost library
+OS_NAME := $(shell uname)
+
+ifeq ($(OS_NAME), Darwin)
+  LDLIBS = -lpthread -lboost_thread-mt
+else
+  LDLIBS = -lpthread -lboost_thread
+endif
+
+CXXFLAGS = -std=c++20 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
+LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
+
+all: server client
+
+fast: fast_server fast_client
+
+server:
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
+
+client:
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -fsanitize=thread
+
+fast_server:
+	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS)
+
+fast_client:
+	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS)
+
+# Use make genm1 to build the generator on M1 Macs
+.PHONY: genm1
+genm1:
+	$(CC) generator/generator.c -I/opt/homebrew/include -L/opt/homebrew/lib -o bin/generator -lgsl -lgslcblas -lm
+
+# Use make generator to build the generator on Intel Macs or Linux
+.PHONY: generator
+generator:
+	$(CC) generator/generator.c -o bin/generator -lgsl -lgslcblas
+
+.PHONY: clean
+	rm bin/generator bin/client bin/server
+```
+
+To compile the generator, run the appropriate command in the terminal:
+
+- For M1 Macs: `make genm1`
+- For Intel Macs and Linux: `make generator`
+
+This will compile the generator for your specific system.
