@@ -5,7 +5,6 @@ $(shell mkdir -p bin)
 
 # Link the Boost library
 OS_NAME := $(shell uname)
-ARCH := $(shell uname -m)
 
 ifeq ($(OS_NAME), Darwin)
   LDLIBS = -lpthread -lboost_thread-mt
@@ -13,27 +12,18 @@ else
   LDLIBS = -lpthread -lboost_thread
 endif
 
-# Set library paths based on architecture
-ifeq ($(ARCH), arm64)
-  INCLUDE_PATH = -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
-  LIBRARY_PATH = -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib
-else
-  INCLUDE_PATH = -I/usr/local/include
-  LIBRARY_PATH = -L/usr/local/lib
-endif
+CXXFLAGS = -std=c++20 -I./lib -I/usr/local/include -I/opt/homebrew/include -I/opt/homebrew/Cellar/boost/1.81.0_1/include
+LDFLAGS = -L/usr/local/lib -L/opt/homebrew/lib -L/opt/homebrew/Cellar/boost/1.81.0_1/lib $(LDLIBS)
 
-CXXFLAGS = -std=c++20 -I./lib $(INCLUDE_PATH)
-LDFLAGS = $(LIBRARY_PATH) $(LDLIBS)
-
-all: server client generator
+all: server client
 
 fast: fast_server fast_client
 
 server:
-	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra -lprofiler
+	g++ -ggdb3 -g -O0 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra
 
 client:
-	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra -lprofiler
+	g++ -ggdb3 -g -O0 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS) -fno-omit-frame-pointer -Wall -Wextra
 
 fast_server:
 	g++ -O3 lsm/server.cpp $(SRCS) -o bin/server $(CXXFLAGS) $(LDFLAGS)
@@ -41,16 +31,17 @@ fast_server:
 fast_client:
 	g++ -O3 lsm/client.cpp $(SRCS) -o bin/client $(CXXFLAGS) $(LDFLAGS)
 
+# Use make genm1 to build the generator on M1 Macs
+.PHONY: genm1
+genm1:
+	$(CC) generator/generator.c -I/opt/homebrew/include -L/opt/homebrew/lib -o bin/generator -lgsl -lgslcblas -lm
+
+# Use make generator to build the generator on Intel Macs or Linux
 .PHONY: generator
 generator:
-ifeq ($(ARCH), arm64)
-	$(CC) generator/generator.c -I/opt/homebrew/include -L/opt/homebrew/lib -o bin/generator -lgsl -lgslcblas -lm
-else
 	$(CC) generator/generator.c -o bin/generator -lgsl -lgslcblas
-endif
 
 .PHONY: clean
-clean:
 	rm bin/generator bin/client bin/server
 
 
