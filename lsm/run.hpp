@@ -15,7 +15,6 @@ public:
     ~Run();
     std::unique_ptr<VAL_t> get(KEY_t key);
     std::vector<kvPair> range(KEY_t start, KEY_t end);
-    void put2(KEY_t key, VAL_t val);
     void flush(std::unique_ptr<std::vector<kvPair>> kvPairs);
     std::vector<kvPair> getVector();
     size_t getMaxKvPairs();
