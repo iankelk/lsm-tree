@@ -339,13 +339,6 @@ void generate_workload(struct settings *s) {
         double ranges_percent  = (s->ranges  == 0) ? 0 : (double)remaining_ranges / remaining_total;
         double deletes_percent = (s->deletes == 0) ? 0 : (double)remaining_deletes / remaining_total;
 
-        // Debugging
-        // printf("[%d/%d(%.2f), %d/%d(%.2f), %d/%d(%.2f), %d/%d(%.2f)]\n", 
-        //    current_puts, s->puts, puts_percent,
-        //    current_gets, s->gets, gets_percent,
-        //    current_ranges, s->ranges, ranges_percent,
-        //    current_deletes, s->deletes, deletes_percent);
-
         // Decide a random operation
         int operation = next_operation(puts_percent, gets_percent, ranges_percent, deletes_percent);
 
