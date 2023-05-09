@@ -110,7 +110,7 @@ void usage(char * binary) {
         --gets-skewness [skewness (0-1) of get operations]\n\
         --gets-misses-ratio [empty result queries ratio]\n\
         --ranges [number of range operations]\n\
-        --max-range-size [maximum size of range]\n\
+        --max-range-size [maximum possible size of ranges]\n\
         --uniform-ranges *use uniform ranges (default)*\n\
         --gaussian-ranges *use gaussian ranges*\n\
         --deletes [number of delete operations]\n\

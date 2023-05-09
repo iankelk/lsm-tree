@@ -103,3 +103,4 @@ rangy5
 shuffled
 workload-10MPuts-1MGets-skewed.bin
 generator/.vscode/c_cpp_properties.json
+.DS_Store
