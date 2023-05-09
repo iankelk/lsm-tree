@@ -67,6 +67,7 @@ struct settings {
     float gets_skewness;
     float gets_misses_ratio;
     int ranges;
+    int max_range_size;
     char uniform_ranges; /* true (uniform) or false (gaussian) */
     int deletes;
     int external_puts;
@@ -86,6 +87,7 @@ void initialize_settings(struct settings *s) {
     s->gets_skewness         = 0;
     s->gets_misses_ratio     = 0.5;
     s->ranges                = 0;
+    s->max_range_size        = 0;
     s->deletes               = 0;
     s->external_puts         = 0;
     s->seed                  = 13141;
@@ -108,6 +110,7 @@ void usage(char * binary) {
         --gets-skewness [skewness (0-1) of get operations]\n\
         --gets-misses-ratio [empty result queries ratio]\n\
         --ranges [number of range operations]\n\
+        --max-range-size [maximum size of range]\n\
         --uniform-ranges *use uniform ranges (default)*\n\
         --gaussian-ranges *use gaussian ranges*\n\
         --deletes [number of delete operations]\n\
@@ -144,6 +147,7 @@ void parse_settings(int argc, char **argv, struct settings *s) {
             {"gets-skewness",    required_argument,  0, 'G'},
             {"gets-misses-ratio",required_argument,  0, 't'},
             {"ranges",           required_argument,  0, 'r'},
+            {"max-range-size",   required_argument,  0, 'b'},
             {"uniform-ranges",   no_argument,        0, 'u'},
             {"gaussian-ranges",  no_argument,        0, 'n'},
             {"deletes",          required_argument,  0, 'd'},
@@ -172,6 +176,9 @@ void parse_settings(int argc, char **argv, struct settings *s) {
                 break;
             case 'r':
                 s->ranges = atoi(optarg);
+                break;
+            case 'b':
+                s->max_range_size = atoi(optarg);
                 break;
             case 'd':
                 s->deletes = atoi(optarg);
@@ -339,7 +346,6 @@ void generate_workload(struct settings *s) {
         //    current_ranges, s->ranges, ranges_percent,
         //    current_deletes, s->deletes, deletes_percent);
 
-
         // Decide a random operation
         int operation = next_operation(puts_percent, gets_percent, ranges_percent, deletes_percent);
 
@@ -451,16 +457,37 @@ void generate_workload(struct settings *s) {
                 continue;
 
             //////////////// RANGES ////////////////// 
-            // TODO: USE DIFFERENT DISTRIBUTIONS
             KEY_t a;
             KEY_t b;
+            KEY_t range_size;
+
             if(s->uniform_ranges) {
-                a = GEN_RANDOM_KEY_UNIFORM(r);
-                b = GEN_RANDOM_KEY_UNIFORM(r);
+                if (s->max_range_size > 0) {
+                    a = GEN_RANDOM_KEY_UNIFORM(r);
+                    // Pick a random number between +/- s->max_range_size. +1 to avoid zero range size
+                    range_size = gsl_rng_uniform_int(r, 2*s->max_range_size + 1) - s->max_range_size;
+                    b = a + range_size;
+                    if (b > KEY_MAX) b = KEY_MAX;
+                    if (b < KEY_MIN) b = KEY_MIN;
+                }
+                else {
+                    a = GEN_RANDOM_KEY_UNIFORM(r);
+                    b = GEN_RANDOM_KEY_UNIFORM(r);
+                }
             }
             else {
-                a = GEN_RANDOM_KEY_GAUSS(r);
-                b = GEN_RANDOM_KEY_GAUSS(r);
+                if (s->max_range_size > 0) {
+                    a = GEN_RANDOM_KEY_GAUSS(r);
+                    // Pick a random number between +/- s->max_range_size. +1 to avoid zero range size
+                    range_size = gsl_rng_uniform_int(r, 2*s->max_range_size + 1) - s->max_range_size;
+                    b = a + range_size;
+                    if (b > KEY_MAX) b = KEY_MAX;
+                    if (b < KEY_MIN) b = KEY_MIN;
+                }
+                else {
+                    a = GEN_RANDOM_KEY_GAUSS(r);
+                    b = GEN_RANDOM_KEY_GAUSS(r);
+                }
             }
 
             if(a < b) {
