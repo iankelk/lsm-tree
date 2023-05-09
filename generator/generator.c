@@ -382,11 +382,10 @@ void generate_workload(struct settings *s) {
             ////////////////// GETS //////////////////
             KEY_t k;
             // With a probability use a new key as a query
-            if((rand()%10) > (s->gets_skewness*10) || 
-                old_gets_pool_count == 0) {
+            if((((float)rand()) / RAND_MAX > s->gets_skewness) || old_gets_pool_count == 0) {
                 // With a probability use one of the 
                 // previously inserted data as a query
-                if((rand()%10) > (s->gets_misses_ratio*10)) {
+                if(((float)rand()) / RAND_MAX > s->gets_misses_ratio) {
                     k = old_puts_pool[rand() % old_puts_pool_count];
                 }
                 // Or issue a completely random query 
