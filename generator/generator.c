@@ -117,6 +117,19 @@ void usage(char * binary) {
 \n\n", binary);
 }
 
+int next_operation(double puts_percent, double gets_percent, double ranges_percent, double deletes_percent) {
+    double r = (double)rand() / (double)RAND_MAX;
+    if (r < puts_percent) {
+        return OPERATION_PUT;
+    } else if (r < puts_percent + gets_percent) {
+        return OPERATION_GET; 
+    } else if (r < puts_percent + gets_percent + ranges_percent) {
+        return OPERATION_RANGE; 
+    } else {
+        return OPERATION_DELETE; 
+    }
+}
+
 /**
  * Parses the arguments to a settings struct
  */
@@ -307,8 +320,28 @@ void generate_workload(struct settings *s) {
           current_gets < s->gets || 
           current_ranges < s->ranges) 
     {
+        int remaining_puts    = s->puts    - current_puts;
+        int remaining_gets    = s->gets    - current_gets;
+        int remaining_ranges  = s->ranges  - current_ranges;
+        int remaining_deletes = s->deletes - current_deletes;
+
+        int remaining_total = remaining_puts + remaining_gets + remaining_ranges + remaining_deletes;
+
+        double puts_percent    = (s->puts    == 0) ? 0 : (double)remaining_puts   / remaining_total;
+        double gets_percent    = (s->gets    == 0) ? 0 : (double)remaining_gets   / remaining_total;
+        double ranges_percent  = (s->ranges  == 0) ? 0 : (double)remaining_ranges / remaining_total;
+        double deletes_percent = (s->deletes == 0) ? 0 : (double)remaining_deletes / remaining_total;
+
+        // Debugging
+        // printf("[%d/%d(%.2f), %d/%d(%.2f), %d/%d(%.2f), %d/%d(%.2f)]\n", 
+        //    current_puts, s->puts, puts_percent,
+        //    current_gets, s->gets, gets_percent,
+        //    current_ranges, s->ranges, ranges_percent,
+        //    current_deletes, s->deletes, deletes_percent);
+
+
         // Decide a random operation
-        int operation = rand() % 4;
+        int operation = next_operation(puts_percent, gets_percent, ranges_percent, deletes_percent);
 
         // TODO: Check if this operation has remaining else continue.
         switch(operation) {
