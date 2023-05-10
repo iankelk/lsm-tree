@@ -60,7 +60,7 @@ Use the Makefile to build the LSM tree. It has two different ways to compile. It
 To launch the server, use the following command, with any desired options:
 
 ```
-./server [OPTIONS]
+./bin/server [OPTIONS]
 ```
 
 ### Server Launch Options
