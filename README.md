@@ -1,5 +1,3 @@
-# Harvard CS265 - Big Data Systems #
----
 *This repository contains the code of an LSM tree key-value store.
 It follows the DSL specified for the systems project of CS265.*
 
