@@ -11,6 +11,7 @@
 import sys
 import time
 import struct
+import argparse
 from sortedcontainers import SortedDict, SortedList
 
 # ------------------------------------------------
@@ -75,15 +76,28 @@ def print_stats(time_elapsed):
 #                   Main function
 # ------------------------------------------------
 if __name__ == "__main__":
+
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='LSM TREE WORKLOAD EVALUATOR')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output showing all commands')
+    parser.add_argument('-s', '--show-output', action='store_true', help='Show all values returned from the workload')
+    parser.add_argument('filename', nargs='?', help='Filename of the workload file')
+    args = parser.parse_args()
+
+    # Check if filename is provided
+    if not args.filename:
+        parser.print_help()
+        sys.exit(1)
+
     # Options
-    verbose = False
-    show_output = False
+    verbose = args.verbose
+    show_output = args.show_output
 
     # Initialize sorted dictionary (key value store)
     db = SortedDict({})
 
     # Open file
-    f = open(sys.argv[1])
+    f = open(args.filename)
 
     # Start reading workload
     start = time.time()
@@ -115,7 +129,6 @@ if __name__ == "__main__":
                 valid_keys = sorted_keys[left_index:right_index]
                 valid_vals = map(lambda x: db[x], valid_keys)
                 res = list(zip(valid_keys, valid_vals))
-                print(len(res))
                 if show_output:
                     print(" ".join(map(lambda x: str(x[0])+":"+str(x[1]), res)))
                 log("RANGE", verbose)
