@@ -76,9 +76,6 @@ void LSMTree::calculateAndPrintThroughput() {
                  << " cps I/O: " << overallIo << std::endl;
 }
 
-
-
-
 // Insert a key-value pair of integers into the LSM tree
 void LSMTree::put(KEY_t key, VAL_t val) {
     size_t bufferMaxKvPairs;
@@ -270,7 +267,6 @@ void LSMTree::removeTombstones(std::unique_ptr<std::vector<kvPair>> &rangeResult
                        rangeResult->end());
 }
 
-
 // Given a key, search the tree for the key. If the key is found, return the value, otherwise return a nullptr. 
 std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     if (throughputPrinting) {
@@ -324,6 +320,7 @@ std::unique_ptr<VAL_t> LSMTree::get(KEY_t key) {
     incrementGetMisses();
     return nullptr;  // If the key is not found in the buffer or the levels, return nullptr
 }
+
 // Returns a vector of all the key-value pairs in the range [start, end] or an empty vector if the range is invalid
 std::unique_ptr<std::vector<kvPair>> LSMTree::range(KEY_t start, KEY_t end) {
     if (throughputPrinting) {
